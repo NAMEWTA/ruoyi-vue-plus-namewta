@@ -21,8 +21,10 @@ import org.dromara.system.api.model.EmailLoginBody;
 import org.dromara.system.api.model.LoginUser;
 import org.dromara.system.domain.SysUser;
 import org.dromara.system.domain.vo.SysClientVo;
+import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.mapper.SysUserMapper;
+import org.dromara.system.service.ClientUserTypeAccessService;
 import org.dromara.web.domain.vo.LoginVo;
 import org.dromara.web.service.IAuthStrategy;
 import org.dromara.web.service.SysLoginService;
@@ -40,6 +42,7 @@ public class EmailAuthStrategy implements IAuthStrategy {
 
     private final SysLoginService loginService;
     private final SysUserMapper userMapper;
+    private final ClientUserTypeAccessService clientUserTypeAccessService;
 
     /**
      * 执行邮箱验证码登录，并按客户端配置生成访问令牌。
@@ -56,8 +59,8 @@ public class EmailAuthStrategy implements IAuthStrategy {
         String emailCode = loginBody.getEmailCode();
         SysUserVo user = loadUserByEmail(email);
         loginService.checkLogin(LoginType.EMAIL, user.getUserName(), () -> !validateEmailCode(email, emailCode));
-        // 此处可根据登录用户的数据不同 自行创建 loginUser 属性不够用继承扩展就行了
-        LoginUser loginUser = loginService.buildLoginUser(user, client, null);
+        SysUserTypeVo activeUserType = clientUserTypeAccessService.requireLoginAccess(user.getUserId(), client);
+        LoginUser loginUser = loginService.buildLoginUser(user, client, activeUserType);
         SaLoginParameter model = IAuthStrategy.buildLoginParameter(client);
         // 生成token
         LoginHelper.login(loginUser, model);

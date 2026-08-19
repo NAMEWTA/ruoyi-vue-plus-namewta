@@ -22,7 +22,9 @@ import org.dromara.system.api.model.LoginUser;
 import org.dromara.system.api.model.XcxLoginBody;
 import org.dromara.system.api.model.XcxLoginUser;
 import org.dromara.system.domain.vo.SysClientVo;
+import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.domain.vo.SysUserVo;
+import org.dromara.system.service.ClientUserTypeAccessService;
 import org.dromara.web.domain.vo.LoginVo;
 import org.dromara.web.service.IAuthStrategy;
 import org.dromara.web.service.SysLoginService;
@@ -39,6 +41,7 @@ import org.springframework.stereotype.Service;
 public class XcxAuthStrategy implements IAuthStrategy {
 
     private final SysLoginService loginService;
+    private final ClientUserTypeAccessService clientUserTypeAccessService;
 
     /**
      * 执行微信小程序登录，并根据 openid 构建小程序用户登录态。
@@ -74,7 +77,8 @@ public class XcxAuthStrategy implements IAuthStrategy {
         }
         // 框架登录不限制从什么表查询 只要最终构建出 LoginUser 即可
         SysUserVo user = loadUserByOpenid(openid);
-        LoginUser baseLoginUser = loginService.buildLoginUser(user, client, null);
+        SysUserTypeVo activeUserType = clientUserTypeAccessService.requireLoginAccess(user.getUserId(), client);
+        LoginUser baseLoginUser = loginService.buildLoginUser(user, client, activeUserType);
         XcxLoginUser loginUser = new XcxLoginUser();
         BeanUtil.copyProperties(baseLoginUser, loginUser);
         loginUser.setOpenid(openid);

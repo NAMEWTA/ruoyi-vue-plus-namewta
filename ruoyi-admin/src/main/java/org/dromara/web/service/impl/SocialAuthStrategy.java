@@ -20,8 +20,10 @@ import org.dromara.system.api.model.LoginUser;
 import org.dromara.system.api.model.SocialLoginBody;
 import org.dromara.system.domain.vo.SysClientVo;
 import org.dromara.system.domain.vo.SysSocialVo;
+import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.mapper.SysUserMapper;
+import org.dromara.system.service.ClientUserTypeAccessService;
 import org.dromara.system.service.ISysSocialService;
 import org.dromara.web.domain.vo.LoginVo;
 import org.dromara.web.service.IAuthStrategy;
@@ -44,6 +46,7 @@ public class SocialAuthStrategy implements IAuthStrategy {
     private final ISysSocialService sysSocialService;
     private final SysUserMapper userMapper;
     private final SysLoginService loginService;
+    private final ClientUserTypeAccessService clientUserTypeAccessService;
 
     /**
      * 执行第三方授权登录，并校验授权账号与系统账号的绑定关系。
@@ -69,8 +72,8 @@ public class SocialAuthStrategy implements IAuthStrategy {
             throw new ServiceException("你还没有绑定第三方账号，绑定后才可以登录！");
         }
         SysUserVo user = loadUser(list.getFirst().getUserId());
-        // 此处可根据登录用户的数据不同 自行创建 loginUser 属性不够用继承扩展就行了
-        LoginUser loginUser = loginService.buildLoginUser(user, client, null);
+        SysUserTypeVo activeUserType = clientUserTypeAccessService.requireLoginAccess(user.getUserId(), client);
+        LoginUser loginUser = loginService.buildLoginUser(user, client, activeUserType);
         SaLoginParameter model = IAuthStrategy.buildLoginParameter(client);
         // 生成token
         LoginHelper.login(loginUser, model);
