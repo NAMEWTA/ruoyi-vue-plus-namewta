@@ -35,43 +35,48 @@ public interface ISysRoleService {
     List<SysRoleVo> selectRoleList(SysRoleBo role);
 
     /**
-     * 根据用户ID查询角色列表
+     * 根据用户ID和客户端查询角色列表
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 角色列表
      */
-    List<SysRoleVo> selectRolesByUserId(Long userId);
+    List<SysRoleVo> selectRolesByUserId(Long userId, Long clientId);
 
     /**
-     * 根据用户ID查询角色列表(包含被授权状态)
+     * 根据用户ID和客户端查询角色列表(包含被授权状态)
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 角色列表
      */
-    List<SysRoleVo> selectRolesAuthByUserId(Long userId);
+    List<SysRoleVo> selectRolesAuthByUserId(Long userId, Long clientId);
 
     /**
-     * 根据用户ID查询角色权限
+     * 根据用户ID和客户端查询角色权限
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 权限列表
      */
-    Set<String> selectRolePermissionByUserId(Long userId);
+    Set<String> selectRolePermissionByUserId(Long userId, Long clientId);
 
     /**
-     * 查询所有角色
+     * 查询指定客户端下的全部角色
      *
+     * @param clientId 客户端主键
      * @return 角色列表
      */
-    List<SysRoleVo> selectRoleAll();
+    List<SysRoleVo> selectRoleAll(Long clientId);
 
     /**
-     * 根据用户ID获取角色选择框列表
+     * 根据用户ID和客户端获取角色选择框列表
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 选中角色ID列表
      */
-    List<Long> selectRoleListByUserId(Long userId);
+    List<Long> selectRoleListByUserId(Long userId, Long clientId);
 
     /**
      * 通过角色ID查询角色

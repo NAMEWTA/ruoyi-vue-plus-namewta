@@ -34,6 +34,12 @@ public class SysRoleBo implements Serializable {
     private Long roleId;
 
     /**
+     * 归属客户端主键
+     */
+    @NotNull(message = "客户端不能为空")
+    private Long clientId;
+
+    /**
      * 角色名称
      */
     @NotBlank(message = "角色名称不能为空")

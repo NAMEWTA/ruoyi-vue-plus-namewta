@@ -20,6 +20,7 @@ import org.dromara.common.mybatis.core.query.QueryBuilder;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.system.api.UserService;
 import org.dromara.system.api.domain.UserDTO;
+import org.dromara.system.api.model.LoginUser;
 import org.dromara.system.domain.SysUser;
 import org.dromara.system.domain.SysUserPost;
 import org.dromara.system.domain.SysUserRole;
@@ -167,7 +168,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (ObjectUtil.isNull(user)) {
             return user;
         }
-        user.setRoles(roleMapper.selectRolesByUserId(user.getUserId()));
+        user.setRoles(roleMapper.selectRolesByUserId(user.getUserId(), resolveLoginClientId()));
         return user;
     }
 
@@ -196,7 +197,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      */
     @Override
     public String selectUserRoleGroup(Long userId) {
-        List<SysRoleVo> list = roleMapper.selectRolesByUserId(userId);
+        List<SysRoleVo> list = roleMapper.selectRolesByUserId(userId, resolveLoginClientId());
         if (CollUtil.isEmpty(list)) {
             return StringUtils.EMPTY;
         }
@@ -772,6 +773,16 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             .in(SysUser::getUserId, userIds)
             .list();
         return StreamUtils.toMap(list, SysUser::getUserId, SysUser::getNickName);
+    }
+
+    /**
+     * 读取当前登录客户端主键，无上下文时不查询跨 Client 角色。
+     *
+     * @return 客户端主键
+     */
+    private Long resolveLoginClientId() {
+        LoginUser loginUser = LoginHelper.getLoginUser();
+        return loginUser == null ? null : loginUser.getClientPk();
     }
 
 }

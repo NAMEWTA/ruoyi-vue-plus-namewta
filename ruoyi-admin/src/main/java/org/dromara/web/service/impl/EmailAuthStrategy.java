@@ -57,7 +57,7 @@ public class EmailAuthStrategy implements IAuthStrategy {
         SysUserVo user = loadUserByEmail(email);
         loginService.checkLogin(LoginType.EMAIL, user.getUserName(), () -> !validateEmailCode(email, emailCode));
         // 此处可根据登录用户的数据不同 自行创建 loginUser 属性不够用继承扩展就行了
-        LoginUser loginUser = loginService.buildLoginUser(user);
+        LoginUser loginUser = loginService.buildLoginUser(user, client);
         loginUser.setClientKey(client.getClientKey());
         loginUser.setDeviceType(client.getDeviceType());
         SaLoginParameter model = IAuthStrategy.buildLoginParameter(client);

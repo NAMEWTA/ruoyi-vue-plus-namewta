@@ -39,9 +39,19 @@ public class SysPermissionServiceImpl implements ISysPermissionService, Permissi
         if (LoginHelper.isSuperAdmin(userId)) {
             roles.add(SystemConstants.SUPER_ADMIN_ROLE_KEY);
         } else {
-            roles.addAll(roleService.selectRolePermissionByUserId(userId));
+            roles.addAll(roleService.selectRolePermissionByUserId(userId, resolveClientId()));
         }
         return roles;
+    }
+
+    /**
+     * 从当前登录快照读取客户端主键；无上下文时不回退为全局角色。
+     *
+     * @return 客户端主键
+     */
+    private Long resolveClientId() {
+        var loginUser = LoginHelper.getLoginUser();
+        return loginUser == null ? null : loginUser.getClientPk();
     }
 
     /**

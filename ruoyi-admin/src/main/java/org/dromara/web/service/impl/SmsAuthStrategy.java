@@ -57,7 +57,7 @@ public class SmsAuthStrategy implements IAuthStrategy {
         SysUserVo user = loadUserByPhoneNumber(phoneNumber);
         loginService.checkLogin(LoginType.SMS, user.getUserName(), () -> !validateSmsCode(phoneNumber, smsCode));
         // 此处可根据登录用户的数据不同 自行创建 loginUser 属性不够用继承扩展就行了
-        LoginUser loginUser = loginService.buildLoginUser(user);
+        LoginUser loginUser = loginService.buildLoginUser(user, client);
         loginUser.setClientKey(client.getClientKey());
         loginUser.setDeviceType(client.getDeviceType());
         SaLoginParameter model = IAuthStrategy.buildLoginParameter(client);

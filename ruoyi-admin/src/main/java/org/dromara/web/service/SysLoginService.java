@@ -150,11 +150,13 @@ public class SysLoginService {
      * 根据用户视图对象组装登录态上下文。
      *
      * @param user 用户基础信息
+     * @param client 当前客户端
      * @return 包含部门、角色、岗位与权限数据的登录用户
      */
-    public LoginUser buildLoginUser(SysUserVo user) {
+    public LoginUser buildLoginUser(SysUserVo user, SysClientVo client) {
         LoginUser loginUser = new LoginUser();
         Long userId = user.getUserId();
+        Long clientId = ObjectUtil.isNull(client) ? null : client.getId();
         loginUser.setUserId(userId);
         loginUser.setDeptId(user.getDeptId());
         loginUser.setUsername(user.getUserName());
@@ -169,7 +171,7 @@ public class SysLoginService {
         }, () -> {
             loginUser.setRolePermission(permissionService.getRolePermission(userId));
         }, () -> {
-            List<SysRoleVo> roles = roleService.selectRolesByUserId(userId);
+            List<SysRoleVo> roles = roleService.selectRolesByUserId(userId, clientId);
             List<RoleDTO> roleDtos = BeanUtil.copyToList(roles, RoleDTO.class);
             loginUser.setRoles(roleDtos);
             loginUser.setDataScopeRoleMap(permissionService.getDataScopeRoleMap(roleDtos));

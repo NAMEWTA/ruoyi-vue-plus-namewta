@@ -54,6 +54,16 @@ public class LoginUser implements Serializable {
     private String userType;
 
     /**
+     * 登录域ID
+     */
+    private Long userTypeId;
+
+    /**
+     * 客户端主键
+     */
+    private Long clientPk;
+
+    /**
      * 登录时间
      */
     private Long loginTime;

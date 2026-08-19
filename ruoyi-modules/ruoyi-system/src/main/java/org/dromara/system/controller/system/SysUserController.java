@@ -141,13 +141,14 @@ public class SysUserController extends BaseController {
      */
     @SaCheckPermission("system:user:query")
     @GetMapping(value = {"/", "/{userId}"})
-    public R<SysUserInfoVo> getInfo(@PathVariable(value = "userId", required = false) Long userId) {
+    public R<SysUserInfoVo> getInfo(@PathVariable(value = "userId", required = false) Long userId,
+                                    @RequestParam(required = false) Long clientId) {
         SysUserInfoVo userInfoVo = new SysUserInfoVo();
         if (ObjectUtil.isNotNull(userId)) {
             userService.checkUserDataScope(userId);
             SysUserVo sysUser = userService.selectUserById(userId);
             userInfoVo.setUser(sysUser);
-            userInfoVo.setRoleIds(roleService.selectRoleListByUserId(userId));
+            userInfoVo.setRoleIds(roleService.selectRoleListByUserId(userId, clientId));
             Long deptId = sysUser.getDeptId();
             if (ObjectUtil.isNotNull(deptId)) {
                 SysPostBo postBo = new SysPostBo();
@@ -158,6 +159,7 @@ public class SysUserController extends BaseController {
         }
         SysRoleBo roleBo = new SysRoleBo();
         roleBo.setStatus(SystemConstants.NORMAL);
+        roleBo.setClientId(clientId);
         List<SysRoleVo> roles = roleService.selectRoleList(roleBo);
         userInfoVo.setRoles(LoginHelper.isSuperAdmin(userId) ? roles : StreamUtils.filter(roles, r -> !r.isSuperAdmin()));
         return R.ok(userInfoVo);
@@ -304,10 +306,11 @@ public class SysUserController extends BaseController {
      */
     @SaCheckPermission("system:user:query")
     @GetMapping("/authRole/{userId}")
-    public R<SysUserInfoVo> authRole(@PathVariable Long userId) {
+    public R<SysUserInfoVo> authRole(@PathVariable Long userId,
+                                     @RequestParam(required = false) Long clientId) {
         userService.checkUserDataScope(userId);
         SysUserVo user = userService.selectUserById(userId);
-        List<SysRoleVo> roles = roleService.selectRolesAuthByUserId(userId);
+        List<SysRoleVo> roles = roleService.selectRolesAuthByUserId(userId, clientId);
         SysUserInfoVo userInfoVo = new SysUserInfoVo();
         userInfoVo.setUser(user);
         userInfoVo.setRoles(LoginHelper.isSuperAdmin(userId) ? roles : StreamUtils.filter(roles, r -> !r.isSuperAdmin()));

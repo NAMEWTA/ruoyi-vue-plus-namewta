@@ -81,17 +81,22 @@ public interface SysRoleMapper extends BaseMapperPlus<SysRole, SysRoleVo>, MPJBa
     }
 
     /**
-     * 根据用户ID查询角色
+     * 根据用户ID和客户端查询角色
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 角色列表
      */
-    default List<SysRoleVo> selectRolesByUserId(Long userId) {
+    default List<SysRoleVo> selectRolesByUserId(Long userId, Long clientId) {
+        if (userId == null || clientId == null) {
+            return List.of();
+        }
         return this.selectJoinList(SysRoleVo.class, QueryBuilder.lambdaJoin("r", SysRole.class)
             .select(SysRole::getRoleId, SysRole::getRoleName, SysRole::getRoleKey,
-                SysRole::getRoleSort, SysRole::getDataScope, SysRole::getStatus)
+                SysRole::getRoleSort, SysRole::getDataScope, SysRole::getStatus, SysRole::getClientId)
             .leftJoin(SysUserRole.class, "sur", SysUserRole::getRoleId, SysRole::getRoleId)
             .eq("sur", SysUserRole::getUserId, userId)
+            .eq("r", SysRole::getClientId, clientId)
             .build());
     }
 

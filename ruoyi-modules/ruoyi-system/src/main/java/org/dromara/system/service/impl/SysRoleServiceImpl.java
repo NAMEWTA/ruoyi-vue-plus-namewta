@@ -62,6 +62,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public PageResult<SysRoleVo> selectPageRoleList(SysRoleBo role, PageQuery pageQuery) {
+        if (ObjectUtil.isNull(role.getClientId())) {
+            return PageResult.build(List.of(), 0);
+        }
         Page<SysRoleVo> page = roleMapper.selectPageRoleList(pageQuery.build(), this.buildQueryWrapper(role));
         return PageResult.build(page.getRecords(), page.getTotal());
     }
@@ -74,6 +77,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public List<SysRoleVo> selectRoleList(SysRoleBo role) {
+        if (ObjectUtil.isNull(role.getClientId())) {
+            return List.of();
+        }
         return roleMapper.selectRoleList(this.buildQueryWrapper(role));
     }
 
@@ -87,6 +93,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         Map<String, Object> params = bo.getParams();
         return QueryBuilder.lambda(SysRole.class)
             .eqIfPresent(SysRole::getRoleId, bo.getRoleId())
+            .eqIfPresent(SysRole::getClientId, bo.getClientId())
             .likeIfText(SysRole::getRoleName, bo.getRoleName())
             .eqIfText(SysRole::getStatus, bo.getStatus())
             .likeIfText(SysRole::getRoleKey, bo.getRoleKey())
@@ -102,21 +109,21 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 角色列表
      */
     @Override
-    public List<SysRoleVo> selectRolesByUserId(Long userId) {
-        return roleMapper.selectRolesByUserId(userId);
+    public List<SysRoleVo> selectRolesByUserId(Long userId, Long clientId) {
+        return roleMapper.selectRolesByUserId(userId, clientId);
     }
 
     /**
-     * 根据用户ID查询角色列表(包含被授权状态)
+     * 根据用户ID和客户端查询角色列表(包含被授权状态)
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 角色列表
      */
     @Override
-    public List<SysRoleVo> selectRolesAuthByUserId(Long userId) {
-        List<SysRoleVo> userRoles = roleMapper.selectRolesByUserId(userId);
-        List<SysRoleVo> roles = selectRoleAll();
-        // 使用HashSet提高查找效率
+    public List<SysRoleVo> selectRolesAuthByUserId(Long userId, Long clientId) {
+        List<SysRoleVo> userRoles = roleMapper.selectRolesByUserId(userId, clientId);
+        List<SysRoleVo> roles = selectRoleAll(clientId);
         Set<Long> userRoleIds = StreamUtils.toSet(userRoles, SysRoleVo::getRoleId);
         for (SysRoleVo role : roles) {
             if (userRoleIds.contains(role.getRoleId())) {
@@ -127,14 +134,15 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     }
 
     /**
-     * 根据用户ID查询权限
+     * 根据用户ID和客户端查询权限
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 权限列表
      */
     @Override
-    public Set<String> selectRolePermissionByUserId(Long userId) {
-        List<SysRoleVo> perms = roleMapper.selectRolesByUserId(userId);
+    public Set<String> selectRolePermissionByUserId(Long userId, Long clientId) {
+        List<SysRoleVo> perms = roleMapper.selectRolesByUserId(userId, clientId);
         Set<String> permsSet = new HashSet<>();
         for (SysRoleVo perm : perms) {
             if (ObjectUtil.isNotNull(perm)) {
@@ -145,24 +153,28 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     }
 
     /**
-     * 查询所有角色
+     * 查询指定客户端下的全部角色
      *
+     * @param clientId 客户端主键
      * @return 角色列表
      */
     @Override
-    public List<SysRoleVo> selectRoleAll() {
-        return this.selectRoleList(new SysRoleBo());
+    public List<SysRoleVo> selectRoleAll(Long clientId) {
+        SysRoleBo bo = new SysRoleBo();
+        bo.setClientId(clientId);
+        return this.selectRoleList(bo);
     }
 
     /**
-     * 根据用户ID获取角色选择框列表
+     * 根据用户ID和客户端获取角色选择框列表
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 选中角色ID列表
      */
     @Override
-    public List<Long> selectRoleListByUserId(Long userId) {
-        List<SysRoleVo> list = roleMapper.selectRolesByUserId(userId);
+    public List<Long> selectRoleListByUserId(Long userId, Long clientId) {
+        List<SysRoleVo> list = roleMapper.selectRolesByUserId(userId, clientId);
         return StreamUtils.toList(list, SysRoleVo::getRoleId);
     }
 
@@ -199,8 +211,10 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public boolean checkRoleNameUnique(SysRoleBo role) {
+        fillClientIdIfAbsent(role);
         boolean exist = roleMapper.lambda()
             .eq(SysRole::getRoleName, role.getRoleName())
+            .eq(SysRole::getClientId, role.getClientId())
             .neIfPresent(SysRole::getRoleId, role.getRoleId())
             .exists();
         return !exist;
@@ -214,8 +228,10 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public boolean checkRoleKeyUnique(SysRoleBo role) {
+        fillClientIdIfAbsent(role);
         boolean exist = roleMapper.lambda()
             .eq(SysRole::getRoleKey, role.getRoleKey())
+            .eq(SysRole::getClientId, role.getClientId())
             .neIfPresent(SysRole::getRoleId, role.getRoleId())
             .exists();
         return !exist;
@@ -248,6 +264,21 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
                     throw new ServiceException("不允许使用系统内置管理员角色标识符!");
                 }
             }
+        }
+    }
+
+    /**
+     * 编辑时若未传客户端，则回填库中已有归属，保证 Client 内唯一校验。
+     *
+     * @param role 角色信息
+     */
+    private void fillClientIdIfAbsent(SysRoleBo role) {
+        if (ObjectUtil.isNotNull(role.getClientId()) || ObjectUtil.isNull(role.getRoleId())) {
+            return;
+        }
+        SysRole dbRole = roleMapper.selectById(role.getRoleId());
+        if (ObjectUtil.isNotNull(dbRole)) {
+            role.setClientId(dbRole.getClientId());
         }
     }
 
@@ -301,6 +332,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     @Transactional(rollbackFor = Exception.class)
     public int insertRole(SysRoleBo bo) {
         SysRole role = MapstructUtils.convert(bo, SysRole.class);
+        if (ObjectUtil.isNull(role.getClientId())) {
+            throw new ServiceException("客户端不能为空");
+        }
         // 新增角色信息
         roleMapper.insert(role);
         bo.setRoleId(role.getRoleId());
@@ -317,6 +351,10 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     @Transactional(rollbackFor = Exception.class)
     public int updateRoleBaseInfo(SysRoleBo bo) {
         SysRole role = MapstructUtils.convert(bo, SysRole.class);
+        SysRole dbRole = roleMapper.selectById(role.getRoleId());
+        if (ObjectUtil.isNotNull(dbRole)) {
+            role.setClientId(dbRole.getClientId());
+        }
 
         if (SystemConstants.DISABLE.equals(role.getStatus()) && this.countUserRoleByRoleId(role.getRoleId()) > 0) {
             throw new ServiceException("角色已分配，不能禁用!");

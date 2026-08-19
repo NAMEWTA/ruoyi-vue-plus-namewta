@@ -33,6 +33,16 @@ public class SysRoleVo implements Serializable {
     private Long roleId;
 
     /**
+     * 归属客户端主键
+     */
+    private Long clientId;
+
+    /**
+     * 是否为当前客户端默认角色
+     */
+    private Boolean clientDefault;
+
+    /**
      * 角色名称
      */
     @ExcelProperty(value = "角色名称")
