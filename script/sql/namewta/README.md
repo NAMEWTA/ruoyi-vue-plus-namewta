@@ -10,3 +10,5 @@
 4. `003_initial_data.sql` — 两个登录域、现有 Client/角色/菜单回填、演示 Client、删除全局注册开关
 
 已有库从当前 `ry_vue.sql` 基线升级时，同样按 001 → 002 → 003 顺序执行一次即可。
+
+上游跟随热点（认证/权限/Client 字段别名等）见父仓库 `docs/upstream/customization-map.md`，本仓库指针在 `docs/upstream/README.md`。
