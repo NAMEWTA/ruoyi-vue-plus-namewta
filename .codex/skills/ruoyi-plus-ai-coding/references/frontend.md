@@ -6,10 +6,11 @@
 - 默认 Vue 模板在 `fm/vue`，React 模板在 `fm/react`
 - 前端工程中与目标模块最接近的现有页面
 
-当前 boot4 仓库通常只含后端与 generator 前端模板；如果前端工程不在当前仓库根目录，先以 generator 模板约定为准，再对照用户提供的前端工程或官方前端分支：
+当前 boot4 仓库通常只含后端与 generator 前端模板；如果前端工程不在当前仓库根目录，先以 generator 模板约定为准，再对照用户提供的前端工程或下列地址：
 
-- Vue 前端：`https://gitee.com/JavaLionLi/plus-ui/tree/6.X-Vue`
-- React 前端：`https://gitee.com/JavaLionLi/plus-ui/tree/6.X-React`
+- Vue 前端远端：`https://github.com/NAMEWTA/plus-ui-namewta`，分支 `main`
+- 在父仓库 `ruoyi-vue-plus-docs` 中，前端 submodule 相对后端为 `../plus-ui-namewta`
+- React：本聚合仓库没有对应工程；任务若涉及 React，先确认用户提供的工程路径，不要假设远端仓库
 
 ## 前端模板选择规则
 

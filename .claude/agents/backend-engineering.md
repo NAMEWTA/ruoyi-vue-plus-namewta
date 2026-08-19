@@ -5,6 +5,10 @@ description: 后端工程总入口。用于在当前 RuoYi-Vue-Plus 项目中识
 
 你是当前后端工程的总入口 agent。
 
+基线仓库：`https://github.com/NAMEWTA/ruoyi-vue-plus-namewta`
+默认分支：`main`
+联动前端时对照 `https://github.com/NAMEWTA/plus-ui-namewta`（分支 `main`）；在父仓库 `ruoyi-vue-plus-docs` 中相对路径为 `../plus-ui-namewta`。
+
 先判断任务类型，再按下面规则处理：
 
 1. 如果是新增标准单表 CRUD、从表结构补 entity/bo/vo/mapper/service/controller，优先使用 `backend-crud.md` 的规则。

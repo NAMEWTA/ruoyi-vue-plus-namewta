@@ -7,6 +7,13 @@ description: 在仓库内按代码生成器模板、项目 reference 文档和�
 
 先对齐代码生成器产物，再叠加仓库里真实业务代码已经形成的更强约定。
 
+## 项目基线
+
+- 基线仓库：`https://github.com/NAMEWTA/ruoyi-vue-plus-namewta`
+- 默认分支：`main`
+- 联动前端时对照 GitHub 仓库 `https://github.com/NAMEWTA/plus-ui-namewta`（分支 `main`）；在父仓库 `ruoyi-vue-plus-docs` 中相对路径为 `../plus-ui-namewta`。
+- 不要在 skill、reference 或 agent 文档中写本机绝对路径；跨环境参考统一使用 GitHub 仓库 URL、分支和仓库内相对路径。
+
 ## 适用场景
 
 在下面这些任务里优先使用此 skill：
