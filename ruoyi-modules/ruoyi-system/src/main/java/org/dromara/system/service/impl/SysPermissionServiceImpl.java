@@ -29,46 +29,36 @@ public class SysPermissionServiceImpl implements ISysPermissionService, Permissi
     /**
      * 获取角色数据权限
      *
-     * @param userId 用户id
+     * @param userId   用户id
+     * @param clientId 客户端主键
      * @return 角色权限信息
      */
     @Override
-    public Set<String> getRolePermission(Long userId) {
+    public Set<String> getRolePermission(Long userId, Long clientId) {
         Set<String> roles = new HashSet<>();
-        // 管理员拥有所有权限
+        // 管理员拥有所有权限标识，角色加载仍按当前 Client 收敛
         if (LoginHelper.isSuperAdmin(userId)) {
             roles.add(SystemConstants.SUPER_ADMIN_ROLE_KEY);
-        } else {
-            roles.addAll(roleService.selectRolePermissionByUserId(userId, resolveClientId()));
         }
+        roles.addAll(roleService.selectRolePermissionByUserId(userId, clientId));
         return roles;
-    }
-
-    /**
-     * 从当前登录快照读取客户端主键；无上下文时不回退为全局角色。
-     *
-     * @return 客户端主键
-     */
-    private Long resolveClientId() {
-        var loginUser = LoginHelper.getLoginUser();
-        return loginUser == null ? null : loginUser.getClientPk();
     }
 
     /**
      * 获取菜单数据权限
      *
-     * @param userId 用户id
+     * @param userId   用户id
+     * @param clientId 客户端主键
      * @return 菜单权限信息
      */
     @Override
-    public Set<String> getMenuPermission(Long userId) {
+    public Set<String> getMenuPermission(Long userId, Long clientId) {
         Set<String> perms = new HashSet<>();
-        // 管理员拥有所有权限
+        // 管理员拥有所有权限，菜单加载仍按当前 Client 收敛
         if (LoginHelper.isSuperAdmin(userId)) {
             perms.add("*:*:*");
-        } else {
-            perms.addAll(menuService.selectMenuPermsByUserId(userId, resolveClientId()));
         }
+        perms.addAll(menuService.selectMenuPermsByUserId(userId, clientId));
         return perms;
     }
 

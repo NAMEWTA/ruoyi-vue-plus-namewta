@@ -61,6 +61,7 @@ public interface IAuthStrategy {
         model.setTimeout(client.getTimeout());
         model.setActiveTimeout(client.getActiveTimeout());
         model.setExtra(LoginHelper.CLIENT_KEY, client.getClientId());
+        model.setExtra(LoginHelper.CLIENT_PK_KEY, client.getId());
         model.setExtra(LoginHelper.CLIENT_ACCESS_PATH_KEY, client.getAccessPath());
         model.setExtra(LoginHelper.CLIENT_IP_WHITELIST_KEY, client.getIpWhitelist());
         if (ObjectUtil.isNotNull(customizer)) {

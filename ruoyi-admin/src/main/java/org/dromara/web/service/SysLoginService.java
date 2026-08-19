@@ -149,11 +149,12 @@ public class SysLoginService {
     /**
      * 根据用户视图对象组装登录态上下文。
      *
-     * @param user 用户基础信息
-     * @param client 当前客户端
+     * @param user           用户基础信息
+     * @param client         当前客户端
+     * @param activeUserType 当前客户端要求且用户已拥有的登录域
      * @return 包含部门、角色、岗位与权限数据的登录用户
      */
-    public LoginUser buildLoginUser(SysUserVo user, SysClientVo client) {
+    public LoginUser buildLoginUser(SysUserVo user, SysClientVo client, SysUserTypeVo activeUserType) {
         LoginUser loginUser = new LoginUser();
         Long userId = user.getUserId();
         Long clientId = ObjectUtil.isNull(client) ? null : client.getId();
@@ -161,15 +162,24 @@ public class SysLoginService {
         loginUser.setDeptId(user.getDeptId());
         loginUser.setUsername(user.getUserName());
         loginUser.setNickname(user.getNickName());
+        if (ObjectUtil.isNotNull(activeUserType)) {
+            loginUser.setUserType(activeUserType.getUserTypeCode());
+            loginUser.setUserTypeId(activeUserType.getUserTypeId());
+        }
+        if (ObjectUtil.isNotNull(client)) {
+            loginUser.setClientPk(client.getId());
+            loginUser.setClientKey(client.getClientKey());
+            loginUser.setDeviceType(client.getDeviceType());
+        }
         if (ObjectUtil.isNotNull(user.getDeptId())) {
             Opt<SysDeptVo> deptOpt = Opt.of(user.getDeptId()).map(deptService::selectDeptById);
             loginUser.setDeptName(deptOpt.map(SysDeptVo::getDeptName).orElse(StringUtils.EMPTY));
             loginUser.setDeptCategory(deptOpt.map(SysDeptVo::getDeptCategory).orElse(StringUtils.EMPTY));
         }
         ThreadUtils.virtualInvokeAll(() -> {
-            loginUser.setMenuPermission(permissionService.getMenuPermission(userId));
+            loginUser.setMenuPermission(permissionService.getMenuPermission(userId, clientId));
         }, () -> {
-            loginUser.setRolePermission(permissionService.getRolePermission(userId));
+            loginUser.setRolePermission(permissionService.getRolePermission(userId, clientId));
         }, () -> {
             List<SysRoleVo> roles = roleService.selectRolesByUserId(userId, clientId);
             List<RoleDTO> roleDtos = BeanUtil.copyToList(roles, RoleDTO.class);

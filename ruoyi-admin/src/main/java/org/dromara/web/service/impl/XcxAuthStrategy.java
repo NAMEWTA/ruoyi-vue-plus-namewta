@@ -2,6 +2,7 @@ package org.dromara.web.service.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.dev33.satoken.stp.parameter.SaLoginParameter;
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ObjectUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.ValidatorUtils;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
+import org.dromara.system.api.model.LoginUser;
 import org.dromara.system.api.model.XcxLoginBody;
 import org.dromara.system.api.model.XcxLoginUser;
 import org.dromara.system.domain.vo.SysClientVo;
@@ -72,13 +74,9 @@ public class XcxAuthStrategy implements IAuthStrategy {
         }
         // 框架登录不限制从什么表查询 只要最终构建出 LoginUser 即可
         SysUserVo user = loadUserByOpenid(openid);
-        // 此处可根据登录用户的数据不同 自行创建 loginUser 属性不够用继承扩展就行了
+        LoginUser baseLoginUser = loginService.buildLoginUser(user, client, null);
         XcxLoginUser loginUser = new XcxLoginUser();
-        loginUser.setUserId(user.getUserId());
-        loginUser.setUsername(user.getUserName());
-        loginUser.setNickname(user.getNickName());
-        loginUser.setClientKey(client.getClientKey());
-        loginUser.setDeviceType(client.getDeviceType());
+        BeanUtil.copyProperties(baseLoginUser, loginUser);
         loginUser.setOpenid(openid);
 
         SaLoginParameter model = IAuthStrategy.buildLoginParameter(client);

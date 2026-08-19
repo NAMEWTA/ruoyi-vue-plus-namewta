@@ -69,9 +69,7 @@ public class PasswordAuthStrategy implements IAuthStrategy {
         SysUserVo user = loadUserByUsername(username);
         loginService.checkLogin(LoginType.PASSWORD, username, () -> !BCrypt.checkpw(password, user.getPassword()));
         // 此处可根据登录用户的数据不同 自行创建 loginUser
-        LoginUser loginUser = loginService.buildLoginUser(user, client);
-        loginUser.setClientKey(client.getClientKey());
-        loginUser.setDeviceType(client.getDeviceType());
+        LoginUser loginUser = loginService.buildLoginUser(user, client, null);
         SaLoginParameter model = IAuthStrategy.buildLoginParameter(client);
         // 生成token
         LoginHelper.login(loginUser, model);

@@ -16,18 +16,20 @@ public interface ISysPermissionService {
     /**
      * 获取角色数据权限
      *
-     * @param userId 用户id
+     * @param userId   用户id
+     * @param clientId 客户端主键
      * @return 角色权限信息
      */
-    Set<String> getRolePermission(Long userId);
+    Set<String> getRolePermission(Long userId, Long clientId);
 
     /**
      * 获取菜单数据权限
      *
-     * @param userId 用户id
+     * @param userId   用户id
+     * @param clientId 客户端主键
      * @return 菜单权限信息
      */
-    Set<String> getMenuPermission(Long userId);
+    Set<String> getMenuPermission(Long userId, Long clientId);
 
     /**
      * 根据角色列表构建数据权限角色映射

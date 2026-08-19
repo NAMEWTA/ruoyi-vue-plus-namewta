@@ -70,9 +70,7 @@ public class SocialAuthStrategy implements IAuthStrategy {
         }
         SysUserVo user = loadUser(list.getFirst().getUserId());
         // 此处可根据登录用户的数据不同 自行创建 loginUser 属性不够用继承扩展就行了
-        LoginUser loginUser = loginService.buildLoginUser(user, client);
-        loginUser.setClientKey(client.getClientKey());
-        loginUser.setDeviceType(client.getDeviceType());
+        LoginUser loginUser = loginService.buildLoginUser(user, client, null);
         SaLoginParameter model = IAuthStrategy.buildLoginParameter(client);
         // 生成token
         LoginHelper.login(loginUser, model);
