@@ -42,6 +42,11 @@ public interface CacheNames {
     String SYS_CLIENT = "sys_client#30d";
 
     /**
+     * 登录域
+     */
+    String SYS_USER_TYPE = "sys_user_type#30d";
+
+    /**
      * 用户账户
      */
     String SYS_USER_NAME = "sys_user_name#30d";

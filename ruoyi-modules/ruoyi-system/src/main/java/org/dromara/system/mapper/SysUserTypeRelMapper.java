@@ -1,0 +1,37 @@
+package org.dromara.system.mapper;
+
+import com.github.yulichang.base.MPJBaseMapper;
+import org.dromara.common.mybatis.core.mapper.BaseMapperPlus;
+import org.dromara.common.mybatis.core.query.QueryBuilder;
+import org.dromara.system.domain.SysUserType;
+import org.dromara.system.domain.SysUserTypeRel;
+import org.dromara.system.domain.vo.SysUserTypeRelVo;
+
+import java.util.List;
+
+/**
+ * 用户登录域关系Mapper接口
+ *
+ * @author NAMEWTA
+ */
+public interface SysUserTypeRelMapper extends BaseMapperPlus<SysUserTypeRel, SysUserTypeRelVo>, MPJBaseMapper<SysUserTypeRel> {
+
+    /**
+     * 查询用户拥有的登录域（含登录域编码、名称、状态）。
+     *
+     * @param userId 用户ID
+     * @return 登录域关系列表
+     */
+    default List<SysUserTypeRelVo> selectVoListByUserId(Long userId) {
+        return this.selectJoinList(SysUserTypeRelVo.class, QueryBuilder.lambdaJoin("r", SysUserTypeRel.class)
+            .selectAll(SysUserTypeRel.class)
+            .selectAs(SysUserType::getUserTypeCode, SysUserTypeRelVo::getUserTypeCode)
+            .selectAs(SysUserType::getUserTypeName, SysUserTypeRelVo::getUserTypeName)
+            .selectAs(SysUserType::getStatus, SysUserTypeRelVo::getUserTypeStatus)
+            .leftJoin(SysUserType.class, "t", SysUserType::getUserTypeId, SysUserTypeRel::getUserTypeId)
+            .eq("r", SysUserTypeRel::getUserId, userId)
+            .orderByAsc("t", SysUserType::getOrderNum)
+            .build());
+    }
+
+}
