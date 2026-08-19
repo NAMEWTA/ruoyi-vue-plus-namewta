@@ -15,11 +15,13 @@ import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.system.domain.SysMenu;
 import org.dromara.system.domain.SysRole;
 import org.dromara.system.domain.SysRoleMenu;
+import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.bo.SysMenuBo;
 import org.dromara.system.domain.vo.MetaVo;
 import org.dromara.system.domain.vo.RouterVo;
 import org.dromara.system.domain.vo.SysMenuVo;
 import org.dromara.system.mapper.SysMenuMapper;
+import org.dromara.system.mapper.SysClientMapper;
 import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.service.ClientSessionService;
@@ -42,6 +44,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
     private final SysMenuMapper menuMapper;
     private final SysRoleMapper roleMapper;
     private final SysRoleMenuMapper roleMenuMapper;
+    private final SysClientMapper clientMapper;
     private final ClientSessionService clientSessionService;
 
     /**
@@ -82,7 +85,8 @@ public class SysMenuServiceImpl implements ISysMenuService {
                 .orderByAsc(SysMenu::getOrderNum)
                 .voList();
         }
-        return menuMapper.selectMenuListByUserId(menu, userId, clientId);
+        return mergeMenuVos(menuMapper.selectMenuListByUserId(menu, userId, clientId),
+            menuMapper.selectMenuListByRoleId(menu, resolveDefaultRoleId(clientId), clientId));
     }
 
     /**
@@ -93,7 +97,12 @@ public class SysMenuServiceImpl implements ISysMenuService {
      */
     @Override
     public Set<String> selectMenuPermsByUserId(Long userId, Long clientId) {
-        return menuMapper.selectMenuPermsByUserId(userId, clientId);
+        Set<String> perms = new HashSet<>(menuMapper.selectMenuPermsByUserId(userId, clientId));
+        Long defaultRoleId = resolveDefaultRoleId(clientId);
+        if (defaultRoleId != null) {
+            perms.addAll(menuMapper.selectMenuPermsByRoleId(defaultRoleId));
+        }
+        return perms;
     }
 
     /**
@@ -133,7 +142,9 @@ public class SysMenuServiceImpl implements ISysMenuService {
         if (LoginHelper.isSuperAdmin(userId)) {
             menus = menuMapper.selectMenuTreeAll(clientId);
         } else {
-            menus = menuMapper.selectMenuTreeByUserId(userId, clientId);
+            menus = mergeMenus(
+                menuMapper.selectMenuTreeByUserId(userId, clientId),
+                menuMapper.selectMenuTreeByRoleId(resolveDefaultRoleId(clientId), clientId));
         }
         if (CollUtil.isEmpty(menus)) {
             return CollUtil.newArrayList();
@@ -451,6 +462,66 @@ public class SysMenuServiceImpl implements ISysMenuService {
         if (!menu.getClientId().equals(parent.getClientId())) {
             throw new ServiceException(isAdd ? "父菜单必须属于同一客户端" : "不能将菜单移动到其他客户端");
         }
+    }
+
+    /**
+     * 读取客户端默认角色ID。角色必须启用且属于当前客户端。
+     *
+     * @param clientId 客户端主键
+     * @return 默认角色ID，不存在时返回 null
+     */
+    private Long resolveDefaultRoleId(Long clientId) {
+        if (ObjectUtil.isNull(clientId)) {
+            return null;
+        }
+        SysClient client = clientMapper.selectById(clientId);
+        if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getDefaultRoleId())) {
+            return null;
+        }
+        SysRole role = roleMapper.selectById(client.getDefaultRoleId());
+        if (ObjectUtil.isNull(role) || !SystemConstants.NORMAL.equals(role.getStatus())) {
+            return null;
+        }
+        if (ObjectUtil.isNotNull(role.getClientId()) && !clientId.equals(role.getClientId())) {
+            return null;
+        }
+        return role.getRoleId();
+    }
+
+    /**
+     * 合并用户显式菜单与默认角色菜单，按菜单ID去重。
+     *
+     * @param owned   显式角色菜单
+     * @param extra   默认角色菜单
+     * @return 合并后的菜单
+     */
+    private List<SysMenu> mergeMenus(List<SysMenu> owned, List<SysMenu> extra) {
+        LinkedHashMap<Long, SysMenu> merged = new LinkedHashMap<>();
+        if (CollUtil.isNotEmpty(owned)) {
+            owned.forEach(menu -> merged.put(menu.getMenuId(), menu));
+        }
+        if (CollUtil.isNotEmpty(extra)) {
+            extra.forEach(menu -> merged.putIfAbsent(menu.getMenuId(), menu));
+        }
+        return new ArrayList<>(merged.values());
+    }
+
+    /**
+     * 合并用户显式菜单与默认角色菜单视图。
+     *
+     * @param owned 显式角色菜单
+     * @param extra 默认角色菜单
+     * @return 合并后的菜单
+     */
+    private List<SysMenuVo> mergeMenuVos(List<SysMenuVo> owned, List<SysMenuVo> extra) {
+        LinkedHashMap<Long, SysMenuVo> merged = new LinkedHashMap<>();
+        if (CollUtil.isNotEmpty(owned)) {
+            owned.forEach(menu -> merged.put(menu.getMenuId(), menu));
+        }
+        if (CollUtil.isNotEmpty(extra)) {
+            extra.forEach(menu -> merged.putIfAbsent(menu.getMenuId(), menu));
+        }
+        return new ArrayList<>(merged.values());
     }
 
 }

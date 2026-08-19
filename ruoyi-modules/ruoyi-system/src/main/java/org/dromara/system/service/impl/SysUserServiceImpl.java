@@ -24,14 +24,19 @@ import org.dromara.system.api.model.LoginUser;
 import org.dromara.system.domain.SysUser;
 import org.dromara.system.domain.SysUserPost;
 import org.dromara.system.domain.SysUserRole;
+import org.dromara.system.domain.SysClient;
+import org.dromara.system.domain.SysRole;
 import org.dromara.system.domain.bo.SysUserBo;
+import org.dromara.system.domain.constant.UserTypeGrantSource;
 import org.dromara.system.domain.vo.SysPostVo;
 import org.dromara.system.domain.vo.SysRoleVo;
 import org.dromara.system.domain.vo.SysUserExportVo;
+import org.dromara.system.domain.vo.SysUserTypeRelVo;
 import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.mapper.*;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysUserService;
+import org.dromara.system.service.ISysUserTypeRelService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -55,7 +60,9 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     private final SysPostMapper postMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
+    private final SysClientMapper clientMapper;
     private final ClientSessionService clientSessionService;
+    private final ISysUserTypeRelService userTypeRelService;
 
     /**
      * 分页查询用户列表。
@@ -171,6 +178,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             return user;
         }
         user.setRoles(roleMapper.selectRolesByUserId(user.getUserId(), resolveLoginClientId()));
+        fillUserTypes(user);
         return user;
     }
 
@@ -307,6 +315,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         // 新增用户信息
         int rows = userMapper.insert(sysUser);
         user.setUserId(sysUser.getUserId());
+        userTypeRelService.coverUserTypes(user.getUserId(), user.getUserTypeIds(), UserTypeGrantSource.ADMIN_CREATE);
         // 新增用户岗位关联
         insertUserPost(user, false);
         // 新增用户与角色管理
@@ -342,6 +351,9 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     @CacheEvict(cacheNames = CacheNames.SYS_NICKNAME, key = "#user.userId")
     @Transactional(rollbackFor = Exception.class)
     public int updateUser(SysUserBo user) {
+        if (user.getUserTypeIds() != null) {
+            userTypeRelService.coverUserTypes(user.getUserId(), user.getUserTypeIds(), UserTypeGrantSource.ADMIN_GRANT);
+        }
         // 新增用户与角色管理
         insertUserRole(user, true);
         // 新增用户与岗位管理
@@ -492,6 +504,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (roleMapper.selectRoleCount(roleList) != roleList.size()) {
             throw new ServiceException("没有权限访问角色的数据");
         }
+        validateRolesUserType(userId, roleList);
 
         // 是否清除原有绑定
         if (clear) {
@@ -507,6 +520,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
                 return ur;
             });
         userRoleMapper.insertBatch(list);
+        kickUserRoleClients(userId, roleList);
     }
 
     /**
@@ -522,6 +536,8 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         userRoleMapper.lambda().eq(SysUserRole::getUserId, userId).delete();
         // 删除用户与岗位表
         userPostMapper.lambda().eq(SysUserPost::getUserId, userId).delete();
+        userTypeRelService.deleteByUserIds(List.of(userId));
+        clientSessionService.kickoutUser(userId);
         // 防止更新失败导致的数据删除
         int flag = userMapper.deleteById(userId);
         if (flag < 1) {
@@ -548,6 +564,10 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         userRoleMapper.lambda().in(SysUserRole::getUserId, ids).delete();
         // 删除用户与岗位表
         userPostMapper.lambda().in(SysUserPost::getUserId, ids).delete();
+        userTypeRelService.deleteByUserIds(ids);
+        for (Long userId : ids) {
+            clientSessionService.kickoutUser(userId);
+        }
         // 防止更新失败导致的数据删除
         int flag = userMapper.deleteByIds(ids);
         if (flag < 1) {
@@ -793,6 +813,60 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     private Long resolveLoginClientId() {
         LoginUser loginUser = LoginHelper.getLoginUser();
         return loginUser == null ? null : loginUser.getClientPk();
+    }
+
+    /**
+     * 回填用户拥有的登录域。
+     *
+     * @param user 用户视图
+     */
+    private void fillUserTypes(SysUserVo user) {
+        List<SysUserTypeRelVo> rels = userTypeRelService.selectByUserId(user.getUserId());
+        user.setUserTypeIds(StreamUtils.toList(rels, SysUserTypeRelVo::getUserTypeId));
+        user.setUserTypeCodes(StreamUtils.toList(rels, SysUserTypeRelVo::getUserTypeCode));
+        user.setUserTypeNames(StreamUtils.toList(rels, SysUserTypeRelVo::getUserTypeName));
+    }
+
+    /**
+     * 分配角色前校验用户已具备该角色客户端要求的登录域。
+     *
+     * @param userId   用户ID
+     * @param roleIds  角色ID列表
+     */
+    private void validateRolesUserType(Long userId, Collection<Long> roleIds) {
+        if (CollUtil.isEmpty(roleIds)) {
+            return;
+        }
+        List<SysRole> roles = roleMapper.selectByIds(roleIds);
+        for (SysRole role : roles) {
+            if (ObjectUtil.isNull(role) || ObjectUtil.isNull(role.getClientId())) {
+                continue;
+            }
+            SysClient client = clientMapper.selectById(role.getClientId());
+            if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getUserTypeId())) {
+                continue;
+            }
+            if (!userTypeRelService.hasUserType(userId, client.getUserTypeId())) {
+                throw new ServiceException("用户不具备角色[{}]所属客户端的登录域", role.getRoleName());
+            }
+        }
+    }
+
+    /**
+     * 用户在某客户端的角色变化后，清理该客户端会话。
+     *
+     * @param userId  用户ID
+     * @param roleIds 角色ID列表
+     */
+    private void kickUserRoleClients(Long userId, Collection<Long> roleIds) {
+        if (CollUtil.isEmpty(roleIds)) {
+            return;
+        }
+        List<SysRole> roles = roleMapper.selectByIds(roleIds);
+        Set<Long> clientIds = StreamUtils.toSet(roles, SysRole::getClientId);
+        for (Long clientId : clientIds) {
+            clientSessionService.kickoutUserClient(userId, clientId);
+        }
     }
 
 }

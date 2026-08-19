@@ -25,8 +25,10 @@ import org.dromara.system.domain.SysRoleDept;
 import org.dromara.system.domain.SysRoleMenu;
 import org.dromara.system.domain.SysUserRole;
 import org.dromara.system.domain.SysMenu;
+import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.bo.SysRoleBo;
 import org.dromara.system.domain.vo.SysRoleVo;
+import org.dromara.system.mapper.SysClientMapper;
 import org.dromara.system.mapper.SysMenuMapper;
 import org.dromara.system.mapper.SysRoleDeptMapper;
 import org.dromara.system.mapper.SysRoleMapper;
@@ -34,6 +36,7 @@ import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.mapper.SysUserRoleMapper;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysRoleService;
+import org.dromara.system.service.ISysUserTypeRelService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,7 +57,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     private final SysUserRoleMapper userRoleMapper;
     private final SysRoleDeptMapper roleDeptMapper;
     private final SysMenuMapper menuMapper;
+    private final SysClientMapper clientMapper;
     private final ClientSessionService clientSessionService;
+    private final ISysUserTypeRelService userTypeRelService;
 
     /**
      * 分页查询角色列表
@@ -113,7 +118,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public List<SysRoleVo> selectRolesByUserId(Long userId, Long clientId) {
-        return roleMapper.selectRolesByUserId(userId, clientId);
+        List<SysRoleVo> roles = new ArrayList<>(roleMapper.selectRolesByUserId(userId, clientId));
+        mergeDefaultRole(roles, clientId);
+        return roles;
     }
 
     /**
@@ -145,7 +152,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public Set<String> selectRolePermissionByUserId(Long userId, Long clientId) {
-        List<SysRoleVo> perms = roleMapper.selectRolesByUserId(userId, clientId);
+        List<SysRoleVo> perms = selectRolesByUserId(userId, clientId);
         Set<String> permsSet = new HashSet<>();
         for (SysRoleVo perm : perms) {
             if (ObjectUtil.isNotNull(perm)) {
@@ -567,6 +574,8 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         if (userIds.contains(LoginHelper.getUserId())) {
             throw new ServiceException("不允许修改当前用户角色!");
         }
+        SysRole role = roleMapper.selectById(roleId);
+        validateUsersHaveRoleClientType(role, userIds);
         List<SysUserRole> list = StreamUtils.toList(userIds, userId -> {
             SysUserRole ur = new SysUserRole();
             ur.setUserId(userId);
@@ -576,12 +585,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         if (CollUtil.isNotEmpty(list)) {
             rows = userRoleMapper.insertBatch(list) ? list.size() : 0;
         }
-        if (rows > 0) {
-            SysRole role = roleMapper.selectById(roleId);
-            if (role != null) {
-                for (Long userId : userIds) {
-                    clientSessionService.kickoutUserClient(userId, role.getClientId());
-                }
+        if (rows > 0 && role != null) {
+            for (Long userId : userIds) {
+                clientSessionService.kickoutUserClient(userId, role.getClientId());
             }
         }
         return rows;
@@ -681,6 +687,56 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             .in(SysRole::getRoleId, roleIds)
             .list();
         return StreamUtils.toMap(list, SysRole::getRoleId, SysRole::getRoleName);
+    }
+
+    /**
+     * 在有效角色中合并客户端默认角色，不写入 sys_user_role。
+     *
+     * @param roles    用户显式角色
+     * @param clientId 客户端主键
+     */
+    private void mergeDefaultRole(List<SysRoleVo> roles, Long clientId) {
+        if (clientId == null) {
+            return;
+        }
+        SysClient client = clientMapper.selectById(clientId);
+        if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getDefaultRoleId())) {
+            return;
+        }
+        Long defaultRoleId = client.getDefaultRoleId();
+        boolean already = roles.stream().anyMatch(role -> defaultRoleId.equals(role.getRoleId()));
+        if (already) {
+            return;
+        }
+        SysRoleVo defaultRole = roleMapper.selectVoById(defaultRoleId);
+        if (ObjectUtil.isNull(defaultRole) || !SystemConstants.NORMAL.equals(defaultRole.getStatus())) {
+            return;
+        }
+        if (ObjectUtil.isNotNull(defaultRole.getClientId()) && !clientId.equals(defaultRole.getClientId())) {
+            return;
+        }
+        roles.add(defaultRole);
+    }
+
+    /**
+     * 授权角色前校验用户已具备该角色客户端要求的登录域。
+     *
+     * @param role    角色
+     * @param userIds 用户ID集合
+     */
+    private void validateUsersHaveRoleClientType(SysRole role, Collection<Long> userIds) {
+        if (ObjectUtil.isNull(role) || ObjectUtil.isNull(role.getClientId()) || CollUtil.isEmpty(userIds)) {
+            return;
+        }
+        SysClient client = clientMapper.selectById(role.getClientId());
+        if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getUserTypeId())) {
+            return;
+        }
+        for (Long userId : userIds) {
+            if (!userTypeRelService.hasUserType(userId, client.getUserTypeId())) {
+                throw new ServiceException("用户不具备该角色所属客户端的登录域");
+            }
+        }
     }
 
 }

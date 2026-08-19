@@ -135,6 +135,21 @@ public class SysUserVo implements Serializable {
     private Long[] postIds;
 
     /**
+     * 登录域ID列表
+     */
+    private List<Long> userTypeIds;
+
+    /**
+     * 登录域编码列表
+     */
+    private List<String> userTypeCodes;
+
+    /**
+     * 登录域名称列表
+     */
+    private List<String> userTypeNames;
+
+    /**
      * 数据权限 当前角色ID
      */
     private Long roleId;

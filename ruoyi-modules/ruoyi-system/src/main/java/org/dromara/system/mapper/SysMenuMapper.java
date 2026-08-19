@@ -206,4 +206,56 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
             .build());
     }
 
+    /**
+     * 根据角色ID和客户端查询正常状态的目录和菜单（含默认角色生效）。
+     *
+     * @param roleId   角色ID
+     * @param clientId 客户端主键
+     * @return 菜单列表
+     */
+    default List<SysMenu> selectMenuTreeByRoleId(Long roleId, Long clientId) {
+        if (roleId == null || clientId == null) {
+            return List.of();
+        }
+        return this.selectJoinList(SysMenu.class, QueryBuilder.lambdaJoin("m", SysMenu.class)
+            .distinct()
+            .selectAll(SysMenu.class)
+            .leftJoin(SysRoleMenu.class, "srm", SysRoleMenu::getMenuId, SysMenu::getMenuId)
+            .eq("srm", SysRoleMenu::getRoleId, roleId)
+            .eq("m", SysMenu::getClientId, clientId)
+            .in("m", SysMenu::getMenuType, SystemConstants.TYPE_DIR, SystemConstants.TYPE_MENU)
+            .eq("m", SysMenu::getStatus, SystemConstants.NORMAL)
+            .orderByAsc("m", SysMenu::getParentId)
+            .orderByAsc("m", SysMenu::getOrderNum)
+            .build());
+    }
+
+    /**
+     * 根据角色ID和查询条件查询菜单列表
+     *
+     * @param menu     菜单查询条件
+     * @param roleId   角色ID
+     * @param clientId 客户端主键
+     * @return 菜单列表
+     */
+    default List<SysMenuVo> selectMenuListByRoleId(SysMenuBo menu, Long roleId, Long clientId) {
+        if (roleId == null || clientId == null) {
+            return List.of();
+        }
+        return this.selectJoinList(SysMenuVo.class, QueryBuilder.lambdaJoin("m", SysMenu.class)
+            .distinct()
+            .selectAll(SysMenu.class)
+            .leftJoin(SysRoleMenu.class, "srm", SysRoleMenu::getMenuId, SysMenu::getMenuId)
+            .eq("srm", SysRoleMenu::getRoleId, roleId)
+            .eq("m", SysMenu::getClientId, clientId)
+            .likeIfText("m", SysMenu::getMenuName, menu.getMenuName())
+            .eqIfText("m", SysMenu::getVisible, menu.getVisible())
+            .eqIfText("m", SysMenu::getStatus, menu.getStatus())
+            .eqIfText("m", SysMenu::getMenuType, menu.getMenuType())
+            .eqIfPresent("m", SysMenu::getParentId, menu.getParentId())
+            .orderByAsc("m", SysMenu::getParentId)
+            .orderByAsc("m", SysMenu::getOrderNum)
+            .build());
+    }
+
 }

@@ -13,6 +13,7 @@ import org.dromara.system.domain.SysUser;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -95,13 +96,17 @@ public class SysUserBo implements Serializable {
     /**
      * 角色组
      */
-    @Size(min = 1, message = "用户角色不能为空")
     private Long[] roleIds;
 
     /**
      * 岗位组
      */
     private Long[] postIds;
+
+    /**
+     * 登录域ID列表
+     */
+    private List<Long> userTypeIds;
 
     /**
      * 数据权限 当前角色ID
