@@ -143,7 +143,7 @@ public class SysUserTypeController extends BaseController {
      * @return 登录域列表
      */
     @SaCheckPermission("system:userType:query")
-    @GetMapping("/optionselect")
+    @GetMapping({"/optionselect", "/options"})
     public R<List<SysUserTypeVo>> optionselect() {
         return R.ok(userTypeService.optionselect());
     }

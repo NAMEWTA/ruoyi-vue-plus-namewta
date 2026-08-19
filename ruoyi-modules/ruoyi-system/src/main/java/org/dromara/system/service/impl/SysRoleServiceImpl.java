@@ -74,6 +74,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             return PageResult.build(List.of(), 0);
         }
         Page<SysRoleVo> page = roleMapper.selectPageRoleList(pageQuery.build(), this.buildQueryWrapper(role));
+        markClientDefault(page.getRecords(), role.getClientId());
         return PageResult.build(page.getRecords(), page.getTotal());
     }
 
@@ -88,7 +89,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         if (ObjectUtil.isNull(role.getClientId())) {
             return List.of();
         }
-        return roleMapper.selectRoleList(this.buildQueryWrapper(role));
+        List<SysRoleVo> roles = roleMapper.selectRoleList(this.buildQueryWrapper(role));
+        markClientDefault(roles, role.getClientId());
+        return roles;
     }
 
     /**
@@ -140,6 +143,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
                 role.setFlag(true);
             }
         }
+        markClientDefault(roles, clientId);
         return roles;
     }
 
@@ -176,7 +180,8 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     }
 
     /**
-     * 根据用户ID和客户端获取角色选择框列表
+     * 根据用户ID和客户端获取角色选择框列表。
+     * clientId 为空时返回全部客户端的显式角色，不含默认角色。
      *
      * @param userId   用户ID
      * @param clientId 客户端主键
@@ -184,7 +189,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public List<Long> selectRoleListByUserId(Long userId, Long clientId) {
-        List<SysRoleVo> list = roleMapper.selectRolesByUserId(userId, clientId);
+        List<SysRoleVo> list = clientId == null
+            ? roleMapper.selectExplicitRolesByUserId(userId)
+            : roleMapper.selectRolesByUserId(userId, clientId);
         return StreamUtils.toList(list, SysRoleVo::getRoleId);
     }
 
@@ -715,7 +722,28 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         if (ObjectUtil.isNotNull(defaultRole.getClientId()) && !clientId.equals(defaultRole.getClientId())) {
             return;
         }
+        defaultRole.setClientDefault(true);
         roles.add(defaultRole);
+    }
+
+    /**
+     * 标记当前客户端的默认角色，便于管理端只读展示且不写入 sys_user_role。
+     *
+     * @param roles    角色列表
+     * @param clientId 客户端主键
+     */
+    private void markClientDefault(List<SysRoleVo> roles, Long clientId) {
+        if (clientId == null || CollUtil.isEmpty(roles)) {
+            return;
+        }
+        SysClient client = clientMapper.selectById(clientId);
+        if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getDefaultRoleId())) {
+            return;
+        }
+        Long defaultRoleId = client.getDefaultRoleId();
+        for (SysRoleVo role : roles) {
+            role.setClientDefault(defaultRoleId.equals(role.getRoleId()));
+        }
     }
 
     /**

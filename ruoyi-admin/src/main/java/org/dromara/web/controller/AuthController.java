@@ -172,19 +172,24 @@ public class AuthController {
 
     /**
      * 查询客户端公开认证上下文。
+     * <p>
+     * 同时接受查询参数 {@code clientId} 与请求头 {@code clientid}（OAuth 客户端标识）。
      *
-     * @param clientId 客户端标识
+     * @param clientId       客户端标识（查询参数）
+     * @param clientIdHeader 客户端标识（请求头）
      * @return 客户端是否可用及是否开放注册
      */
     @GetMapping("/client/context")
-    public R<AuthClientContextVo> clientContext(String clientId) {
+    public R<AuthClientContextVo> clientContext(@RequestParam(value = "clientId", required = false) String clientId,
+                                                @RequestHeader(value = "clientid", required = false) String clientIdHeader) {
         AuthClientContextVo vo = new AuthClientContextVo();
         vo.setClientEnabled(false);
         vo.setRegisterEnabled(false);
-        if (StringUtils.isBlank(clientId)) {
+        String resolvedClientId = StringUtils.isNotBlank(clientId) ? clientId : clientIdHeader;
+        if (StringUtils.isBlank(resolvedClientId)) {
             return R.ok(vo);
         }
-        SysClientVo client = clientService.queryByClientId(clientId);
+        SysClientVo client = clientService.queryByClientId(resolvedClientId);
         if (ObjectUtil.isNull(client)) {
             return R.ok(vo);
         }

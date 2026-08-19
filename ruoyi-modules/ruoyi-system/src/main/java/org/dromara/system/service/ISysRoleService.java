@@ -70,10 +70,10 @@ public interface ISysRoleService {
     List<SysRoleVo> selectRoleAll(Long clientId);
 
     /**
-     * 根据用户ID和客户端获取角色选择框列表
+     * 根据用户ID获取已显式分配的角色ID列表。
      *
      * @param userId   用户ID
-     * @param clientId 客户端主键
+     * @param clientId 客户端主键，为空时返回全部客户端的显式角色
      * @return 选中角色ID列表
      */
     List<Long> selectRoleListByUserId(Long userId, Long clientId);
