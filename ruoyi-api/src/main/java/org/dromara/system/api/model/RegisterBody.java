@@ -30,9 +30,4 @@ public class RegisterBody extends LoginBody {
 //    @Pattern(regexp = RegexConstants.PASSWORD, message = "{user.password.format.valid}")
     private String password;
 
-    /**
-     * 用户类型
-     */
-    private String userType;
-
 }

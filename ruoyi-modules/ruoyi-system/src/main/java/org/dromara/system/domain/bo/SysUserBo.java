@@ -56,11 +56,6 @@ public class SysUserBo implements Serializable {
     private String nickName;
 
     /**
-     * 用户类型（sys_user系统用户）
-     */
-    private String userType;
-
-    /**
      * 用户邮箱
      */
     @Email(message = "邮箱格式不正确")

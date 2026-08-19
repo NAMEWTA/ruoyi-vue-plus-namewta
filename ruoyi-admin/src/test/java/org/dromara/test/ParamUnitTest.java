@@ -1,11 +1,9 @@
 package org.dromara.test;
 
-import org.dromara.common.core.enums.UserType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -59,19 +57,6 @@ public class ParamUnitTest {
     @NullSource
     public void testNullSource(String str) {
         assertNull(str);
-    }
-
-    /**
-     * 验证 {@link EnumSource} 能遍历用户类型枚举。
-     *
-     * @param type 当前用户类型
-     */
-    @DisplayName("测试 @EnumSource 注解")
-    @ParameterizedTest
-    @EnumSource(UserType.class)
-    public void testEnumSource(UserType type) {
-        assertNotNull(type);
-        assertFalse(type.getUserType().isBlank());
     }
 
     /**

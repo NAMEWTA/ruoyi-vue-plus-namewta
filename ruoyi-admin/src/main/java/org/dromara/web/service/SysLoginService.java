@@ -159,7 +159,6 @@ public class SysLoginService {
         loginUser.setDeptId(user.getDeptId());
         loginUser.setUsername(user.getUserName());
         loginUser.setNickname(user.getNickName());
-        loginUser.setUserType(user.getUserType());
         if (ObjectUtil.isNotNull(user.getDeptId())) {
             Opt<SysDeptVo> deptOpt = Opt.of(user.getDeptId()).map(deptService::selectDeptById);
             loginUser.setDeptName(deptOpt.map(SysDeptVo::getDeptName).orElse(StringUtils.EMPTY));

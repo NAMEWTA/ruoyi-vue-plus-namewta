@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.constant.Constants;
 import org.dromara.common.core.constant.GlobalConstants;
-import org.dromara.common.core.enums.UserType;
 import org.dromara.common.core.exception.user.CaptchaException;
 import org.dromara.common.core.exception.user.CaptchaExpireException;
 import org.dromara.common.core.exception.user.UserException;
@@ -45,8 +44,6 @@ public class SysRegisterService {
     public void register(RegisterBody registerBody) {
         String username = registerBody.getUsername();
         String password = registerBody.getPassword();
-        // 校验用户类型是否存在
-        String userType = UserType.getUserType(registerBody.getUserType()).getUserType();
 
         boolean captchaEnabled = captchaProperties.getEnable();
         // 验证码开关
@@ -57,7 +54,6 @@ public class SysRegisterService {
         sysUser.setUserName(username);
         sysUser.setNickName(username);
         sysUser.setPassword(BCrypt.hashpw(password));
-        sysUser.setUserType(userType);
 
         boolean exist = userMapper.lambda()
             .eq(SysUser::getUserName, sysUser.getUserName())

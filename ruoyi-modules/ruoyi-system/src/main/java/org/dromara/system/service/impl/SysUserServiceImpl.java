@@ -649,7 +649,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     public UserDTO selectById(Long userId) {
         SysUserVo vo = userMapper.lambda()
             .select(SysUser::getUserId, SysUser::getDeptId, SysUser::getUserName,
-                SysUser::getNickName, SysUser::getUserType, SysUser::getEmail,
+                SysUser::getNickName, SysUser::getEmail,
                 SysUser::getPhoneNumber, SysUser::getGender, SysUser::getStatus,
                 SysUser::getCreateTime)
             .eq(SysUser::getStatus, SystemConstants.NORMAL)
@@ -671,7 +671,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         }
         List<SysUserVo> list = userMapper.lambda()
             .select(SysUser::getUserId, SysUser::getDeptId, SysUser::getUserName,
-                SysUser::getNickName, SysUser::getUserType, SysUser::getEmail,
+                SysUser::getNickName, SysUser::getEmail,
                 SysUser::getPhoneNumber, SysUser::getGender, SysUser::getStatus,
                 SysUser::getCreateTime)
             .eq(SysUser::getStatus, SystemConstants.NORMAL)

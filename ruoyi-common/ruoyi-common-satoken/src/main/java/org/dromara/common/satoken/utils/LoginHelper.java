@@ -12,7 +12,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.dromara.common.core.constant.SystemConstants;
-import org.dromara.common.core.enums.UserType;
 import org.dromara.common.core.utils.ServletUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.core.utils.ip.AddressUtils;
@@ -209,13 +208,25 @@ public class LoginHelper {
     }
 
     /**
-     * 获取当前登录用户类型。
+     * 获取当前登录用户类型编码。
      *
-     * @return 用户类型
+     * @return 登录域编码
      */
-    public static UserType getUserType() {
-        String loginType = StpUtil.getLoginIdAsString();
-        return UserType.getUserType(loginType);
+    public static String getUserType() {
+        LoginUser loginUser = getLoginUser();
+        if (ObjectUtil.isNotNull(loginUser) && StringUtils.isNotBlank(loginUser.getUserType())) {
+            return loginUser.getUserType();
+        }
+        try {
+            String loginId = StpUtil.getLoginIdAsString();
+            int separatorIndex = loginId.indexOf(':');
+            if (separatorIndex > 0) {
+                return loginId.substring(0, separatorIndex);
+            }
+            return loginId;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
