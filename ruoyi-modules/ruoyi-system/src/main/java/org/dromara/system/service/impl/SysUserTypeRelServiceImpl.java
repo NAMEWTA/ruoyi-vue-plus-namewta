@@ -12,6 +12,7 @@ import org.dromara.system.domain.vo.SysUserTypeRelVo;
 import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.mapper.SysUserTypeMapper;
 import org.dromara.system.mapper.SysUserTypeRelMapper;
+import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysUserTypeRelService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
 
     private final SysUserTypeRelMapper userTypeRelMapper;
     private final SysUserTypeMapper userTypeMapper;
+    private final ClientSessionService clientSessionService;
 
     /**
      * 查询用户拥有的登录域关系
@@ -121,6 +123,9 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
             if (!currentIds.contains(userTypeId)) {
                 grantUserType(userId, userTypeId, grantSource);
             }
+        }
+        for (String removedCode : removedCodes) {
+            clientSessionService.kickoutUserType(userId, removedCode);
         }
         return removedCodes;
     }

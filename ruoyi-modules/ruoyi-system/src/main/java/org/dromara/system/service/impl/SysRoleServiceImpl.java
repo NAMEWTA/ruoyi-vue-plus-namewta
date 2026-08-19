@@ -13,7 +13,6 @@ import org.dromara.common.core.constant.SystemConstants;
 import org.dromara.common.core.domain.PageResult;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
-import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StreamUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
@@ -28,12 +27,12 @@ import org.dromara.system.domain.SysUserRole;
 import org.dromara.system.domain.SysMenu;
 import org.dromara.system.domain.bo.SysRoleBo;
 import org.dromara.system.domain.vo.SysRoleVo;
-import org.dromara.system.event.OnlineUserCleanEvent;
 import org.dromara.system.mapper.SysMenuMapper;
 import org.dromara.system.mapper.SysRoleDeptMapper;
 import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.mapper.SysUserRoleMapper;
+import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysRoleService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
@@ -55,6 +54,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     private final SysUserRoleMapper userRoleMapper;
     private final SysRoleDeptMapper roleDeptMapper;
     private final SysMenuMapper menuMapper;
+    private final ClientSessionService clientSessionService;
 
     /**
      * 分页查询角色列表
@@ -518,7 +518,10 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             .eq(SysUserRole::getUserId, userRole.getUserId())
             .deleteCount();
         if (rows > 0) {
-            SpringUtils.context().publishEvent(OnlineUserCleanEvent.byUsers(List.of(userRole.getUserId())));
+            SysRole role = roleMapper.selectById(userRole.getRoleId());
+            if (role != null) {
+                clientSessionService.kickoutUserClient(userRole.getUserId(), role.getClientId());
+            }
         }
         return rows;
     }
@@ -540,7 +543,12 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             .in(SysUserRole::getUserId, userIds)
             .deleteCount();
         if (rows > 0) {
-            SpringUtils.context().publishEvent(OnlineUserCleanEvent.byUsers(userIds));
+            SysRole role = roleMapper.selectById(roleId);
+            if (role != null) {
+                for (Long userId : userIds) {
+                    clientSessionService.kickoutUserClient(userId, role.getClientId());
+                }
+            }
         }
         return rows;
     }
@@ -569,7 +577,12 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             rows = userRoleMapper.insertBatch(list) ? list.size() : 0;
         }
         if (rows > 0) {
-            SpringUtils.context().publishEvent(OnlineUserCleanEvent.byUsers(userIds));
+            SysRole role = roleMapper.selectById(roleId);
+            if (role != null) {
+                for (Long userId : userIds) {
+                    clientSessionService.kickoutUserClient(userId, role.getClientId());
+                }
+            }
         }
         return rows;
     }

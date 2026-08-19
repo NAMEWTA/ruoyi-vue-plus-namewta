@@ -22,6 +22,7 @@ import org.dromara.system.domain.vo.SysClientVo;
 import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.mapper.SysClientMapper;
 import org.dromara.system.mapper.SysRoleMapper;
+import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysClientService;
 import org.dromara.system.service.ISysUserTypeService;
 import org.springframework.cache.annotation.CacheEvict;
@@ -48,6 +49,7 @@ public class SysClientServiceImpl implements ISysClientService {
     private final SysClientMapper clientMapper;
     private final SysRoleMapper roleMapper;
     private final ISysUserTypeService userTypeService;
+    private final ClientSessionService clientSessionService;
 
     /**
      * 查询客户端管理
@@ -158,6 +160,7 @@ public class SysClientServiceImpl implements ISysClientService {
     @CacheEvict(cacheNames = CacheNames.SYS_CLIENT, key = "#bo.clientId")
     @Override
     public Boolean updateByBo(SysClientBo bo) {
+        SysClient db = clientMapper.selectById(bo.getId());
         SysClient update = MapstructUtils.convert(bo, SysClient.class);
         validClientPolicy(update, false);
         if (ObjectUtil.isNull(update.getRegisterEnabled())) {
@@ -166,7 +169,11 @@ public class SysClientServiceImpl implements ISysClientService {
         update.setGrantType(StringUtils.joinComma(bo.getGrantTypeList()));
         update.setAccessPath(resolveRuleValue(bo.getAccessPath(), bo.getAccessPathList(), this::normalizeAccessPath));
         update.setIpWhitelist(resolveRuleValue(bo.getIpWhitelist(), bo.getIpWhitelistList(), UnaryOperator.identity()));
-        return clientMapper.updateById(update) > 0;
+        boolean flag = clientMapper.updateById(update) > 0;
+        if (flag && shouldKickClientSessions(db, update)) {
+            clientSessionService.kickoutClient(db.getId());
+        }
+        return flag;
     }
 
     /**
@@ -179,10 +186,15 @@ public class SysClientServiceImpl implements ISysClientService {
     @CacheEvict(cacheNames = CacheNames.SYS_CLIENT, key = "#clientId")
     @Override
     public int updateClientStatus(String clientId, String status) {
-        return clientMapper.lambda()
+        SysClientVo client = clientMapper.lambda().eq(SysClient::getClientId, clientId).voOne();
+        int rows = clientMapper.lambda()
             .set(SysClient::getStatus, status)
             .eq(SysClient::getClientId, clientId)
             .updateCount();
+        if (rows > 0 && SystemConstants.DISABLE.equals(status) && ObjectUtil.isNotNull(client)) {
+            clientSessionService.kickoutClient(client.getId());
+        }
+        return rows;
     }
 
     /**
@@ -336,6 +348,24 @@ public class SysClientServiceImpl implements ISysClientService {
             && !role.getClientId().equals(clientPk)) {
             throw new ServiceException("默认角色必须属于当前客户端");
         }
+    }
+
+    /**
+     * 停用客户端或变更登录域时清理会话；改注册开关不清 Token。
+     *
+     * @param db     变更前客户端
+     * @param update 变更后客户端
+     * @return 是否需要踢出该客户端会话
+     */
+    private boolean shouldKickClientSessions(SysClient db, SysClient update) {
+        if (ObjectUtil.isNull(db)) {
+            return false;
+        }
+        if (!ObjectUtil.equal(db.getUserTypeId(), update.getUserTypeId())) {
+            return true;
+        }
+        return SystemConstants.DISABLE.equals(update.getStatus())
+            && !SystemConstants.DISABLE.equals(db.getStatus());
     }
 
 }

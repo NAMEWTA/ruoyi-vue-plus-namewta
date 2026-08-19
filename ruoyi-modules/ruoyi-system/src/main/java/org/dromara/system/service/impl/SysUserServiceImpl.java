@@ -30,6 +30,7 @@ import org.dromara.system.domain.vo.SysRoleVo;
 import org.dromara.system.domain.vo.SysUserExportVo;
 import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.mapper.*;
+import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysUserService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -54,6 +55,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     private final SysPostMapper postMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
+    private final ClientSessionService clientSessionService;
 
     /**
      * 分页查询用户列表。
@@ -374,10 +376,14 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      */
     @Override
     public int updateUserStatus(Long userId, String status) {
-        return userMapper.lambda()
+        int rows = userMapper.lambda()
             .set(SysUser::getStatus, status)
             .eq(SysUser::getUserId, userId)
             .updateCount();
+        if (rows > 0 && SystemConstants.DISABLE.equals(status)) {
+            clientSessionService.kickoutUser(userId);
+        }
+        return rows;
     }
 
     /**

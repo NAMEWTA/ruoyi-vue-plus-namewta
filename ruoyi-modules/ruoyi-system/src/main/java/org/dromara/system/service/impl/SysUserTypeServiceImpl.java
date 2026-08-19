@@ -19,6 +19,7 @@ import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.mapper.SysClientMapper;
 import org.dromara.system.mapper.SysUserTypeMapper;
 import org.dromara.system.mapper.SysUserTypeRelMapper;
+import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysUserTypeService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -40,6 +41,7 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
     private final SysUserTypeMapper userTypeMapper;
     private final SysUserTypeRelMapper userTypeRelMapper;
     private final SysClientMapper clientMapper;
+    private final ClientSessionService clientSessionService;
 
     /**
      * 查询登录域
@@ -162,10 +164,15 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
         if (ObjectUtil.isNull(userTypeId)) {
             throw new ServiceException("登录域ID不能为空");
         }
-        return userTypeMapper.lambda()
+        SysUserType userType = userTypeMapper.selectById(userTypeId);
+        int rows = userTypeMapper.lambda()
             .set(SysUserType::getStatus, status)
             .eq(SysUserType::getUserTypeId, userTypeId)
             .updateCount();
+        if (rows > 0 && SystemConstants.DISABLE.equals(status) && ObjectUtil.isNotNull(userType)) {
+            clientSessionService.kickoutUserType(null, userType.getUserTypeCode());
+        }
+        return rows;
     }
 
     /**
