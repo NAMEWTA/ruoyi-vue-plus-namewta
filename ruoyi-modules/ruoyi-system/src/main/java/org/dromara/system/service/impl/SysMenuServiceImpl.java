@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.Constants;
 import org.dromara.common.core.constant.SystemConstants;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.core.utils.TreeBuildUtils;
@@ -61,9 +62,15 @@ public class SysMenuServiceImpl implements ISysMenuService {
      */
     @Override
     public List<SysMenuVo> selectMenuList(SysMenuBo menu, Long userId) {
-        // 管理员显示所有菜单信息 不是管理员 按用户id过滤菜单
+        Long clientId = resolveClientId(menu.getClientId());
+        if (ObjectUtil.isNull(clientId)) {
+            return CollUtil.newArrayList();
+        }
+        menu.setClientId(clientId);
+        // 管理员显示当前客户端全部菜单，不返回跨 Client 并集
         if (LoginHelper.isSuperAdmin(userId)) {
             return menuMapper.lambda()
+                .eq(SysMenu::getClientId, clientId)
                 .likeIfText(SysMenu::getMenuName, menu.getMenuName())
                 .eqIfText(SysMenu::getVisible, menu.getVisible())
                 .eqIfText(SysMenu::getStatus, menu.getStatus())
@@ -73,7 +80,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
                 .orderByAsc(SysMenu::getOrderNum)
                 .voList();
         }
-        return menuMapper.selectMenuListByUserId(menu, userId);
+        return menuMapper.selectMenuListByUserId(menu, userId, clientId);
     }
 
     /**
@@ -83,8 +90,8 @@ public class SysMenuServiceImpl implements ISysMenuService {
      * @return 权限列表
      */
     @Override
-    public Set<String> selectMenuPermsByUserId(Long userId) {
-        return menuMapper.selectMenuPermsByUserId(userId);
+    public Set<String> selectMenuPermsByUserId(Long userId, Long clientId) {
+        return menuMapper.selectMenuPermsByUserId(userId, clientId);
     }
 
     /**
@@ -116,12 +123,15 @@ public class SysMenuServiceImpl implements ISysMenuService {
      * @return 按树结构组织的菜单列表
      */
     @Override
-    public List<SysMenu> selectMenuTreeByUserId(Long userId) {
+    public List<SysMenu> selectMenuTreeByUserId(Long userId, Long clientId) {
         List<SysMenu> menus;
+        if (ObjectUtil.isNull(clientId)) {
+            return CollUtil.newArrayList();
+        }
         if (LoginHelper.isSuperAdmin(userId)) {
-            menus = menuMapper.selectMenuTreeAll();
+            menus = menuMapper.selectMenuTreeAll(clientId);
         } else {
-            menus = menuMapper.selectMenuTreeByUserId(userId);
+            menus = menuMapper.selectMenuTreeByUserId(userId, clientId);
         }
         if (CollUtil.isEmpty(menus)) {
             return CollUtil.newArrayList();
@@ -149,7 +159,10 @@ public class SysMenuServiceImpl implements ISysMenuService {
     @Override
     public List<Long> selectMenuListByRoleId(Long roleId) {
         SysRole role = roleMapper.selectById(roleId);
-        return menuMapper.selectMenuListByRoleId(roleId, role.getMenuCheckStrictly());
+        if (ObjectUtil.isNull(role) || ObjectUtil.isNull(role.getClientId())) {
+            return CollUtil.newArrayList();
+        }
+        return menuMapper.selectMenuListByRoleId(roleId, role.getClientId(), role.getMenuCheckStrictly());
     }
 
     /**
@@ -292,6 +305,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
     @Override
     public int insertMenu(SysMenuBo bo) {
         SysMenu menu = MapstructUtils.convert(bo, SysMenu.class);
+        validateMenuClient(menu, true);
         return menuMapper.insert(menu);
     }
 
@@ -304,6 +318,11 @@ public class SysMenuServiceImpl implements ISysMenuService {
     @Override
     public int updateMenu(SysMenuBo bo) {
         SysMenu menu = MapstructUtils.convert(bo, SysMenu.class);
+        SysMenu dbMenu = menuMapper.selectById(menu.getMenuId());
+        if (ObjectUtil.isNotNull(dbMenu)) {
+            menu.setClientId(dbMenu.getClientId());
+        }
+        validateMenuClient(menu, false);
         return menuMapper.updateById(menu);
     }
 
@@ -341,6 +360,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
         boolean exist = menuMapper.lambda()
             .eq(SysMenu::getMenuName, menu.getMenuName())
             .eq(SysMenu::getParentId, menu.getParentId())
+            .eq(SysMenu::getClientId, menu.getClientId())
             .neIfPresent(SysMenu::getMenuId, menu.getMenuId())
             .exists();
         return !exist;
@@ -363,6 +383,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
         String path = menu.getPath();
         String routeName = StringUtils.isEmpty(menu.getRouteName()) ? path : menu.getRouteName();
         List<SysMenu> sysMenuList = menuMapper.lambda()
+            .eq(SysMenu::getClientId, menu.getClientId())
             .in(SysMenu::getMenuType, SystemConstants.TYPE_DIR, SystemConstants.TYPE_MENU)
             .and(w ->
                 w.eq(SysMenu::getPath, path).or().eq(SysMenu::getPath, routeName)
@@ -382,12 +403,48 @@ public class SysMenuServiceImpl implements ISysMenuService {
                     return false;
                 } else if (StringUtils.equalsAnyIgnoreCase(routeName, dbRouteName)
                     && sysMenu.getMenuType().equals(menu.getMenuType())) {
-                    log.warn("[路由名称冲突] 路由名称 '{}' 需全局唯一，已被菜单 '{}' 使用", routeName, sysMenu.getMenuName());
+                    log.warn("[路由名称冲突] 路由名称 '{}' 需在当前客户端内唯一，已被菜单 '{}' 使用", routeName, sysMenu.getMenuName());
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    /**
+     * 解析客户端主键：优先使用入参，否则读取当前登录快照。缺上下文时拒绝查全局菜单。
+     *
+     * @param clientId 入参客户端主键
+     * @return 客户端主键
+     */
+    private Long resolveClientId(Long clientId) {
+        if (ObjectUtil.isNotNull(clientId)) {
+            return clientId;
+        }
+        var loginUser = LoginHelper.getLoginUser();
+        return loginUser == null ? null : loginUser.getClientPk();
+    }
+
+    /**
+     * 校验菜单归属客户端，以及父子菜单必须同 Client。
+     *
+     * @param menu  菜单
+     * @param isAdd 是否新增
+     */
+    private void validateMenuClient(SysMenu menu, boolean isAdd) {
+        if (ObjectUtil.isNull(menu.getClientId())) {
+            throw new ServiceException("客户端不能为空");
+        }
+        if (ObjectUtil.isNull(menu.getParentId()) || Constants.TOP_PARENT_ID.equals(menu.getParentId())) {
+            return;
+        }
+        SysMenu parent = menuMapper.selectById(menu.getParentId());
+        if (ObjectUtil.isNull(parent)) {
+            throw new ServiceException("父菜单不存在");
+        }
+        if (!menu.getClientId().equals(parent.getClientId())) {
+            throw new ServiceException(isAdd ? "父菜单必须属于同一客户端" : "不能将菜单移动到其他客户端");
+        }
     }
 
 }

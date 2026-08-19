@@ -67,7 +67,7 @@ public class SysPermissionServiceImpl implements ISysPermissionService, Permissi
         if (LoginHelper.isSuperAdmin(userId)) {
             perms.add("*:*:*");
         } else {
-            perms.addAll(menuService.selectMenuPermsByUserId(userId));
+            perms.addAll(menuService.selectMenuPermsByUserId(userId, resolveClientId()));
         }
         return perms;
     }

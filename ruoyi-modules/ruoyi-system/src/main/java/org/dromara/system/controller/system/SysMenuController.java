@@ -13,11 +13,14 @@ import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.redis.annotation.RepeatSubmit;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.web.core.BaseController;
+import org.dromara.system.api.model.LoginUser;
 import org.dromara.system.domain.SysMenu;
 import org.dromara.system.domain.bo.SysMenuBo;
 import org.dromara.system.domain.vo.RouterVo;
 import org.dromara.system.domain.vo.SysMenuVo;
+import org.dromara.system.domain.vo.SysRoleVo;
 import org.dromara.system.service.ISysMenuService;
+import org.dromara.system.service.ISysRoleService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,6 +38,7 @@ import java.util.List;
 public class SysMenuController extends BaseController {
 
     private final ISysMenuService menuService;
+    private final ISysRoleService roleService;
 
     /**
      * 获取路由信息
@@ -43,7 +47,12 @@ public class SysMenuController extends BaseController {
      */
     @GetMapping("/getRouters")
     public R<List<RouterVo>> getRouters() {
-        List<SysMenu> menus = menuService.selectMenuTreeByUserId(LoginHelper.getUserId());
+        LoginUser loginUser = LoginHelper.getLoginUser();
+        if (loginUser == null || loginUser.getClientPk() == null) {
+            return R.fail("当前登录缺少客户端上下文");
+        }
+        List<SysMenu> menus = menuService.selectMenuTreeByUserId(
+            loginUser.getUserId(), loginUser.getClientPk());
         return R.ok(menuService.buildMenus(menus));
     }
 
@@ -100,7 +109,12 @@ public class SysMenuController extends BaseController {
     @SaCheckPermission("system:menu:query")
     @GetMapping(value = "/roleMenuTreeselect/{roleId}")
     public R<MenuTreeSelectVo> roleMenuTreeselect(@PathVariable("roleId") Long roleId) {
-        List<SysMenuVo> menus = menuService.selectMenuList(LoginHelper.getUserId());
+        SysRoleVo role = roleService.selectRoleById(roleId);
+        SysMenuBo menu = new SysMenuBo();
+        if (role != null) {
+            menu.setClientId(role.getClientId());
+        }
+        List<SysMenuVo> menus = menuService.selectMenuList(menu, LoginHelper.getUserId());
         MenuTreeSelectVo selectVo = new MenuTreeSelectVo(
             menuService.selectMenuListByRoleId(roleId),
             menuService.buildMenuTreeSelect(menus));

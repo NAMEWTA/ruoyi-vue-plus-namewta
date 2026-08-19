@@ -38,10 +38,11 @@ public interface ISysMenuService {
     /**
      * 根据用户ID查询权限
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 权限列表
      */
-    Set<String> selectMenuPermsByUserId(Long userId);
+    Set<String> selectMenuPermsByUserId(Long userId, Long clientId);
 
     /**
      * 根据角色ID查询权限
@@ -60,12 +61,13 @@ public interface ISysMenuService {
     Map<Long, Set<String>> selectMenuPermsByRoleIds(Collection<Long> roleIds);
 
     /**
-     * 根据用户ID查询菜单树信息
+     * 根据用户ID和客户端查询菜单树信息
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 菜单列表
      */
-    List<SysMenu> selectMenuTreeByUserId(Long userId);
+    List<SysMenu> selectMenuTreeByUserId(Long userId, Long clientId);
 
     /**
      * 根据角色ID查询菜单树信息

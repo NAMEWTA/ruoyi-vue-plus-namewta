@@ -25,9 +25,11 @@ import org.dromara.system.domain.SysRole;
 import org.dromara.system.domain.SysRoleDept;
 import org.dromara.system.domain.SysRoleMenu;
 import org.dromara.system.domain.SysUserRole;
+import org.dromara.system.domain.SysMenu;
 import org.dromara.system.domain.bo.SysRoleBo;
 import org.dromara.system.domain.vo.SysRoleVo;
 import org.dromara.system.event.OnlineUserCleanEvent;
+import org.dromara.system.mapper.SysMenuMapper;
 import org.dromara.system.mapper.SysRoleDeptMapper;
 import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.mapper.SysRoleMenuMapper;
@@ -52,6 +54,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     private final SysRoleMenuMapper roleMenuMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysRoleDeptMapper roleDeptMapper;
+    private final SysMenuMapper menuMapper;
 
     /**
      * 分页查询角色列表
@@ -410,7 +413,19 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     private int insertRoleMenu(SysRoleBo role) {
         int rows = 1;
-        // 新增用户与角色管理
+        if (role.getMenuIds() == null || role.getMenuIds().length == 0) {
+            return rows;
+        }
+        SysRole dbRole = roleMapper.selectById(role.getRoleId());
+        Long clientId = dbRole == null ? role.getClientId() : dbRole.getClientId();
+        List<Long> menuIds = Arrays.asList(role.getMenuIds());
+        long sameClientCount = menuMapper.lambda()
+            .in(SysMenu::getMenuId, menuIds)
+            .eq(SysMenu::getClientId, clientId)
+            .count();
+        if (sameClientCount != menuIds.size()) {
+            throw new ServiceException("菜单必须属于当前角色所在客户端");
+        }
         List<SysRoleMenu> list = new ArrayList<>();
         for (Long menuId : role.getMenuIds()) {
             SysRoleMenu rm = new SysRoleMenu();

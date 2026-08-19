@@ -25,12 +25,16 @@ import java.util.*;
 public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBaseMapper<SysMenu> {
 
     /**
-     * 根据用户ID查询权限
+     * 根据用户ID和客户端查询权限
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 权限列表
      */
-    default Set<String> selectMenuPermsByUserId(Long userId) {
+    default Set<String> selectMenuPermsByUserId(Long userId, Long clientId) {
+        if (userId == null || clientId == null) {
+            return Set.of();
+        }
         List<SysMenu> list = this.selectJoinList(SysMenu.class, QueryBuilder.lambdaJoin("m", SysMenu.class)
             .distinct()
             .select(SysMenu::getPerms)
@@ -39,6 +43,8 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
             .leftJoin(SysRole.class, "sr", SysRole::getRoleId, SysRoleMenu::getRoleId)
             .eq("sur", SysUserRole::getUserId, userId)
             .eq("sr", SysRole::getStatus, SystemConstants.NORMAL)
+            .eq("sr", SysRole::getClientId, clientId)
+            .eq("m", SysMenu::getClientId, clientId)
             .isNotNull("m", SysMenu::getPerms)
             .build());
         return new HashSet<>(StreamUtils.filter(StreamUtils.toList(list, SysMenu::getPerms), StringUtils::isNotBlank));
@@ -94,12 +100,17 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
     }
 
     /**
-     * 查询全部正常状态的目录和菜单
+     * 查询指定客户端下全部正常状态的目录和菜单
      *
+     * @param clientId 客户端主键
      * @return 菜单列表
      */
-    default List<SysMenu> selectMenuTreeAll() {
+    default List<SysMenu> selectMenuTreeAll(Long clientId) {
+        if (clientId == null) {
+            return List.of();
+        }
         return this.lambda()
+            .eq(SysMenu::getClientId, clientId)
             .in(SysMenu::getMenuType, SystemConstants.TYPE_DIR, SystemConstants.TYPE_MENU)
             .eq(SysMenu::getStatus, SystemConstants.NORMAL)
             .orderByAsc(SysMenu::getParentId)
@@ -114,7 +125,10 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
      * @param menuCheckStrictly 菜单树选择项是否关联显示
      * @return 选中菜单列表
      */
-    default List<Long> selectMenuListByRoleId(Long roleId, boolean menuCheckStrictly) {
+    default List<Long> selectMenuListByRoleId(Long roleId, Long clientId, boolean menuCheckStrictly) {
+        if (roleId == null || clientId == null) {
+            return List.of();
+        }
         List<SysMenu> menus = this.selectJoinList(SysMenu.class, QueryBuilder.lambdaJoin("m", SysMenu.class)
             .distinct()
             .select(SysMenu::getMenuId, SysMenu::getParentId, SysMenu::getOrderNum)
@@ -122,6 +136,7 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
             .leftJoin(SysRole.class, "sr", SysRole::getRoleId, SysRoleMenu::getRoleId)
             .eq("srm", SysRoleMenu::getRoleId, roleId)
             .eq("sr", SysRole::getStatus, SystemConstants.NORMAL)
+            .eq("m", SysMenu::getClientId, clientId)
             .orderByAsc("m", SysMenu::getParentId)
             .orderByAsc("m", SysMenu::getOrderNum)
             .build());
@@ -139,7 +154,10 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
      * @param userId 用户ID
      * @return 菜单列表
      */
-    default List<SysMenuVo> selectMenuListByUserId(SysMenuBo menu, Long userId) {
+    default List<SysMenuVo> selectMenuListByUserId(SysMenuBo menu, Long userId, Long clientId) {
+        if (userId == null || clientId == null) {
+            return List.of();
+        }
         return this.selectJoinList(SysMenuVo.class, QueryBuilder.lambdaJoin("m", SysMenu.class)
             .distinct()
             .selectAll(SysMenu.class)
@@ -148,6 +166,8 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
             .leftJoin(SysRole.class, "sr", SysRole::getRoleId, SysRoleMenu::getRoleId)
             .eq("sur", SysUserRole::getUserId, userId)
             .eq("sr", SysRole::getStatus, SystemConstants.NORMAL)
+            .eq("sr", SysRole::getClientId, clientId)
+            .eq("m", SysMenu::getClientId, clientId)
             .likeIfText("m", SysMenu::getMenuName, menu.getMenuName())
             .eqIfText("m", SysMenu::getVisible, menu.getVisible())
             .eqIfText("m", SysMenu::getStatus, menu.getStatus())
@@ -159,12 +179,16 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
     }
 
     /**
-     * 根据用户ID查询正常状态的目录和菜单
+     * 根据用户ID和客户端查询正常状态的目录和菜单
      *
-     * @param userId 用户ID
+     * @param userId   用户ID
+     * @param clientId 客户端主键
      * @return 菜单列表
      */
-    default List<SysMenu> selectMenuTreeByUserId(Long userId) {
+    default List<SysMenu> selectMenuTreeByUserId(Long userId, Long clientId) {
+        if (userId == null || clientId == null) {
+            return List.of();
+        }
         return this.selectJoinList(SysMenu.class, QueryBuilder.lambdaJoin("m", SysMenu.class)
             .distinct()
             .selectAll(SysMenu.class)
@@ -173,6 +197,8 @@ public interface SysMenuMapper extends BaseMapperPlus<SysMenu, SysMenuVo>, MPJBa
             .leftJoin(SysRole.class, "sr", SysRole::getRoleId, SysRoleMenu::getRoleId)
             .eq("sur", SysUserRole::getUserId, userId)
             .eq("sr", SysRole::getStatus, SystemConstants.NORMAL)
+            .eq("sr", SysRole::getClientId, clientId)
+            .eq("m", SysMenu::getClientId, clientId)
             .in("m", SysMenu::getMenuType, SystemConstants.TYPE_DIR, SystemConstants.TYPE_MENU)
             .eq("m", SysMenu::getStatus, SystemConstants.NORMAL)
             .orderByAsc("m", SysMenu::getParentId)

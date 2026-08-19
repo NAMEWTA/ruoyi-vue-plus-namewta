@@ -29,6 +29,11 @@ public class SysMenuVo implements Serializable {
     private Long menuId;
 
     /**
+     * 归属客户端主键
+     */
+    private Long clientId;
+
+    /**
      * 菜单名称
      */
     private String menuName;
