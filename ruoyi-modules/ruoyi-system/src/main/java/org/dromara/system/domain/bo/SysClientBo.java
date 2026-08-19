@@ -95,6 +95,22 @@ public class SysClientBo implements Serializable {
     private Long timeout;
 
     /**
+     * 登录域ID
+     */
+    @NotNull(message = "登录域不能为空", groups = {AddGroup.class, EditGroup.class})
+    private Long userTypeId;
+
+    /**
+     * 是否开放公开注册
+     */
+    private Boolean registerEnabled;
+
+    /**
+     * 默认角色ID
+     */
+    private Long defaultRoleId;
+
+    /**
      * 状态（0正常 1停用）
      */
     private String status;

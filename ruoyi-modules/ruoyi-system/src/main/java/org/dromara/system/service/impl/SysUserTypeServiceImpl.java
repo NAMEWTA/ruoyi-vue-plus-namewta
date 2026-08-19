@@ -11,10 +11,12 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.query.QueryBuilder;
+import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.SysUserType;
 import org.dromara.system.domain.SysUserTypeRel;
 import org.dromara.system.domain.bo.SysUserTypeBo;
 import org.dromara.system.domain.vo.SysUserTypeVo;
+import org.dromara.system.mapper.SysClientMapper;
 import org.dromara.system.mapper.SysUserTypeMapper;
 import org.dromara.system.mapper.SysUserTypeRelMapper;
 import org.dromara.system.service.ISysUserTypeService;
@@ -37,6 +39,7 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
 
     private final SysUserTypeMapper userTypeMapper;
     private final SysUserTypeRelMapper userTypeRelMapper;
+    private final SysClientMapper clientMapper;
 
     /**
      * 查询登录域
@@ -181,6 +184,12 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
                 .exists();
             if (referenced) {
                 throw new ServiceException("{}已被用户引用，不能删除!", userType.getUserTypeName());
+            }
+            boolean usedByClient = clientMapper.lambda()
+                .eq(SysClient::getUserTypeId, userType.getUserTypeId())
+                .exists();
+            if (usedByClient) {
+                throw new ServiceException("{}已被客户端引用，不能删除!", userType.getUserTypeName());
             }
         }
         return userTypeMapper.deleteByIds(ids) > 0;

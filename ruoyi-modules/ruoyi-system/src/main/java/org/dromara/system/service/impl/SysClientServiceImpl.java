@@ -8,16 +8,22 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.CacheNames;
+import org.dromara.common.core.constant.SystemConstants;
 import org.dromara.common.core.domain.PageResult;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.query.QueryBuilder;
 import org.dromara.system.domain.SysClient;
+import org.dromara.system.domain.SysRole;
 import org.dromara.system.domain.bo.SysClientBo;
 import org.dromara.system.domain.vo.SysClientVo;
+import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.mapper.SysClientMapper;
+import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.service.ISysClientService;
+import org.dromara.system.service.ISysUserTypeService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -40,6 +46,8 @@ public class SysClientServiceImpl implements ISysClientService {
     private static final String CLIENT_RULE_SEPARATOR_REGEX = "[,;\\r\\n]+";
 
     private final SysClientMapper clientMapper;
+    private final SysRoleMapper roleMapper;
+    private final ISysUserTypeService userTypeService;
 
     /**
      * 查询客户端管理
@@ -108,6 +116,7 @@ public class SysClientServiceImpl implements ISysClientService {
             .eqIfText(SysClient::getClientId, bo.getClientId())
             .eqIfText(SysClient::getClientKey, bo.getClientKey())
             .eqIfText(SysClient::getClientSecret, bo.getClientSecret())
+            .eqIfPresent(SysClient::getUserTypeId, bo.getUserTypeId())
             .eqIfText(SysClient::getStatus, bo.getStatus())
             .orderByAsc(SysClient::getId)
             .build();
@@ -122,6 +131,10 @@ public class SysClientServiceImpl implements ISysClientService {
     @Override
     public Boolean insertByBo(SysClientBo bo) {
         SysClient add = MapstructUtils.convert(bo, SysClient.class);
+        validClientPolicy(add, true);
+        if (ObjectUtil.isNull(add.getRegisterEnabled())) {
+            add.setRegisterEnabled(Boolean.FALSE);
+        }
         add.setGrantType(CollUtil.join(bo.getGrantTypeList(), StringUtils.SEPARATOR));
         add.setAccessPath(resolveRuleValue(bo.getAccessPath(), bo.getAccessPathList(), this::normalizeAccessPath));
         add.setIpWhitelist(resolveRuleValue(bo.getIpWhitelist(), bo.getIpWhitelistList(), UnaryOperator.identity()));
@@ -146,6 +159,10 @@ public class SysClientServiceImpl implements ISysClientService {
     @Override
     public Boolean updateByBo(SysClientBo bo) {
         SysClient update = MapstructUtils.convert(bo, SysClient.class);
+        validClientPolicy(update, false);
+        if (ObjectUtil.isNull(update.getRegisterEnabled())) {
+            update.setRegisterEnabled(Boolean.FALSE);
+        }
         update.setGrantType(StringUtils.joinComma(bo.getGrantTypeList()));
         update.setAccessPath(resolveRuleValue(bo.getAccessPath(), bo.getAccessPathList(), this::normalizeAccessPath));
         update.setIpWhitelist(resolveRuleValue(bo.getIpWhitelist(), bo.getIpWhitelistList(), UnaryOperator.identity()));
@@ -208,6 +225,7 @@ public class SysClientServiceImpl implements ISysClientService {
         vo.setGrantTypeList(StringUtils.splitList(vo.getGrantType()));
         vo.setAccessPathList(parseRuleList(vo.getAccessPath(), this::normalizeAccessPath));
         vo.setIpWhitelistList(parseRuleList(vo.getIpWhitelist(), UnaryOperator.identity()));
+        fillUserTypeAndDefaultRole(vo);
     }
 
     /**
@@ -263,6 +281,61 @@ public class SysClientServiceImpl implements ISysClientService {
             return "/**";
         }
         return accessPath.startsWith(StringUtils.SLASH) ? accessPath : StringUtils.SLASH + accessPath;
+    }
+
+    /**
+     * 回填登录域与默认角色展示字段。
+     *
+     * @param vo 客户端视图对象
+     */
+    private void fillUserTypeAndDefaultRole(SysClientVo vo) {
+        if (ObjectUtil.isNotNull(vo.getUserTypeId())) {
+            SysUserTypeVo userType = userTypeService.queryById(vo.getUserTypeId());
+            if (ObjectUtil.isNotNull(userType)) {
+                vo.setUserTypeCode(userType.getUserTypeCode());
+                vo.setUserTypeName(userType.getUserTypeName());
+            }
+        }
+        if (ObjectUtil.isNotNull(vo.getDefaultRoleId())) {
+            SysRole role = roleMapper.selectById(vo.getDefaultRoleId());
+            if (ObjectUtil.isNotNull(role)) {
+                vo.setDefaultRoleName(role.getRoleName());
+            }
+        }
+    }
+
+    /**
+     * 校验登录域与默认角色策略。
+     *
+     * @param client 客户端实体
+     * @param isAdd  是否新增
+     */
+    private void validClientPolicy(SysClient client, boolean isAdd) {
+        if (ObjectUtil.isNull(client.getUserTypeId())) {
+            throw new ServiceException("登录域不能为空");
+        }
+        SysUserTypeVo userType = userTypeService.queryById(client.getUserTypeId());
+        if (ObjectUtil.isNull(userType)) {
+            throw new ServiceException("登录域不存在");
+        }
+        if (!SystemConstants.NORMAL.equals(userType.getStatus())) {
+            throw new ServiceException("登录域已停用");
+        }
+        if (ObjectUtil.isNull(client.getDefaultRoleId())) {
+            return;
+        }
+        SysRole role = roleMapper.selectById(client.getDefaultRoleId());
+        if (ObjectUtil.isNull(role)) {
+            throw new ServiceException("默认角色不存在");
+        }
+        if (!SystemConstants.NORMAL.equals(role.getStatus())) {
+            throw new ServiceException("默认角色已停用");
+        }
+        Long clientPk = isAdd ? null : client.getId();
+        if (ObjectUtil.isNotNull(role.getClientId()) && ObjectUtil.isNotNull(clientPk)
+            && !role.getClientId().equals(clientPk)) {
+            throw new ServiceException("默认角色必须属于当前客户端");
+        }
     }
 
 }

@@ -102,6 +102,41 @@ public class SysClientVo implements Serializable {
     private Long timeout;
 
     /**
+     * 登录域ID
+     */
+    private Long userTypeId;
+
+    /**
+     * 登录域编码
+     */
+    @ExcelProperty(value = "登录域编码")
+    private String userTypeCode;
+
+    /**
+     * 登录域名称
+     */
+    @ExcelProperty(value = "登录域名称")
+    private String userTypeName;
+
+    /**
+     * 是否开放公开注册
+     */
+    @ExcelProperty(value = "公开注册", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(readConverterExp = "true=开启,false=关闭")
+    private Boolean registerEnabled;
+
+    /**
+     * 默认角色ID
+     */
+    private Long defaultRoleId;
+
+    /**
+     * 默认角色名称
+     */
+    @ExcelProperty(value = "默认角色")
+    private String defaultRoleName;
+
+    /**
      * 状态（0正常 1停用）
      */
     @ExcelProperty(value = "状态", converter = ExcelDictConvert.class)

@@ -27,6 +27,11 @@ public class SysRole extends BaseEntity {
     private Long roleId;
 
     /**
+     * 归属客户端主键
+     */
+    private Long clientId;
+
+    /**
      * 角色名称
      */
     private String roleName;
