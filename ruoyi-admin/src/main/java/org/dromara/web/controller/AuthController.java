@@ -30,8 +30,8 @@ import org.dromara.system.api.model.RegisterBody;
 import org.dromara.system.api.model.SocialLoginBody;
 import org.dromara.system.domain.vo.SysClientVo;
 import org.dromara.system.service.ISysClientService;
-import org.dromara.system.service.ISysConfigService;
 import org.dromara.system.service.ISysSocialService;
+import org.dromara.web.domain.vo.AuthClientContextVo;
 import org.dromara.web.domain.vo.LoginVo;
 import org.dromara.web.service.IAuthStrategy;
 import org.dromara.web.service.SysLoginService;
@@ -59,7 +59,6 @@ public class AuthController {
     private final SocialProperties socialProperties;
     private final SysLoginService loginService;
     private final SysRegisterService registerService;
-    private final ISysConfigService configService;
     private final ISysSocialService socialUserService;
     private final ISysClientService clientService;
     private final ScheduledExecutorService scheduledExecutorService;
@@ -172,6 +171,30 @@ public class AuthController {
     }
 
     /**
+     * 查询客户端公开认证上下文。
+     *
+     * @param clientId 客户端标识
+     * @return 客户端是否可用及是否开放注册
+     */
+    @GetMapping("/client/context")
+    public R<AuthClientContextVo> clientContext(String clientId) {
+        AuthClientContextVo vo = new AuthClientContextVo();
+        vo.setClientEnabled(false);
+        vo.setRegisterEnabled(false);
+        if (StringUtils.isBlank(clientId)) {
+            return R.ok(vo);
+        }
+        SysClientVo client = clientService.queryByClientId(clientId);
+        if (ObjectUtil.isNull(client)) {
+            return R.ok(vo);
+        }
+        boolean clientEnabled = SystemConstants.NORMAL.equals(client.getStatus());
+        vo.setClientEnabled(clientEnabled);
+        vo.setRegisterEnabled(clientEnabled && Boolean.TRUE.equals(client.getRegisterEnabled()));
+        return R.ok(vo);
+    }
+
+    /**
      * 用户注册。
      *
      * @param user 注册信息
@@ -180,9 +203,6 @@ public class AuthController {
     @ApiEncrypt
     @PostMapping("/register")
     public R<Void> register(@Validated @RequestBody RegisterBody user) {
-        if (!configService.selectRegisterEnabled()) {
-            return R.fail("当前系统没有开启注册功能！");
-        }
         registerService.register(user);
         return R.ok();
     }

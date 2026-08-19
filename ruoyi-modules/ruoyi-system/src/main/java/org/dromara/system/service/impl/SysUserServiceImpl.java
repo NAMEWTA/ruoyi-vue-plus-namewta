@@ -323,7 +323,11 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         user.setCreateBy(0L);
         user.setUpdateBy(0L);
         SysUser sysUser = MapstructUtils.convert(user, SysUser.class);
-        return userMapper.insert(sysUser) > 0;
+        boolean flag = userMapper.insert(sysUser) > 0;
+        if (flag) {
+            user.setUserId(sysUser.getUserId());
+        }
+        return flag;
     }
 
     /**

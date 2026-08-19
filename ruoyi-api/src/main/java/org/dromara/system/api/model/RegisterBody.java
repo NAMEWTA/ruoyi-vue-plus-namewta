@@ -16,6 +16,13 @@ import org.hibernate.validator.constraints.Length;
 public class RegisterBody extends LoginBody {
 
     /**
+     * 注册请求默认授权类型，避免继承 LoginBody 的 grantType 必填约束阻塞公开注册。
+     */
+    public RegisterBody() {
+        setGrantType("password");
+    }
+
+    /**
      * 用户名
      */
     @NotBlank(message = "{user.username.not.blank}")
