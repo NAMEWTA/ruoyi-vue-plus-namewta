@@ -26,6 +26,7 @@ import org.dromara.system.domain.SysUserPost;
 import org.dromara.system.domain.SysUserRole;
 import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.SysRole;
+import org.dromara.system.domain.SysUserType;
 import org.dromara.system.domain.bo.SysUserBo;
 import org.dromara.system.domain.constant.UserTypeGrantSource;
 import org.dromara.system.domain.vo.SysPostVo;
@@ -61,6 +62,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
     private final SysClientMapper clientMapper;
+    private final SysUserTypeMapper userTypeMapper;
     private final ClientSessionService clientSessionService;
     private final ISysUserTypeRelService userTypeRelService;
 
@@ -366,7 +368,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             throw new ServiceException("修改用户{}信息失败", user.getUserName());
         }
         if (SystemConstants.DISABLE.equals(sysUser.getStatus())) {
-            clientSessionService.kickoutUser(user.getUserId());
+            kickoutUserTypes(user.getUserId(), userTypeRelService.selectByUserId(user.getUserId()));
         }
         return flag;
     }
@@ -396,12 +398,14 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      */
     @Override
     public int updateUserStatus(Long userId, String status) {
+        List<SysUserTypeRelVo> userTypes = SystemConstants.DISABLE.equals(status)
+            ? userTypeRelService.selectByUserId(userId) : List.of();
         int rows = userMapper.lambda()
             .set(SysUser::getStatus, status)
             .eq(SysUser::getUserId, userId)
             .updateCount();
         if (rows > 0 && SystemConstants.DISABLE.equals(status)) {
-            clientSessionService.kickoutUser(userId);
+            kickoutUserTypes(userId, userTypes);
         }
         return rows;
     }
@@ -613,12 +617,13 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int deleteUserById(Long userId) {
+        List<SysUserTypeRelVo> userTypes = userTypeRelService.selectByUserId(userId);
         // 删除用户与角色关联
         userRoleMapper.lambda().eq(SysUserRole::getUserId, userId).delete();
         // 删除用户与岗位表
         userPostMapper.lambda().eq(SysUserPost::getUserId, userId).delete();
         userTypeRelService.deleteByUserIds(List.of(userId));
-        clientSessionService.kickoutUser(userId);
+        kickoutUserTypes(userId, userTypes);
         // 防止更新失败导致的数据删除
         int flag = userMapper.deleteById(userId);
         if (flag < 1) {
@@ -641,13 +646,15 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             checkUserDataScope(userId);
         }
         List<Long> ids = List.of(userIds);
+        List<SysUserTypeRelVo> userTypes = userTypeRelService.selectByUserIds(ids);
         // 删除用户与角色关联
         userRoleMapper.lambda().in(SysUserRole::getUserId, ids).delete();
         // 删除用户与岗位表
         userPostMapper.lambda().in(SysUserPost::getUserId, ids).delete();
         userTypeRelService.deleteByUserIds(ids);
+        Map<Long, List<SysUserTypeRelVo>> userTypesByUser = StreamUtils.groupByKey(userTypes, SysUserTypeRelVo::getUserId);
         for (Long userId : ids) {
-            clientSessionService.kickoutUser(userId);
+            kickoutUserTypes(userId, userTypesByUser.getOrDefault(userId, List.of()));
         }
         // 防止更新失败导致的数据删除
         int flag = userMapper.deleteByIds(ids);
@@ -939,16 +946,45 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             return;
         }
         List<SysRole> roles = roleMapper.selectByIds(roleIds);
+        if (roles.size() != new HashSet<>(roleIds).size()) {
+            throw new ServiceException("存在无效角色");
+        }
         for (SysRole role : roles) {
-            if (ObjectUtil.isNull(role) || ObjectUtil.isNull(role.getClientId())) {
-                continue;
+            if (ObjectUtil.isNull(role) || !SystemConstants.NORMAL.equals(role.getStatus())
+                || ObjectUtil.isNull(role.getClientId())) {
+                throw new ServiceException("角色不存在、已停用或未归属客户端");
             }
             SysClient client = clientMapper.selectById(role.getClientId());
-            if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getUserTypeId())) {
-                continue;
+            if (ObjectUtil.isNull(client) || !SystemConstants.NORMAL.equals(client.getStatus())) {
+                throw new ServiceException("角色所属客户端不存在或已停用");
+            }
+            if (ObjectUtil.isNull(client.getUserTypeId())) {
+                throw new ServiceException("角色所属客户端未配置登录域");
+            }
+            SysUserType userType = userTypeMapper.selectById(client.getUserTypeId());
+            if (ObjectUtil.isNull(userType) || !SystemConstants.NORMAL.equals(userType.getStatus())) {
+                throw new ServiceException("角色所属客户端的登录域不存在或已停用");
+            }
+            if (role.getRoleId().equals(client.getDefaultRoleId())) {
+                throw new ServiceException("客户端默认角色由系统自动授予，不能显式分配");
             }
             if (!userTypeRelService.hasUserType(userId, client.getUserTypeId())) {
                 throw new ServiceException("用户不具备角色[{}]所属客户端的登录域", role.getRoleName());
+            }
+        }
+    }
+
+    /**
+     * 按用户已有登录域清理会话，不扫描或推断其他身份上下文。
+     */
+    private void kickoutUserTypes(Long userId, Collection<SysUserTypeRelVo> userTypes) {
+        if (CollUtil.isEmpty(userTypes)) {
+            return;
+        }
+        Set<String> codes = StreamUtils.toSet(userTypes, SysUserTypeRelVo::getUserTypeCode);
+        for (String code : codes) {
+            if (StringUtils.isNotBlank(code)) {
+                clientSessionService.kickoutUserType(userId, code);
             }
         }
     }

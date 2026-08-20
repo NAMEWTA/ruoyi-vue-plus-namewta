@@ -20,12 +20,10 @@ import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.web.config.properties.CaptchaProperties;
 import org.dromara.system.api.model.RegisterBody;
-import org.dromara.system.domain.SysUser;
 import org.dromara.system.domain.bo.SysUserBo;
 import org.dromara.system.domain.constant.UserTypeGrantSource;
 import org.dromara.system.domain.vo.SysClientVo;
 import org.dromara.system.domain.vo.SysUserTypeVo;
-import org.dromara.system.mapper.SysUserMapper;
 import org.dromara.system.service.ISysClientService;
 import org.dromara.system.service.ISysUserService;
 import org.dromara.system.service.ISysUserTypeRelService;
@@ -43,7 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class SysRegisterService {
 
     private final ISysUserService userService;
-    private final SysUserMapper userMapper;
     private final CaptchaProperties captchaProperties;
     private final ISysClientService clientService;
     private final ISysUserTypeService userTypeService;
@@ -78,16 +75,24 @@ public class SysRegisterService {
             validateCaptcha(username, registerBody.getCode(), registerBody.getUuid());
         }
 
-        boolean exist = userMapper.lambda()
-            .eq(SysUser::getUserName, username)
-            .exists();
-        if (exist) {
-            throw new ServiceException("该账号已存在，请登录");
-        }
-
         SysUserBo sysUser = new SysUserBo();
         sysUser.setUserName(username);
         sysUser.setNickName(username);
+        if (StringUtils.isNotBlank(registerBody.getEmail())) {
+            sysUser.setEmail(StringUtils.trim(registerBody.getEmail()));
+        }
+        if (StringUtils.isNotBlank(registerBody.getPhoneNumber())) {
+            sysUser.setPhoneNumber(StringUtils.trim(registerBody.getPhoneNumber()));
+        }
+        if (!userService.checkUserNameUnique(sysUser)) {
+            throw new ServiceException("该账号已存在，请登录");
+        }
+        if (StringUtils.isNotBlank(sysUser.getPhoneNumber()) && !userService.checkPhoneUnique(sysUser)) {
+            throw new ServiceException("该手机号已存在，请登录");
+        }
+        if (StringUtils.isNotBlank(sysUser.getEmail()) && !userService.checkEmailUnique(sysUser)) {
+            throw new ServiceException("该邮箱已存在，请登录");
+        }
         sysUser.setPassword(BCrypt.hashpw(password));
         boolean regFlag = userService.registerUser(sysUser);
         if (!regFlag) {

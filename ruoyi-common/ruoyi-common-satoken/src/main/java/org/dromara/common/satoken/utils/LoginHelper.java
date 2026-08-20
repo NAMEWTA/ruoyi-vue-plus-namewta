@@ -216,24 +216,7 @@ public class LoginHelper {
      * @return 登录域编码
      */
     public static String getUserType() {
-        String extra = Convert.toStr(getExtra(USER_TYPE_KEY));
-        if (StringUtils.isNotBlank(extra)) {
-            return extra;
-        }
-        LoginUser loginUser = getLoginUser();
-        if (ObjectUtil.isNotNull(loginUser) && StringUtils.isNotBlank(loginUser.getUserType())) {
-            return loginUser.getUserType();
-        }
-        try {
-            String loginId = StpUtil.getLoginIdAsString();
-            int separatorIndex = loginId.indexOf(':');
-            if (separatorIndex > 0) {
-                return loginId.substring(0, separatorIndex);
-            }
-            return loginId;
-        } catch (Exception e) {
-            return null;
-        }
+        return Convert.toStr(StpUtil.getExtra(USER_TYPE_KEY));
     }
 
     /**

@@ -63,18 +63,6 @@ public class ClientSessionService {
     }
 
     /**
-     * 踢出指定用户的全部 Token。
-     *
-     * @param userId 用户ID
-     */
-    public void kickoutUser(Long userId) {
-        if (userId == null) {
-            return;
-        }
-        forEachToken(loginUser -> userId.equals(loginUser.getUserId()));
-    }
-
-    /**
      * 遍历当前全部在线 Token，对命中的会话执行登出。
      *
      * @param matcher 登录快照匹配器
