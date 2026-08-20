@@ -26,6 +26,7 @@ import org.dromara.system.domain.SysRoleMenu;
 import org.dromara.system.domain.SysUserRole;
 import org.dromara.system.domain.SysMenu;
 import org.dromara.system.domain.SysClient;
+import org.dromara.system.domain.SysUserType;
 import org.dromara.system.domain.bo.SysRoleBo;
 import org.dromara.system.domain.vo.SysRoleVo;
 import org.dromara.system.mapper.SysClientMapper;
@@ -34,6 +35,7 @@ import org.dromara.system.mapper.SysRoleDeptMapper;
 import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.mapper.SysUserRoleMapper;
+import org.dromara.system.mapper.SysUserTypeMapper;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysRoleService;
 import org.dromara.system.service.ISysUserTypeRelService;
@@ -58,6 +60,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     private final SysRoleDeptMapper roleDeptMapper;
     private final SysMenuMapper menuMapper;
     private final SysClientMapper clientMapper;
+    private final SysUserTypeMapper userTypeMapper;
     private final ClientSessionService clientSessionService;
     private final ISysUserTypeRelService userTypeRelService;
 
@@ -70,9 +73,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public PageResult<SysRoleVo> selectPageRoleList(SysRoleBo role, PageQuery pageQuery) {
-        if (ObjectUtil.isNull(role.getClientId())) {
-            return PageResult.build(List.of(), 0);
-        }
+        requireActiveClient(role.getClientId());
         Page<SysRoleVo> page = roleMapper.selectPageRoleList(pageQuery.build(), this.buildQueryWrapper(role));
         markClientDefault(page.getRecords(), role.getClientId());
         return PageResult.build(page.getRecords(), page.getTotal());
@@ -86,9 +87,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public List<SysRoleVo> selectRoleList(SysRoleBo role) {
-        if (ObjectUtil.isNull(role.getClientId())) {
-            return List.of();
-        }
+        requireActiveClient(role.getClientId());
         List<SysRoleVo> roles = roleMapper.selectRoleList(this.buildQueryWrapper(role));
         markClientDefault(roles, role.getClientId());
         return roles;
@@ -121,6 +120,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public List<SysRoleVo> selectRolesByUserId(Long userId, Long clientId) {
+        requireActiveClient(clientId);
         List<SysRoleVo> roles = new ArrayList<>(roleMapper.selectRolesByUserId(userId, clientId));
         mergeDefaultRole(roles, clientId);
         return roles;
@@ -181,7 +181,6 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
 
     /**
      * 根据用户ID和客户端获取角色选择框列表。
-     * clientId 为空时返回全部客户端的显式角色，不含默认角色。
      *
      * @param userId   用户ID
      * @param clientId 客户端主键
@@ -189,9 +188,8 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public List<Long> selectRoleListByUserId(Long userId, Long clientId) {
-        List<SysRoleVo> list = clientId == null
-            ? roleMapper.selectExplicitRolesByUserId(userId)
-            : roleMapper.selectRolesByUserId(userId, clientId);
+        requireActiveClient(clientId);
+        List<SysRoleVo> list = roleMapper.selectRolesByUserId(userId, clientId);
         return StreamUtils.toList(list, SysRoleVo::getRoleId);
     }
 
@@ -730,24 +728,16 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @param clientId 客户端主键
      */
     private void mergeDefaultRole(List<SysRoleVo> roles, Long clientId) {
-        if (clientId == null) {
+        SysClient client = requireActiveClient(clientId);
+        SysRoleVo defaultRole = resolveConfiguredDefaultRole(client);
+        if (ObjectUtil.isNull(defaultRole)) {
             return;
         }
-        SysClient client = clientMapper.selectById(clientId);
-        if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getDefaultRoleId())) {
-            return;
-        }
-        Long defaultRoleId = client.getDefaultRoleId();
-        boolean already = roles.stream().anyMatch(role -> defaultRoleId.equals(role.getRoleId()));
-        if (already) {
-            return;
-        }
-        SysRoleVo defaultRole = roleMapper.selectVoById(defaultRoleId);
-        if (ObjectUtil.isNull(defaultRole) || !SystemConstants.NORMAL.equals(defaultRole.getStatus())) {
-            return;
-        }
-        if (ObjectUtil.isNotNull(defaultRole.getClientId()) && !clientId.equals(defaultRole.getClientId())) {
-            return;
+        for (SysRoleVo role : roles) {
+            if (defaultRole.getRoleId().equals(role.getRoleId())) {
+                role.setClientDefault(true);
+                return;
+            }
         }
         defaultRole.setClientDefault(true);
         roles.add(defaultRole);
@@ -760,17 +750,52 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @param clientId 客户端主键
      */
     private void markClientDefault(List<SysRoleVo> roles, Long clientId) {
-        if (clientId == null || CollUtil.isEmpty(roles)) {
+        SysClient client = requireActiveClient(clientId);
+        SysRoleVo defaultRole = resolveConfiguredDefaultRole(client);
+        if (ObjectUtil.isNull(defaultRole) || CollUtil.isEmpty(roles)) {
             return;
+        }
+        for (SysRoleVo role : roles) {
+            role.setClientDefault(defaultRole.getRoleId().equals(role.getRoleId()));
+        }
+    }
+
+    /**
+     * 校验客户端及其登录域可用于角色管理和运行时授权。
+     */
+    private SysClient requireActiveClient(Long clientId) {
+        if (ObjectUtil.isNull(clientId)) {
+            throw new ServiceException("请选择客户端");
         }
         SysClient client = clientMapper.selectById(clientId);
-        if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getDefaultRoleId())) {
-            return;
+        if (ObjectUtil.isNull(client) || !SystemConstants.NORMAL.equals(client.getStatus())) {
+            throw new ServiceException("客户端不存在或已停用");
         }
-        Long defaultRoleId = client.getDefaultRoleId();
-        for (SysRoleVo role : roles) {
-            role.setClientDefault(defaultRoleId.equals(role.getRoleId()));
+        if (ObjectUtil.isNull(client.getUserTypeId())) {
+            throw new ServiceException("客户端未配置登录域");
         }
+        SysUserType userType = userTypeMapper.selectById(client.getUserTypeId());
+        if (ObjectUtil.isNull(userType) || !SystemConstants.NORMAL.equals(userType.getStatus())) {
+            throw new ServiceException("客户端登录域不存在或已停用");
+        }
+        return client;
+    }
+
+    /**
+     * 解析已配置的默认角色；未配置时返回空，配置错误时拒绝继续授权。
+     */
+    private SysRoleVo resolveConfiguredDefaultRole(SysClient client) {
+        if (ObjectUtil.isNull(client.getDefaultRoleId())) {
+            return null;
+        }
+        SysRoleVo role = roleMapper.selectVoById(client.getDefaultRoleId());
+        if (ObjectUtil.isNull(role)
+            || !SystemConstants.NORMAL.equals(role.getStatus())
+            || ObjectUtil.isNull(role.getClientId())
+            || !client.getId().equals(role.getClientId())) {
+            throw new ServiceException("客户端默认角色配置无效");
+        }
+        return role;
     }
 
     /**
@@ -780,12 +805,16 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @param userIds 用户ID集合
      */
     private void validateUsersHaveRoleClientType(SysRole role, Collection<Long> userIds) {
-        if (ObjectUtil.isNull(role) || ObjectUtil.isNull(role.getClientId()) || CollUtil.isEmpty(userIds)) {
+        if (CollUtil.isEmpty(userIds)) {
             return;
         }
-        SysClient client = clientMapper.selectById(role.getClientId());
-        if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getUserTypeId())) {
-            return;
+        if (ObjectUtil.isNull(role) || !SystemConstants.NORMAL.equals(role.getStatus())
+            || ObjectUtil.isNull(role.getClientId())) {
+            throw new ServiceException("角色不存在、已停用或未归属客户端");
+        }
+        SysClient client = requireActiveClient(role.getClientId());
+        if (role.getRoleId().equals(client.getDefaultRoleId())) {
+            throw new ServiceException("客户端默认角色由系统自动授予，不能显式分配");
         }
         for (Long userId : userIds) {
             if (!userTypeRelService.hasUserType(userId, client.getUserTypeId())) {

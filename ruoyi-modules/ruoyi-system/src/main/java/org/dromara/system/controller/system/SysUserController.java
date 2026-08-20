@@ -144,11 +144,14 @@ public class SysUserController extends BaseController {
     public R<SysUserInfoVo> getInfo(@PathVariable(value = "userId", required = false) Long userId,
                                     @RequestParam(required = false) Long clientId) {
         SysUserInfoVo userInfoVo = new SysUserInfoVo();
+        userInfoVo.setRoleIds(List.of());
         if (ObjectUtil.isNotNull(userId)) {
             userService.checkUserDataScope(userId);
             SysUserVo sysUser = userService.selectUserById(userId);
             userInfoVo.setUser(sysUser);
-            userInfoVo.setRoleIds(roleService.selectRoleListByUserId(userId, clientId));
+            if (ObjectUtil.isNotNull(clientId)) {
+                userInfoVo.setRoleIds(roleService.selectRoleListByUserId(userId, clientId));
+            }
             Long deptId = sysUser.getDeptId();
             if (ObjectUtil.isNotNull(deptId)) {
                 SysPostBo postBo = new SysPostBo();
@@ -157,10 +160,17 @@ public class SysUserController extends BaseController {
                 userInfoVo.setPostIds(postService.selectPostListByUserId(userId));
             }
         }
-        SysRoleBo roleBo = new SysRoleBo();
-        roleBo.setStatus(SystemConstants.NORMAL);
-        roleBo.setClientId(clientId);
-        List<SysRoleVo> roles = roleService.selectRoleList(roleBo);
+        List<SysRoleVo> roles = List.of();
+        if (ObjectUtil.isNotNull(clientId)) {
+            if (ObjectUtil.isNotNull(userId)) {
+                roles = roleService.selectRolesAuthByUserId(userId, clientId);
+            } else {
+                SysRoleBo roleBo = new SysRoleBo();
+                roleBo.setStatus(SystemConstants.NORMAL);
+                roleBo.setClientId(clientId);
+                roles = roleService.selectRoleList(roleBo);
+            }
+        }
         userInfoVo.setRoles(LoginHelper.isSuperAdmin(userId) ? roles : StreamUtils.filter(roles, r -> !r.isSuperAdmin()));
         return R.ok(userInfoVo);
     }
@@ -307,7 +317,7 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:query")
     @GetMapping("/authRole/{userId}")
     public R<SysUserInfoVo> authRole(@PathVariable Long userId,
-                                     @RequestParam(required = false) Long clientId) {
+                                     @RequestParam Long clientId) {
         userService.checkUserDataScope(userId);
         SysUserVo user = userService.selectUserById(userId);
         List<SysRoleVo> roles = roleService.selectRolesAuthByUserId(userId, clientId);

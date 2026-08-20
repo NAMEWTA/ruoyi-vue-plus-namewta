@@ -493,15 +493,16 @@ public class SysMenuServiceImpl implements ISysMenuService {
             return null;
         }
         SysClient client = clientMapper.selectById(clientId);
-        if (ObjectUtil.isNull(client) || ObjectUtil.isNull(client.getDefaultRoleId())) {
+        if (ObjectUtil.isNull(client) || !SystemConstants.NORMAL.equals(client.getStatus())) {
+            throw new ServiceException("客户端不存在或已停用");
+        }
+        if (ObjectUtil.isNull(client.getDefaultRoleId())) {
             return null;
         }
         SysRole role = roleMapper.selectById(client.getDefaultRoleId());
-        if (ObjectUtil.isNull(role) || !SystemConstants.NORMAL.equals(role.getStatus())) {
-            return null;
-        }
-        if (ObjectUtil.isNotNull(role.getClientId()) && !clientId.equals(role.getClientId())) {
-            return null;
+        if (ObjectUtil.isNull(role) || !SystemConstants.NORMAL.equals(role.getStatus())
+            || ObjectUtil.isNull(role.getClientId()) || !clientId.equals(role.getClientId())) {
+            throw new ServiceException("客户端默认角色配置无效");
         }
         return role.getRoleId();
     }
