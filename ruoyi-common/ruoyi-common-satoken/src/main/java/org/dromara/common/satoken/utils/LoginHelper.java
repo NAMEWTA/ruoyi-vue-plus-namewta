@@ -43,6 +43,7 @@ public class LoginHelper {
     public static final String CLIENT_PK_KEY = "clientPk";
     public static final String CLIENT_ACCESS_PATH_KEY = "clientAccessPath";
     public static final String CLIENT_IP_WHITELIST_KEY = "clientIpWhitelist";
+    public static final String USER_TYPE_KEY = "userType";
 
     /**
      * 登录系统 基于 设备类型
@@ -60,6 +61,7 @@ public class LoginHelper {
                 .setExtra(DEPT_KEY, loginUser.getDeptId())
                 .setExtra(DEPT_NAME_KEY, loginUser.getDeptName())
                 .setExtra(DEPT_CATEGORY_KEY, loginUser.getDeptCategory())
+                .setExtra(USER_TYPE_KEY, loginUser.getUserType())
         );
         StpUtil.getTokenSession().set(LOGIN_USER_KEY, loginUser);
     }
@@ -214,6 +216,10 @@ public class LoginHelper {
      * @return 登录域编码
      */
     public static String getUserType() {
+        String extra = Convert.toStr(getExtra(USER_TYPE_KEY));
+        if (StringUtils.isNotBlank(extra)) {
+            return extra;
+        }
         LoginUser loginUser = getLoginUser();
         if (ObjectUtil.isNotNull(loginUser) && StringUtils.isNotBlank(loginUser.getUserType())) {
             return loginUser.getUserType();

@@ -81,6 +81,19 @@ values (1761300000000000001, 1761400000000000124),
        (1761300000000000001, 1761400000000001074);
 
 -- ----------------------------
+-- 三个用户端基础菜单（默认角色只给本 Client 工作台，不写入 sys_user_role）
+-- ----------------------------
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param, is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext, create_dept, create_by, create_time, remark)
+values (1761400000000002001, 1762000000000000002, '数据采集工作台', 0, 1, 'collection', 'business/data-collection/index', '', 'N', 'Y', 'C', '0', '0', 'app:collection:workspace', 'dashboard', '', '', 1761000000000000103, 1761100000000000001, sysdate(), '数据采集端工作台'),
+       (1761400000000002002, 1762000000000000003, '数超大赛工作台', 0, 1, 'competition', 'business/data-competition/index', '', 'N', 'Y', 'C', '0', '0', 'app:competition:workspace', 'trophy', '', '', 1761000000000000103, 1761100000000000001, sysdate(), '数超大赛端工作台'),
+       (1761400000000002003, 1762000000000000004, 'Token 中继工作台', 0, 1, 'relay', 'business/token-relay/index', '', 'N', 'Y', 'C', '0', '0', 'app:relay:workspace', 'link', '', '', 1761000000000000103, 1761100000000000001, sysdate(), 'Token 中继端工作台');
+
+insert into sys_role_menu (role_id, menu_id)
+values (1761300000000000010, 1761400000000002001),
+       (1761300000000000011, 1761400000000002002),
+       (1761300000000000012, 1761400000000002003);
+
+-- ----------------------------
 -- 删除全局注册开关，改由 Client.register_enabled 控制
 -- ----------------------------
 delete from sys_config where config_key = 'sys.account.registerUser';

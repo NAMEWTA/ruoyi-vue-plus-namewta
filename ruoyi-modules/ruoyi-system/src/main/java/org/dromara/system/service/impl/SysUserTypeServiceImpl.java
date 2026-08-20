@@ -148,7 +148,14 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
     public Boolean updateByBo(SysUserTypeBo bo) {
         SysUserType update = MapstructUtils.convert(bo, SysUserType.class);
         update.setUserTypeCode(null);
-        return userTypeMapper.updateById(update) > 0;
+        SysUserType db = userTypeMapper.selectById(bo.getUserTypeId());
+        boolean flag = userTypeMapper.updateById(update) > 0;
+        if (flag && ObjectUtil.isNotNull(db)
+            && SystemConstants.DISABLE.equals(update.getStatus())
+            && !SystemConstants.DISABLE.equals(db.getStatus())) {
+            clientSessionService.kickoutUserType(null, db.getUserTypeCode());
+        }
+        return flag;
     }
 
     /**

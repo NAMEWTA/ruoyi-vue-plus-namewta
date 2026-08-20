@@ -351,7 +351,12 @@ public class SysMenuServiceImpl implements ISysMenuService {
      */
     @Override
     public int deleteMenuById(Long menuId) {
-        return menuMapper.deleteById(menuId);
+        SysMenu menu = menuMapper.selectById(menuId);
+        int rows = menuMapper.deleteById(menuId);
+        if (rows > 0 && ObjectUtil.isNotNull(menu)) {
+            clientSessionService.kickoutClient(menu.getClientId());
+        }
+        return rows;
     }
 
     /**
@@ -362,8 +367,21 @@ public class SysMenuServiceImpl implements ISysMenuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteMenuById(Collection<Long> menuIds) {
+        if (CollUtil.isEmpty(menuIds)) {
+            return;
+        }
+        List<SysMenu> menus = menuMapper.selectByIds(menuIds);
+        Set<Long> clientIds = new HashSet<>();
+        for (SysMenu menu : menus) {
+            if (ObjectUtil.isNotNull(menu) && ObjectUtil.isNotNull(menu.getClientId())) {
+                clientIds.add(menu.getClientId());
+            }
+        }
         menuMapper.deleteByIds(menuIds);
         roleMenuMapper.deleteByMenuIds(menuIds);
+        for (Long clientId : clientIds) {
+            clientSessionService.kickoutClient(clientId);
+        }
     }
 
     /**

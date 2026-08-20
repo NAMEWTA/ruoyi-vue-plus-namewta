@@ -74,6 +74,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     @Override
     public PageResult<SysUserVo> selectPageUserList(SysUserBo user, PageQuery pageQuery) {
         Page<SysUserVo> page = userMapper.selectPageUserList(pageQuery.build(), this.buildQueryWrapper(user));
+        fillUserTypes(page.getRecords());
         return PageResult.build(page.getRecords(), page.getTotal());
     }
 
@@ -364,19 +365,26 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (flag < 1) {
             throw new ServiceException("修改用户{}信息失败", user.getUserName());
         }
+        if (SystemConstants.DISABLE.equals(sysUser.getStatus())) {
+            clientSessionService.kickoutUser(user.getUserId());
+        }
         return flag;
     }
 
     /**
-     * 用户授权角色
+     * 按客户端授权用户角色。只替换该客户端下的显式角色，不影响其他客户端。
      *
-     * @param userId  用户ID
-     * @param roleIds 角色组
+     * @param userId   用户ID
+     * @param roleIds  角色组，空数组表示撤销该客户端全部显式角色
+     * @param clientId 客户端主键
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void insertUserAuth(Long userId, Long[] roleIds) {
-        insertUserRole(userId, roleIds, true);
+    public void insertUserAuth(Long userId, Long[] roleIds, Long clientId) {
+        if (ObjectUtil.isNull(clientId)) {
+            throw new ServiceException("请选择客户端");
+        }
+        insertUserRole(userId, roleIds == null ? new Long[0] : roleIds, true, clientId);
     }
 
     /**
@@ -439,7 +447,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @param clear 清除已存在的关联数据
      */
     private void insertUserRole(SysUserBo user, boolean clear) {
-        this.insertUserRole(user.getUserId(), user.getRoleIds(), clear);
+        this.insertUserRole(user.getUserId(), user.getRoleIds(), clear, null);
     }
 
     /**
@@ -479,16 +487,33 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     /**
      * 新增用户角色信息
      *
-     * @param userId  用户ID
-     * @param roleIds 角色组
-     * @param clear   清除已存在的关联数据
+     * @param userId   用户ID
+     * @param roleIds  角色组；null 表示不改角色（如导入更新），空数组且 clear=true 表示撤销
+     * @param clear    清除已存在的关联数据
+     * @param clientId 非空时只替换该客户端下的显式角色
      */
-    private void insertUserRole(Long userId, Long[] roleIds, boolean clear) {
-        if (ArrayUtil.isEmpty(roleIds)) {
+    private void insertUserRole(Long userId, Long[] roleIds, boolean clear, Long clientId) {
+        if (roleIds == null) {
             return;
         }
+        List<Long> roleList = new ArrayList<>();
+        for (Long roleId : roleIds) {
+            if (roleId != null) {
+                roleList.add(roleId);
+            }
+        }
+        List<Long> oldRoleIds = selectUserRoleIds(userId, clientId);
 
-        List<Long> roleList = new ArrayList<>(Arrays.asList(roleIds));
+        if (roleList.isEmpty()) {
+            if (clear) {
+                deleteUserRoles(userId, clientId);
+                kickUserRoleClients(userId, oldRoleIds);
+                if (ObjectUtil.isNotNull(clientId)) {
+                    clientSessionService.kickoutUserClient(userId, clientId);
+                }
+            }
+            return;
+        }
 
         // 非超级管理员，禁止包含超级管理员角色
         if (!LoginHelper.isSuperAdmin(userId)) {
@@ -504,14 +529,20 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (roleMapper.selectRoleCount(roleList) != roleList.size()) {
             throw new ServiceException("没有权限访问角色的数据");
         }
+        if (ObjectUtil.isNotNull(clientId)) {
+            List<SysRole> roles = roleMapper.selectByIds(roleList);
+            for (SysRole role : roles) {
+                if (ObjectUtil.isNull(role) || !clientId.equals(role.getClientId())) {
+                    throw new ServiceException("角色必须属于当前客户端");
+                }
+            }
+        }
         validateRolesUserType(userId, roleList);
 
-        // 是否清除原有绑定
         if (clear) {
-            userRoleMapper.lambda().eq(SysUserRole::getUserId, userId).delete();
+            deleteUserRoles(userId, clientId);
         }
 
-        // 批量插入用户-角色关联
         List<SysUserRole> list = StreamUtils.toList(roleList,
             roleId -> {
                 SysUserRole ur = new SysUserRole();
@@ -520,7 +551,57 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
                 return ur;
             });
         userRoleMapper.insertBatch(list);
-        kickUserRoleClients(userId, roleList);
+        Set<Long> kickRoleIds = new HashSet<>(oldRoleIds);
+        kickRoleIds.addAll(roleList);
+        kickUserRoleClients(userId, kickRoleIds);
+        if (ObjectUtil.isNotNull(clientId)) {
+            clientSessionService.kickoutUserClient(userId, clientId);
+        }
+    }
+
+    /**
+     * 查询用户已绑定的显式角色 ID。
+     *
+     * @param userId   用户ID
+     * @param clientId 非空时只返回该客户端角色
+     * @return 角色 ID 列表
+     */
+    private List<Long> selectUserRoleIds(Long userId, Long clientId) {
+        List<Long> roleIds = userRoleMapper.lambda()
+            .eq(SysUserRole::getUserId, userId)
+            .list()
+            .stream()
+            .map(SysUserRole::getRoleId)
+            .filter(Objects::nonNull)
+            .toList();
+        if (CollUtil.isEmpty(roleIds) || ObjectUtil.isNull(clientId)) {
+            return roleIds;
+        }
+        return roleMapper.selectByIds(roleIds).stream()
+            .filter(role -> clientId.equals(role.getClientId()))
+            .map(SysRole::getRoleId)
+            .toList();
+    }
+
+    /**
+     * 删除用户显式角色。clientId 非空时只删除该客户端下的绑定。
+     *
+     * @param userId   用户ID
+     * @param clientId 客户端主键
+     */
+    private void deleteUserRoles(Long userId, Long clientId) {
+        if (ObjectUtil.isNull(clientId)) {
+            userRoleMapper.lambda().eq(SysUserRole::getUserId, userId).delete();
+            return;
+        }
+        List<Long> roleIds = selectUserRoleIds(userId, clientId);
+        if (CollUtil.isEmpty(roleIds)) {
+            return;
+        }
+        userRoleMapper.lambda()
+            .eq(SysUserRole::getUserId, userId)
+            .in(SysUserRole::getRoleId, roleIds)
+            .delete();
     }
 
     /**
@@ -821,10 +902,30 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @param user 用户视图
      */
     private void fillUserTypes(SysUserVo user) {
-        List<SysUserTypeRelVo> rels = userTypeRelService.selectByUserId(user.getUserId());
-        user.setUserTypeIds(StreamUtils.toList(rels, SysUserTypeRelVo::getUserTypeId));
-        user.setUserTypeCodes(StreamUtils.toList(rels, SysUserTypeRelVo::getUserTypeCode));
-        user.setUserTypeNames(StreamUtils.toList(rels, SysUserTypeRelVo::getUserTypeName));
+        if (ObjectUtil.isNull(user)) {
+            return;
+        }
+        fillUserTypes(List.of(user));
+    }
+
+    /**
+     * 批量回填用户拥有的登录域。
+     *
+     * @param users 用户视图列表
+     */
+    private void fillUserTypes(List<SysUserVo> users) {
+        if (CollUtil.isEmpty(users)) {
+            return;
+        }
+        List<Long> userIds = StreamUtils.toList(users, SysUserVo::getUserId);
+        List<SysUserTypeRelVo> rels = userTypeRelService.selectByUserIds(userIds);
+        Map<Long, List<SysUserTypeRelVo>> grouped = StreamUtils.groupByKey(rels, SysUserTypeRelVo::getUserId);
+        for (SysUserVo user : users) {
+            List<SysUserTypeRelVo> userRels = grouped.getOrDefault(user.getUserId(), List.of());
+            user.setUserTypeIds(StreamUtils.toList(userRels, SysUserTypeRelVo::getUserTypeId));
+            user.setUserTypeCodes(StreamUtils.toList(userRels, SysUserTypeRelVo::getUserTypeCode));
+            user.setUserTypeNames(StreamUtils.toList(userRels, SysUserTypeRelVo::getUserTypeName));
+        }
     }
 
     /**

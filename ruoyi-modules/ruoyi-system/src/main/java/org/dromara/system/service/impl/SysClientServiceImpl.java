@@ -343,9 +343,7 @@ public class SysClientServiceImpl implements ISysClientService {
         if (!SystemConstants.NORMAL.equals(role.getStatus())) {
             throw new ServiceException("默认角色已停用");
         }
-        Long clientPk = isAdd ? null : client.getId();
-        if (ObjectUtil.isNotNull(role.getClientId()) && ObjectUtil.isNotNull(clientPk)
-            && !role.getClientId().equals(clientPk)) {
+        if (isAdd || ObjectUtil.isNull(role.getClientId()) || !role.getClientId().equals(client.getId())) {
             throw new ServiceException("默认角色必须属于当前客户端");
         }
     }

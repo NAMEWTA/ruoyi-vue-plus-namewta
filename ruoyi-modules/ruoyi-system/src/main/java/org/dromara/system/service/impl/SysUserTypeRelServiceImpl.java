@@ -51,6 +51,20 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
     }
 
     /**
+     * 批量查询用户拥有的登录域关系
+     *
+     * @param userIds 用户ID集合
+     * @return 登录域关系列表
+     */
+    @Override
+    public List<SysUserTypeRelVo> selectByUserIds(Collection<Long> userIds) {
+        if (CollUtil.isEmpty(userIds)) {
+            return List.of();
+        }
+        return userTypeRelMapper.selectVoListByUserIds(userIds);
+    }
+
+    /**
      * 判断用户是否拥有指定且正常的登录域
      *
      * @param userId     用户ID

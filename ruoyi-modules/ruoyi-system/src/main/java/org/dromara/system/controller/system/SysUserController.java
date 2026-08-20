@@ -320,17 +320,18 @@ public class SysUserController extends BaseController {
     /**
      * 用户授权角色
      *
-     * @param userId  用户Id
-     * @param roleIds 角色ID串
+     * @param userId   用户Id
+     * @param roleIds  角色ID串，空表示撤销当前客户端显式角色
+     * @param clientId 客户端主键
      * @return 操作结果
      */
     @SaCheckPermission("system:user:edit")
     @Log(title = "用户管理", businessType = BusinessType.GRANT)
     @RepeatSubmit()
     @PutMapping("/authRole")
-    public R<Void> insertAuthRole(Long userId, Long[] roleIds) {
+    public R<Void> insertAuthRole(Long userId, Long[] roleIds, Long clientId) {
         userService.checkUserDataScope(userId);
-        userService.insertUserAuth(userId, roleIds);
+        userService.insertUserAuth(userId, roleIds, clientId);
         return R.ok();
     }
 

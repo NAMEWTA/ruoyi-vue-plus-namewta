@@ -164,12 +164,13 @@ public interface ISysUserService {
     int updateUser(SysUserBo user);
 
     /**
-     * 用户授权角色
+     * 按客户端授权用户角色。只替换该客户端下的显式角色，不影响其他客户端。
      *
-     * @param userId  用户ID
-     * @param roleIds 角色组
+     * @param userId   用户ID
+     * @param roleIds  角色组，空数组表示撤销该客户端全部显式角色
+     * @param clientId 客户端主键
      */
-    void insertUserAuth(Long userId, Long[] roleIds);
+    void insertUserAuth(Long userId, Long[] roleIds, Long clientId);
 
     /**
      * 修改用户状态

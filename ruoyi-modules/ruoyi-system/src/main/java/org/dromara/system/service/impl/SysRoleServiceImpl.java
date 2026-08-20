@@ -340,6 +340,21 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     }
 
     /**
+     * 客户端默认角色未写入 sys_user_role，禁止停用或删除以免悬挂。
+     *
+     * @param roleId 角色ID
+     * @param action 操作描述
+     */
+    private void checkNotClientDefaultRole(Long roleId, String action) {
+        boolean used = clientMapper.lambda()
+            .eq(SysClient::getDefaultRoleId, roleId)
+            .exists();
+        if (used) {
+            throw new ServiceException("角色已被客户端设为默认角色，不能" + action + "!");
+        }
+    }
+
+    /**
      * 新增保存角色信息
      *
      * @param bo 角色信息
@@ -373,6 +388,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             role.setClientId(dbRole.getClientId());
         }
 
+        if (SystemConstants.DISABLE.equals(role.getStatus())) {
+            checkNotClientDefaultRole(role.getRoleId(), "禁用");
+        }
         if (SystemConstants.DISABLE.equals(role.getStatus()) && this.countUserRoleByRoleId(role.getRoleId()) > 0) {
             throw new ServiceException("角色已分配，不能禁用!");
         }
@@ -391,6 +409,10 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     @Transactional(rollbackFor = Exception.class)
     public int updateRolePermission(SysRoleBo bo) {
         SysRole role = MapstructUtils.convert(bo, SysRole.class);
+        SysRole dbRole = roleMapper.selectById(role.getRoleId());
+        if (ObjectUtil.isNotNull(dbRole)) {
+            role.setClientId(dbRole.getClientId());
+        }
         // 更新权限相关配置字段（数据范围、树联动）。
         roleMapper.updateById(role);
         // 先清理旧菜单权限，再重建。
@@ -410,6 +432,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public int updateRoleStatus(Long roleId, String status) {
+        if (SystemConstants.DISABLE.equals(status)) {
+            checkNotClientDefaultRole(roleId, "禁用");
+        }
         if (SystemConstants.DISABLE.equals(status) && this.countUserRoleByRoleId(roleId) > 0) {
             throw new ServiceException("角色已分配，不能禁用!");
         }
@@ -484,6 +509,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int deleteRoleById(Long roleId) {
+        checkNotClientDefaultRole(roleId, "删除");
         // 删除角色与菜单关联
         roleMenuMapper.lambda().eq(SysRoleMenu::getRoleId, roleId).delete();
         // 删除角色与部门关联
@@ -505,6 +531,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         List<SysRole> roles = roleMapper.selectByIds(roleIds);
         for (SysRole role : roles) {
             checkRoleAllowed(BeanUtil.toBean(role, SysRoleBo.class));
+            checkNotClientDefaultRole(role.getRoleId(), "删除");
             if (countUserRoleByRoleId(role.getRoleId()) > 0) {
                 throw new ServiceException(String.format("%1$s已分配，不能删除!", role.getRoleName()));
             }
