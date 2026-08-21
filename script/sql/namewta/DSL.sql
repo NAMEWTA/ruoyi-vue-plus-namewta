@@ -1,8 +1,18 @@
--- ----------------------------
--- NAMEWTA 初始登录域、Client 回填与演示数据
--- 执行前需已执行 001_user_type.sql、002_client_rbac.sql
--- 现有管理端 Client（e5cd7e4891bf95d1d19206ce24a7b32e）保持可登录
--- ----------------------------
+-- ============================================================================
+-- NAMEWTA 数据 SQL
+-- 本文件中的 DSL 是项目约定的数据类 SQL，包含初始化、回填和补偿语句。
+-- 本文件自 2026-08-21 起只允许在文件末尾追加新的数据变更块。
+-- 已有 SQL 禁止修改、删除、替换或重排。
+-- ============================================================================
+
+-- ============================================================================
+-- 变更标识：NAMEWTA-BASE-DSL-001
+-- 变更内容：登录域、Client、角色、菜单及关系初始化
+-- 执行前置：已完整执行 DDL.sql
+-- 适用范围：全新环境；仅有 ry_vue.sql 基线且尚未执行旧 003 的升级环境
+-- 重复执行：否
+-- 回滚方式：按本块固定主键逆序删除新增关系与数据，并恢复被回填字段及全局注册配置
+-- ============================================================================
 
 -- ----------------------------
 -- 两个登录域
@@ -97,3 +107,42 @@ values (1761300000000000010, 1761400000000002001),
 -- 删除全局注册开关，改由 Client.register_enabled 控制
 -- ----------------------------
 delete from sys_config where config_key = 'sys.account.registerUser';
+
+-- ============================================================================
+-- 变更标识：NAMEWTA-BASE-DSL-002
+-- 变更内容：为已执行旧基线但缺少菜单的环境补充三个用户端基础菜单
+-- 执行前置：已执行 NAMEWTA-BASE-DSL-001 或旧 003_initial_data.sql
+-- 适用范围：缺少对应菜单或角色菜单关系的升级环境；全新环境执行时自动无操作
+-- 重复执行：是
+-- 回滚方式：删除三个固定 menu_id 及对应 role_id、menu_id 关系
+-- ============================================================================
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param, is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext, create_dept, create_by, create_time, remark)
+select 1761400000000002001, 1762000000000000002, '数据采集工作台', 0, 1, 'collection', 'business/data-collection/index', '', 'N', 'Y', 'C', '0', '0', 'app:collection:workspace', 'dashboard', '', '', 1761000000000000103, 1761100000000000001, sysdate(), '数据采集端工作台'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 1761400000000002001);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param, is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext, create_dept, create_by, create_time, remark)
+select 1761400000000002002, 1762000000000000003, '数超大赛工作台', 0, 1, 'competition', 'business/data-competition/index', '', 'N', 'Y', 'C', '0', '0', 'app:competition:workspace', 'trophy', '', '', 1761000000000000103, 1761100000000000001, sysdate(), '数超大赛端工作台'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 1761400000000002002);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param, is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext, create_dept, create_by, create_time, remark)
+select 1761400000000002003, 1762000000000000004, 'Token 中继工作台', 0, 1, 'relay', 'business/token-relay/index', '', 'N', 'Y', 'C', '0', '0', 'app:relay:workspace', 'link', '', '', 1761000000000000103, 1761100000000000001, sysdate(), 'Token 中继端工作台'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 1761400000000002003);
+
+insert into sys_role_menu (role_id, menu_id)
+select 1761300000000000010, 1761400000000002001
+from dual
+where not exists (select 1 from sys_role_menu where role_id = 1761300000000000010 and menu_id = 1761400000000002001);
+
+insert into sys_role_menu (role_id, menu_id)
+select 1761300000000000011, 1761400000000002002
+from dual
+where not exists (select 1 from sys_role_menu where role_id = 1761300000000000011 and menu_id = 1761400000000002002);
+
+insert into sys_role_menu (role_id, menu_id)
+select 1761300000000000012, 1761400000000002003
+from dual
+where not exists (select 1 from sys_role_menu where role_id = 1761300000000000012 and menu_id = 1761400000000002003);
