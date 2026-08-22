@@ -146,3 +146,28 @@ insert into sys_role_menu (role_id, menu_id)
 select 1761300000000000012, 1761400000000002003
 from dual
 where not exists (select 1 from sys_role_menu where role_id = 1761300000000000012 and menu_id = 1761400000000002003);
+
+-- ============================================================================
+-- 变更标识：NAMEWTA-OSS-NOTIFY-DSL-001
+-- 变更内容：通知监控动态菜单与功能权限
+-- 执行前置：已执行 NAMEWTA-OSS-NOTIFY-DDL-001
+-- 适用范围：全新环境；已完成 NAMEWTA-BASE-DSL-002 的升级环境
+-- 重复执行：是
+-- 回滚方式：先撤销角色授权，再删除以下固定 menu_id；不删除通知日志数据
+-- ============================================================================
+
+-- 通知监控是全局运维功能。此处只定义菜单和权限，不自动扩大普通角色授权。
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param, is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext, create_dept, create_by, create_time, remark)
+select 1761400000000000125, 1762000000000000001, '通知监控', 1761400000000000108, 3, 'notify', 'monitor/notify/index', '', 'N', 'Y', 'C', '0', '0', 'system:notify:list', 'message', '', '', 1761000000000000103, 1761100000000000001, sysdate(), '通知监控菜单'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 1761400000000000125);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param, is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext, create_dept, create_by, create_time, remark)
+select 1761400000000001080, 1762000000000000001, '通知查询', 1761400000000000125, 1, '', '', '', 'N', 'Y', 'F', '0', '0', 'system:notify:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), ''
+from dual
+where not exists (select 1 from sys_menu where menu_id = 1761400000000001080);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param, is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext, create_dept, create_by, create_time, remark)
+select 1761400000000001081, 1762000000000000001, '通知删除', 1761400000000000125, 2, '', '', '', 'N', 'Y', 'F', '0', '0', 'system:notify:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), ''
+from dual
+where not exists (select 1 from sys_menu where menu_id = 1761400000000001081);
