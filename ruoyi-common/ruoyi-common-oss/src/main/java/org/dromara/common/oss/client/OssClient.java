@@ -6,6 +6,15 @@ import org.dromara.common.oss.io.OutputStreamDownloadSubscriber;
 import org.dromara.common.oss.model.GetObjectResult;
 import org.dromara.common.oss.model.HandleAsyncResult;
 import org.dromara.common.oss.model.Options;
+import org.dromara.common.oss.model.OssClientCapabilities;
+import org.dromara.common.oss.model.OssCompletedPart;
+import org.dromara.common.oss.model.OssCopyResult;
+import org.dromara.common.oss.model.OssMultipartCompleteResult;
+import org.dromara.common.oss.model.OssMultipartPart;
+import org.dromara.common.oss.model.OssMultipartUpload;
+import org.dromara.common.oss.model.OssObjectOptions;
+import org.dromara.common.oss.model.OssObjectStat;
+import org.dromara.common.oss.model.OssPresignedRequest;
 import org.dromara.common.oss.model.PutObjectResult;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
@@ -25,6 +34,7 @@ import java.nio.channels.WritableByteChannel;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -372,6 +382,107 @@ public interface OssClient extends AutoCloseable {
     String bucketPresignPutUrl(String bucket, String key, Duration expiredTime, Map<String, String> metadata);
 
     /**
+     * 获取当前客户端已确认的 Provider 能力。
+     *
+     * @return 能力快照
+     */
+    OssClientCapabilities capabilities();
+
+    /**
+     * 生成指定存储桶对象的结构化下载预签名请求。
+     *
+     * @param bucket      存储桶名称
+     * @param key         对象键
+     * @param expiredTime 签名有效期
+     * @return 浏览器可执行请求
+     */
+    OssPresignedRequest bucketPresignGet(String bucket, String key, Duration expiredTime);
+
+    /**
+     * 生成指定存储桶对象的结构化上传预签名请求。
+     *
+     * @param bucket      存储桶名称
+     * @param key         对象键
+     * @param expiredTime 签名有效期
+     * @param options     对象属性
+     * @return 浏览器可执行请求
+     */
+    OssPresignedRequest bucketPresignPut(String bucket, String key, Duration expiredTime, OssObjectOptions options);
+
+    /**
+     * 生成指定 Multipart Part 的结构化上传预签名请求。
+     *
+     * @param bucket      存储桶名称
+     * @param key         对象键
+     * @param uploadId    Multipart Upload ID
+     * @param partNumber  Part 编号，范围 1..10000
+     * @param expiredTime 签名有效期
+     * @return 浏览器可执行请求
+     */
+    OssPresignedRequest bucketPresignUploadPart(String bucket, String key, String uploadId, int partNumber, Duration expiredTime);
+
+    /**
+     * 获取指定存储桶对象的 HEAD 元数据。
+     *
+     * @param bucket 存储桶名称
+     * @param key    对象键
+     * @return 对象元数据
+     */
+    OssObjectStat bucketHeadObject(String bucket, String key);
+
+    /**
+     * 创建指定存储桶对象的 Multipart Upload。
+     *
+     * @param bucket  存储桶名称
+     * @param key     对象键
+     * @param options 对象属性
+     * @return Multipart 会话
+     */
+    OssMultipartUpload bucketCreateMultipartUpload(String bucket, String key, OssObjectOptions options);
+
+    /**
+     * 查询并聚合指定 Multipart Upload 的全部已上传 Part。
+     *
+     * @param bucket   存储桶名称
+     * @param key      对象键
+     * @param uploadId Multipart Upload ID
+     * @return 已上传 Part 的不可变列表
+     */
+    List<OssMultipartPart> bucketListParts(String bucket, String key, String uploadId);
+
+    /**
+     * 完成指定 Multipart Upload。Part 会按编号排序，重复或非法编号会被拒绝。
+     *
+     * @param bucket   存储桶名称
+     * @param key      对象键
+     * @param uploadId Multipart Upload ID
+     * @param parts    已完成 Part
+     * @return 完成结果；ETag 不代表整文件 MD5
+     */
+    OssMultipartCompleteResult bucketCompleteMultipartUpload(String bucket, String key, String uploadId, List<OssCompletedPart> parts);
+
+    /**
+     * 中止指定 Multipart Upload。Provider 返回不存在时仍视为幂等成功。
+     *
+     * @param bucket   存储桶名称
+     * @param key      对象键
+     * @param uploadId Multipart Upload ID
+     * @return 是否已处于中止或不存在状态
+     */
+    boolean bucketAbortMultipartUpload(String bucket, String key, String uploadId);
+
+    /**
+     * 在 Provider 内部复制对象。
+     *
+     * @param sourceBucket 源存储桶
+     * @param sourceKey    源对象键
+     * @param targetBucket 目标存储桶
+     * @param targetKey    目标对象键
+     * @return 复制结果
+     */
+    OssCopyResult bucketCopyObject(String sourceBucket, String sourceKey, String targetBucket, String targetKey);
+
+    /**
      * 将本地路径对应的文件上传到默认存储桶。
      *
      * @param key     对象键
@@ -578,6 +689,90 @@ public interface OssClient extends AutoCloseable {
      * @return 预签名上传 URL
      */
     String presignPutUrl(String key, Duration expiredTime, Map<String, String> metadata);
+
+    /**
+     * 生成默认存储桶对象的结构化下载预签名请求。
+     *
+     * @param key         对象键
+     * @param expiredTime 签名有效期
+     * @return 浏览器可执行请求
+     */
+    OssPresignedRequest presignGet(String key, Duration expiredTime);
+
+    /**
+     * 生成默认存储桶对象的结构化上传预签名请求。
+     *
+     * @param key         对象键
+     * @param expiredTime 签名有效期
+     * @param options     对象属性
+     * @return 浏览器可执行请求
+     */
+    OssPresignedRequest presignPut(String key, Duration expiredTime, OssObjectOptions options);
+
+    /**
+     * 生成默认存储桶 Multipart Part 的结构化上传预签名请求。
+     *
+     * @param key         对象键
+     * @param uploadId    Multipart Upload ID
+     * @param partNumber  Part 编号，范围 1..10000
+     * @param expiredTime 签名有效期
+     * @return 浏览器可执行请求
+     */
+    OssPresignedRequest presignUploadPart(String key, String uploadId, int partNumber, Duration expiredTime);
+
+    /**
+     * 获取默认存储桶对象的 HEAD 元数据。
+     *
+     * @param key 对象键
+     * @return 对象元数据
+     */
+    OssObjectStat headObject(String key);
+
+    /**
+     * 创建默认存储桶对象的 Multipart Upload。
+     *
+     * @param key     对象键
+     * @param options 对象属性
+     * @return Multipart 会话
+     */
+    OssMultipartUpload createMultipartUpload(String key, OssObjectOptions options);
+
+    /**
+     * 查询默认存储桶 Multipart Upload 的全部已上传 Part。
+     *
+     * @param key      对象键
+     * @param uploadId Multipart Upload ID
+     * @return 已上传 Part 的不可变列表
+     */
+    List<OssMultipartPart> listParts(String key, String uploadId);
+
+    /**
+     * 完成默认存储桶 Multipart Upload。
+     *
+     * @param key      对象键
+     * @param uploadId Multipart Upload ID
+     * @param parts    已完成 Part
+     * @return 完成结果；ETag 不代表整文件 MD5
+     */
+    OssMultipartCompleteResult completeMultipartUpload(String key, String uploadId, List<OssCompletedPart> parts);
+
+    /**
+     * 中止默认存储桶 Multipart Upload。
+     *
+     * @param key      对象键
+     * @param uploadId Multipart Upload ID
+     * @return 是否已处于中止或不存在状态
+     */
+    boolean abortMultipartUpload(String key, String uploadId);
+
+    /**
+     * 在默认存储桶内复制对象。
+     *
+     * @param sourceKey 源对象键
+     * @param targetKey 目标对象键
+     * @return 复制结果
+     */
+    OssCopyResult copyObject(String sourceKey, String targetKey);
 
     /**
      * 根据客户端配置生成默认对象Key。

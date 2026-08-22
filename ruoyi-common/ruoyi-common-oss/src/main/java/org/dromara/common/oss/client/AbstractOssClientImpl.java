@@ -6,17 +6,30 @@ import org.dromara.common.core.utils.DateUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.oss.config.OssClientConfig;
 import org.dromara.common.oss.exception.S3StorageException;
+import org.dromara.common.oss.exception.OssErrorCode;
 import org.dromara.common.oss.io.OutputStreamDownloadSubscriber;
 import org.dromara.common.oss.model.GetObjectResult;
 import org.dromara.common.oss.model.HandleAsyncResult;
 import org.dromara.common.oss.model.Options;
+import org.dromara.common.oss.model.OssChecksumAlgorithm;
+import org.dromara.common.oss.model.OssClientCapabilities;
+import org.dromara.common.oss.model.OssCompletedPart;
+import org.dromara.common.oss.model.OssCopyResult;
+import org.dromara.common.oss.model.OssMultipartCompleteResult;
+import org.dromara.common.oss.model.OssMultipartPart;
+import org.dromara.common.oss.model.OssMultipartUpload;
+import org.dromara.common.oss.model.OssObjectOptions;
+import org.dromara.common.oss.model.OssObjectStat;
+import org.dromara.common.oss.model.OssPresignedRequest;
 import org.dromara.common.oss.model.PutObjectResult;
+import software.amazon.awssdk.awscore.presigner.PresignedRequest;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
 import software.amazon.awssdk.core.async.ResponsePublisher;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.SdkHttpMethod;
+import software.amazon.awssdk.http.SdkHttpRequest;
 import software.amazon.awssdk.http.auth.aws.signer.AwsV4FamilyHttpSigner;
 import software.amazon.awssdk.http.auth.aws.signer.AwsV4HttpSigner;
 import software.amazon.awssdk.http.auth.spi.signer.HttpSigner;
@@ -26,8 +39,19 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListPartsRequest;
+import software.amazon.awssdk.services.s3.model.Part;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
 import software.amazon.awssdk.transfer.s3.model.CompletedUpload;
@@ -718,6 +742,223 @@ public abstract class AbstractOssClientImpl implements OssClient {
         }
     }
 
+    @Override
+    public OssObjectStat bucketHeadObject(String bucket, String key) {
+        validateObjectIdentity(bucket, key);
+        try {
+            var response = s3AsyncClient.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build()).join();
+            return new OssObjectStat(
+                bucket,
+                key,
+                Optional.ofNullable(response.contentLength()).orElse(0L),
+                response.contentType(),
+                response.eTag(),
+                response.lastModified(),
+                response.metadata(),
+                checksumMap(response.checksumCRC32(), response.checksumCRC32C(), response.checksumSHA1(), response.checksumSHA256())
+            );
+        } catch (Exception e) {
+            throw toStorageException(e);
+        }
+    }
+
+    @Override
+    public OssMultipartUpload bucketCreateMultipartUpload(String bucket, String key, OssObjectOptions options) {
+        validateObjectIdentity(bucket, key);
+        OssObjectOptions actualOptions = options == null ? OssObjectOptions.empty() : options;
+        requireSupportedChecksum(actualOptions);
+        try {
+            CreateMultipartUploadRequest request = CreateMultipartUploadRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentType(actualOptions.contentType())
+                .metadata(actualOptions.metadata())
+                .build();
+            var response = s3AsyncClient.createMultipartUpload(request).join();
+            return new OssMultipartUpload(bucket, key, response.uploadId());
+        } catch (Exception e) {
+            throw toStorageException(e);
+        }
+    }
+
+    @Override
+    public List<OssMultipartPart> bucketListParts(String bucket, String key, String uploadId) {
+        validateMultipartIdentity(bucket, key, uploadId);
+        List<OssMultipartPart> result = new ArrayList<>();
+        Integer partNumberMarker = null;
+        try {
+            do {
+                ListPartsRequest request = ListPartsRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .uploadId(uploadId)
+                    .partNumberMarker(partNumberMarker)
+                    .build();
+                var response = s3AsyncClient.listParts(request).join();
+                for (Part part : response.parts()) {
+                    result.add(new OssMultipartPart(
+                        part.partNumber(),
+                        part.eTag(),
+                        Optional.ofNullable(part.size()).orElse(0L),
+                        part.lastModified(),
+                        checksumMap(part.checksumCRC32(), part.checksumCRC32C(), part.checksumSHA1(), part.checksumSHA256())
+                    ));
+                }
+                if (!Boolean.TRUE.equals(response.isTruncated())) {
+                    break;
+                }
+                Integer nextMarker = response.nextPartNumberMarker();
+                if (nextMarker == null || Objects.equals(nextMarker, partNumberMarker)) {
+                    throw S3StorageException.form(
+                        OssErrorCode.PROVIDER_ERROR,
+                        "Provider returned a truncated ListParts page without a forward marker."
+                    );
+                }
+                partNumberMarker = nextMarker;
+            } while (true);
+            return List.copyOf(result);
+        } catch (Exception e) {
+            throw toStorageException(e);
+        }
+    }
+
+    @Override
+    public OssMultipartCompleteResult bucketCompleteMultipartUpload(
+        String bucket,
+        String key,
+        String uploadId,
+        List<OssCompletedPart> parts
+    ) {
+        validateMultipartIdentity(bucket, key, uploadId);
+        List<CompletedPart> providerParts = normalizeCompletedParts(parts);
+        try {
+            CompleteMultipartUploadRequest request = CompleteMultipartUploadRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .uploadId(uploadId)
+                .multipartUpload(CompletedMultipartUpload.builder().parts(providerParts).build())
+                .build();
+            var response = s3AsyncClient.completeMultipartUpload(request).join();
+            return new OssMultipartCompleteResult(
+                bucket,
+                key,
+                response.eTag(),
+                checksumMap(response.checksumCRC32(), response.checksumCRC32C(), response.checksumSHA1(), response.checksumSHA256())
+            );
+        } catch (Exception e) {
+            throw toStorageException(e);
+        }
+    }
+
+    @Override
+    public boolean bucketAbortMultipartUpload(String bucket, String key, String uploadId) {
+        validateMultipartIdentity(bucket, key, uploadId);
+        try {
+            AbortMultipartUploadRequest request = AbortMultipartUploadRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .uploadId(uploadId)
+                .build();
+            s3AsyncClient.abortMultipartUpload(request).join();
+            return true;
+        } catch (Exception e) {
+            Throwable cause = unwrapAsyncException(e);
+            if (cause instanceof S3Exception s3Exception && s3Exception.statusCode() == 404) {
+                return true;
+            }
+            throw toStorageException(e);
+        }
+    }
+
+    @Override
+    public OssCopyResult bucketCopyObject(String sourceBucket, String sourceKey, String targetBucket, String targetKey) {
+        if (StringUtils.isAnyBlank(sourceBucket, sourceKey, targetBucket, targetKey)) {
+            throw invalidRequest("source and target bucket/key must not be blank.");
+        }
+        try {
+            String copySource = SdkHttpUtils.urlEncodeIgnoreSlashes(sourceBucket + StringUtils.SLASH + sourceKey);
+            CopyObjectRequest request = CopyObjectRequest.builder()
+                .copySource(copySource)
+                .bucket(targetBucket)
+                .key(targetKey)
+                .build();
+            var response = s3AsyncClient.copyObject(request).join();
+            var result = response.copyObjectResult();
+            return new OssCopyResult(
+                sourceBucket,
+                sourceKey,
+                targetBucket,
+                targetKey,
+                result == null ? null : result.eTag(),
+                result == null ? null : result.lastModified()
+            );
+        } catch (Exception e) {
+            throw toStorageException(e);
+        }
+    }
+
+    private List<CompletedPart> normalizeCompletedParts(List<OssCompletedPart> parts) {
+        if (parts == null || parts.isEmpty()) {
+            throw invalidRequest("completed parts must not be empty.");
+        }
+        List<OssCompletedPart> ordered = parts.stream()
+            .sorted(Comparator.comparingInt(OssCompletedPart::partNumber))
+            .toList();
+        Set<Integer> partNumbers = new HashSet<>();
+        List<CompletedPart> result = new ArrayList<>(ordered.size());
+        for (OssCompletedPart part : ordered) {
+            if (part.partNumber() < 1 || part.partNumber() > 10_000 || !partNumbers.add(part.partNumber())) {
+                throw invalidRequest("completed parts contain an invalid or duplicate partNumber.");
+            }
+            if (StringUtils.isBlank(part.eTag())) {
+                throw invalidRequest("completed part ETag must not be blank.");
+            }
+            CompletedPart.Builder builder = CompletedPart.builder()
+                .partNumber(part.partNumber())
+                .eTag(part.eTag());
+            part.checksums().forEach((algorithm, checksum) -> applyChecksum(builder, algorithm, checksum));
+            result.add(builder.build());
+        }
+        return result;
+    }
+
+    private void applyChecksum(CompletedPart.Builder builder, OssChecksumAlgorithm algorithm, String checksum) {
+        switch (algorithm) {
+            case CRC32 -> builder.checksumCRC32(checksum);
+            case CRC32C -> builder.checksumCRC32C(checksum);
+            case SHA1 -> builder.checksumSHA1(checksum);
+            case SHA256 -> builder.checksumSHA256(checksum);
+        }
+    }
+
+    private Map<OssChecksumAlgorithm, String> checksumMap(String crc32, String crc32c, String sha1, String sha256) {
+        EnumMap<OssChecksumAlgorithm, String> checksums = new EnumMap<>(OssChecksumAlgorithm.class);
+        putChecksum(checksums, OssChecksumAlgorithm.CRC32, crc32);
+        putChecksum(checksums, OssChecksumAlgorithm.CRC32C, crc32c);
+        putChecksum(checksums, OssChecksumAlgorithm.SHA1, sha1);
+        putChecksum(checksums, OssChecksumAlgorithm.SHA256, sha256);
+        return Map.copyOf(checksums);
+    }
+
+    private void putChecksum(Map<OssChecksumAlgorithm, String> checksums, OssChecksumAlgorithm algorithm, String value) {
+        if (StringUtils.isNotBlank(value)) {
+            checksums.put(algorithm, value);
+        }
+    }
+
+    private void validateMultipartIdentity(String bucket, String key, String uploadId) {
+        validateObjectIdentity(bucket, key);
+        if (StringUtils.isBlank(uploadId)) {
+            throw invalidRequest("uploadId must not be blank.");
+        }
+    }
+
+    private void validateObjectIdentity(String bucket, String key) {
+        if (StringUtils.isAnyBlank(bucket, key)) {
+            throw invalidRequest("bucket and key must not be blank.");
+        }
+    }
+
     /**
      * 生成指定存储桶对象的下载预签名 URL。
      *
@@ -728,19 +969,7 @@ public abstract class AbstractOssClientImpl implements OssClient {
      */
     @Override
     public String bucketPresignGetUrl(String bucket, String key, Duration expiredTime) {
-        if (useBucketBoundDomain(bucket)) {
-            return bucketBoundDomainPresignUrl(SdkHttpMethod.GET, key, expiredTime, Collections.emptyMap());
-        }
-        try {
-            return s3Presigner.presignGetObject(getObjectPresignRequestBuilder -> {
-                    getObjectPresignRequestBuilder.signatureDuration(expiredTime)
-                        .getObjectRequest(getObjectRequestBuilder -> getObjectRequestBuilder.bucket(bucket).key(key));
-                })
-                .url()
-                .toExternalForm();
-        } catch (Exception e) {
-            throw toStorageException(e);
-        }
+        return bucketPresignGet(bucket, key, expiredTime).url();
     }
 
     /**
@@ -754,16 +983,86 @@ public abstract class AbstractOssClientImpl implements OssClient {
      */
     @Override
     public String bucketPresignPutUrl(String bucket, String key, Duration expiredTime, Map<String, String> metadata) {
+        return bucketPresignPut(bucket, key, expiredTime, new OssObjectOptions(null, metadata, null)).url();
+    }
+
+    @Override
+    public OssClientCapabilities capabilities() {
+        return OssClientCapabilities.s3CompatibleBaseline();
+    }
+
+    @Override
+    public OssPresignedRequest bucketPresignGet(String bucket, String key, Duration expiredTime) {
+        validateObjectIdentity(bucket, key);
+        validatePresignInput(key, expiredTime);
         if (useBucketBoundDomain(bucket)) {
-            return bucketBoundDomainPresignUrl(SdkHttpMethod.PUT, key, expiredTime, metadata);
+            return bucketBoundDomainPresignRequest(SdkHttpMethod.GET, key, expiredTime, Map.of(), Map.of());
         }
         try {
-            return s3Presigner.presignPutObject(putObjectPresignRequestBuilder -> {
-                    putObjectPresignRequestBuilder.signatureDuration(expiredTime)
-                        .putObjectRequest(putObjectRequestBuilder -> putObjectRequestBuilder.bucket(bucket).key(key).metadata(metadata));
-                })
-                .url()
-                .toExternalForm();
+            PresignedRequest request = s3Presigner.presignGetObject(builder -> builder
+                .signatureDuration(expiredTime)
+                .getObjectRequest(getBuilder -> getBuilder.bucket(bucket).key(key)));
+            return toPresignedRequest(request);
+        } catch (Exception e) {
+            throw toStorageException(e);
+        }
+    }
+
+    @Override
+    public OssPresignedRequest bucketPresignPut(String bucket, String key, Duration expiredTime, OssObjectOptions options) {
+        validateObjectIdentity(bucket, key);
+        validatePresignInput(key, expiredTime);
+        OssObjectOptions actualOptions = options == null ? OssObjectOptions.empty() : options;
+        requireSupportedChecksum(actualOptions);
+        Map<String, String> requiredHeaders = objectHeaders(actualOptions);
+        if (useBucketBoundDomain(bucket)) {
+            return bucketBoundDomainPresignRequest(SdkHttpMethod.PUT, key, expiredTime, requiredHeaders, Map.of());
+        }
+        try {
+            PresignedRequest request = s3Presigner.presignPutObject(builder -> builder
+                .signatureDuration(expiredTime)
+                .putObjectRequest(putBuilder -> {
+                    putBuilder.bucket(bucket).key(key).metadata(actualOptions.metadata());
+                    if (StringUtils.isNotBlank(actualOptions.contentType())) {
+                        putBuilder.contentType(actualOptions.contentType());
+                    }
+                }));
+            return toPresignedRequest(request);
+        } catch (Exception e) {
+            throw toStorageException(e);
+        }
+    }
+
+    @Override
+    public OssPresignedRequest bucketPresignUploadPart(String bucket, String key, String uploadId, int partNumber, Duration expiredTime) {
+        validateObjectIdentity(bucket, key);
+        validatePresignInput(key, expiredTime);
+        if (StringUtils.isBlank(uploadId)) {
+            throw invalidRequest("uploadId must not be blank.");
+        }
+        if (partNumber < 1 || partNumber > 10_000) {
+            throw invalidRequest("partNumber must be between 1 and 10000.");
+        }
+        if (useBucketBoundDomain(bucket)) {
+            return bucketBoundDomainPresignRequest(
+                SdkHttpMethod.PUT,
+                key,
+                expiredTime,
+                Map.of(),
+                Map.of("partNumber", Integer.toString(partNumber), "uploadId", uploadId)
+            );
+        }
+        try {
+            UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .uploadId(uploadId)
+                .partNumber(partNumber)
+                .build();
+            PresignedRequest request = s3Presigner.presignUploadPart(builder -> builder
+                .signatureDuration(expiredTime)
+                .uploadPartRequest(uploadPartRequest));
+            return toPresignedRequest(request);
         } catch (Exception e) {
             throw toStorageException(e);
         }
@@ -792,30 +1091,32 @@ public abstract class AbstractOssClientImpl implements OssClient {
      * @param metadata    对象元数据
      * @return 预签名 URL
      */
-    private String bucketBoundDomainPresignUrl(SdkHttpMethod method, String key, Duration expiredTime, Map<String, String> metadata) {
+    private OssPresignedRequest bucketBoundDomainPresignRequest(
+        SdkHttpMethod method,
+        String key,
+        Duration expiredTime,
+        Map<String, String> requiredHeaders,
+        Map<String, String> queryParameters
+    ) {
         try {
             URI domainUri = URI.create(config.getDomainUrl());
             SdkHttpFullRequest.Builder requestBuilder = SdkHttpFullRequest.builder()
                 .method(method)
                 .uri(domainUri)
                 .encodedPath(bucketBoundDomainPath(domainUri, key));
-            if (metadata != null) {
-                metadata.forEach((metadataKey, metadataValue) -> {
-                    if (StringUtils.isNotBlank(metadataKey)) {
-                        requestBuilder.putHeader("x-amz-meta-" + metadataKey, String.valueOf(metadataValue));
-                    }
-                });
-            }
+            requiredHeaders.forEach(requestBuilder::putHeader);
+            queryParameters.forEach(requestBuilder::putRawQueryParameter);
             AwsCredentialsIdentity credentials = AwsCredentialsIdentity.create(
                 config.accessKey()
                     .filter(StringUtils::isNotBlank)
-                    .orElseThrow(() -> S3StorageException.form("accessKey is not configured.")),
+                    .orElseThrow(() -> S3StorageException.form(OssErrorCode.CONFIGURATION, "accessKey is not configured.")),
                 config.secretKey()
                     .filter(StringUtils::isNotBlank)
-                    .orElseThrow(() -> S3StorageException.form("secretKey is not configured."))
+                    .orElseThrow(() -> S3StorageException.form(OssErrorCode.CONFIGURATION, "secretKey is not configured."))
             );
-            Clock signingClock = Clock.fixed(Instant.now(), ZoneOffset.UTC);
-            return AwsV4HttpSigner.create()
+            Instant signedAt = Instant.now();
+            Clock signingClock = Clock.fixed(signedAt, ZoneOffset.UTC);
+            SdkHttpRequest signedRequest = AwsV4HttpSigner.create()
                 .sign(SignRequest.builder(credentials)
                     .request(requestBuilder.build())
                     .putProperty(AwsV4HttpSigner.REGION_NAME, config.region().orElse(Region.US_EAST_1).id())
@@ -827,12 +1128,66 @@ public abstract class AbstractOssClientImpl implements OssClient {
                     .putProperty(AwsV4FamilyHttpSigner.DOUBLE_URL_ENCODE, false)
                     .putProperty(AwsV4FamilyHttpSigner.NORMALIZE_PATH, false)
                     .build())
-                .request()
-                .getUri()
-                .toString();
+                .request();
+            return new OssPresignedRequest(
+                method.name(),
+                signedRequest.getUri().toString(),
+                requiredHeaders,
+                signedAt.plus(expiredTime)
+            );
         } catch (Exception e) {
             throw toStorageException(e);
         }
+    }
+
+    private OssPresignedRequest toPresignedRequest(PresignedRequest request) {
+        Map<String, String> requiredHeaders = new TreeMap<>();
+        request.signedHeaders().forEach((name, values) -> {
+            if (!"host".equalsIgnoreCase(name)) {
+                requiredHeaders.put(name.toLowerCase(Locale.ROOT), String.join(",", values));
+            }
+        });
+        return new OssPresignedRequest(
+            request.httpRequest().method().name(),
+            request.url().toExternalForm(),
+            requiredHeaders,
+            request.expiration()
+        );
+    }
+
+    private Map<String, String> objectHeaders(OssObjectOptions options) {
+        Map<String, String> headers = new TreeMap<>();
+        if (StringUtils.isNotBlank(options.contentType())) {
+            headers.put("content-type", options.contentType());
+        }
+        options.metadata().forEach((name, value) -> {
+            if (StringUtils.isNotBlank(name)) {
+                headers.put("x-amz-meta-" + name.toLowerCase(Locale.ROOT), String.valueOf(value));
+            }
+        });
+        return headers;
+    }
+
+    private void validatePresignInput(String key, Duration expiredTime) {
+        if (StringUtils.isBlank(key)) {
+            throw invalidRequest("key must not be blank.");
+        }
+        if (expiredTime == null || expiredTime.isZero() || expiredTime.isNegative() || expiredTime.compareTo(Duration.ofDays(7)) > 0) {
+            throw invalidRequest("expiredTime must be between 1 nanosecond and 7 days.");
+        }
+    }
+
+    private void requireSupportedChecksum(OssObjectOptions options) {
+        if (options.checksumAlgorithm() != null && !capabilities().supportsChecksum(options.checksumAlgorithm())) {
+            throw S3StorageException.form(
+                OssErrorCode.UNSUPPORTED_CAPABILITY,
+                "checksum algorithm is not supported by the configured provider: " + options.checksumAlgorithm()
+            );
+        }
+    }
+
+    private S3StorageException invalidRequest(String message) {
+        return S3StorageException.form(OssErrorCode.INVALID_REQUEST, message);
     }
 
     /**
@@ -1132,6 +1487,52 @@ public abstract class AbstractOssClientImpl implements OssClient {
         return bucketPresignPutUrl(defaultBucket(), key, expiredTime, metadata);
     }
 
+    @Override
+    public OssPresignedRequest presignGet(String key, Duration expiredTime) {
+        return bucketPresignGet(defaultBucket(), key, expiredTime);
+    }
+
+    @Override
+    public OssPresignedRequest presignPut(String key, Duration expiredTime, OssObjectOptions options) {
+        return bucketPresignPut(defaultBucket(), key, expiredTime, options);
+    }
+
+    @Override
+    public OssPresignedRequest presignUploadPart(String key, String uploadId, int partNumber, Duration expiredTime) {
+        return bucketPresignUploadPart(defaultBucket(), key, uploadId, partNumber, expiredTime);
+    }
+
+    @Override
+    public OssObjectStat headObject(String key) {
+        return bucketHeadObject(defaultBucket(), key);
+    }
+
+    @Override
+    public OssMultipartUpload createMultipartUpload(String key, OssObjectOptions options) {
+        return bucketCreateMultipartUpload(defaultBucket(), key, options);
+    }
+
+    @Override
+    public List<OssMultipartPart> listParts(String key, String uploadId) {
+        return bucketListParts(defaultBucket(), key, uploadId);
+    }
+
+    @Override
+    public OssMultipartCompleteResult completeMultipartUpload(String key, String uploadId, List<OssCompletedPart> parts) {
+        return bucketCompleteMultipartUpload(defaultBucket(), key, uploadId, parts);
+    }
+
+    @Override
+    public boolean abortMultipartUpload(String key, String uploadId) {
+        return bucketAbortMultipartUpload(defaultBucket(), key, uploadId);
+    }
+
+    @Override
+    public OssCopyResult copyObject(String sourceKey, String targetKey) {
+        String bucket = defaultBucket();
+        return bucketCopyObject(bucket, sourceKey, bucket, targetKey);
+    }
+
     /**
      * 获取默认存储桶名称。
      *
@@ -1140,7 +1541,7 @@ public abstract class AbstractOssClientImpl implements OssClient {
     private String defaultBucket() {
         return config.bucket()
             .filter(bucket -> !bucket.isBlank())
-            .orElseThrow(() -> S3StorageException.form("bucket is not configured."));
+            .orElseThrow(() -> S3StorageException.form(OssErrorCode.CONFIGURATION, "bucket is not configured."));
     }
 
     /**
@@ -1210,7 +1611,22 @@ public abstract class AbstractOssClientImpl implements OssClient {
         if (cause instanceof S3StorageException ex) {
             return ex;
         }
-        return S3StorageException.form(cause);
+        if (cause instanceof S3Exception s3Exception) {
+            OssErrorCode code = s3Exception.statusCode() == 404
+                ? OssErrorCode.OBJECT_NOT_FOUND
+                : OssErrorCode.PROVIDER_ERROR;
+            String providerCode = Optional.ofNullable(s3Exception.awsErrorDetails())
+                .map(details -> details.errorCode())
+                .filter(StringUtils::isNotBlank)
+                .map(value -> value.replaceAll("[^A-Za-z0-9_.-]", ""))
+                .filter(StringUtils::isNotBlank)
+                .orElse("unknown");
+            return S3StorageException.form(
+                code,
+                "S3 provider request failed (status=" + s3Exception.statusCode() + ", code=" + providerCode + ")."
+            );
+        }
+        return S3StorageException.form(OssErrorCode.PROVIDER_ERROR, "S3 provider operation failed.");
     }
 
     /**

@@ -12,13 +12,15 @@ public class S3StorageException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    private final OssErrorCode code;
+
     /**
      * 使用异常消息构造 S3 对象存储异常。
      *
      * @param message 异常消息
      */
     public S3StorageException(String message) {
-        super(message);
+        this(OssErrorCode.PROVIDER_ERROR, message);
     }
 
     /**
@@ -28,7 +30,7 @@ public class S3StorageException extends RuntimeException {
      * @param cause   异常原因
      */
     public S3StorageException(String message, Throwable cause) {
-        super(message, cause);
+        this(OssErrorCode.PROVIDER_ERROR, message, cause);
     }
 
     /**
@@ -37,7 +39,7 @@ public class S3StorageException extends RuntimeException {
      * @param cause 异常原因
      */
     public S3StorageException(Throwable cause) {
-        super(cause);
+        this(OssErrorCode.PROVIDER_ERROR, cause == null ? null : cause.getMessage(), cause);
     }
 
     /**
@@ -50,6 +52,30 @@ public class S3StorageException extends RuntimeException {
      */
     public S3StorageException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
         super(message, cause, enableSuppression, writableStackTrace);
+        this.code = OssErrorCode.PROVIDER_ERROR;
+    }
+
+    /**
+     * 使用稳定错误类别构造异常。
+     */
+    public S3StorageException(OssErrorCode code, String message) {
+        super(message);
+        this.code = code;
+    }
+
+    /**
+     * 使用稳定错误类别和原因构造异常。
+     */
+    public S3StorageException(OssErrorCode code, String message, Throwable cause) {
+        super(message, cause);
+        this.code = code;
+    }
+
+    /**
+     * 获取稳定错误类别。
+     */
+    public OssErrorCode code() {
+        return code;
     }
 
     /**
@@ -60,6 +86,13 @@ public class S3StorageException extends RuntimeException {
      */
     public static S3StorageException form(String message) {
         return new S3StorageException(message);
+    }
+
+    /**
+     * 创建带稳定错误类别的 S3 对象存储异常。
+     */
+    public static S3StorageException form(OssErrorCode code, String message) {
+        return new S3StorageException(code, message);
     }
 
     /**
