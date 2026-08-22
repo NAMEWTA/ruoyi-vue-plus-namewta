@@ -25,6 +25,33 @@ captcha:
   # 字符验证码长度
   charLength: 4
 
+# OSS 浏览器直传控制面。生产启用主动清理前先审核 dry-run，并配置 Bucket CORS/Lifecycle。
+oss:
+  direct-upload:
+    ticket-ttl: 24h
+    presign-ttl: 5m
+    cleanup-record-ttl: 7d
+    max-sign-parts: 20
+    cleanup-enabled: false
+    cleanup-dry-run: true
+    policies:
+      general:
+        max-size: 2147483648
+        allowed-content-types:
+          - image/jpeg
+          - image/png
+          - image/gif
+          - image/webp
+          - application/pdf
+          - application/zip
+          - application/octet-stream
+          - text/plain
+        object-prefix: direct/general
+        mode: AUTO
+        multipart-threshold: 104857600
+        part-size: 16777216
+        required-permission: system:oss:upload
+
 # 日志配置
 logging:
   level:

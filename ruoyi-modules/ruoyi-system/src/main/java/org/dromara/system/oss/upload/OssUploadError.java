@@ -1,0 +1,19 @@
+package org.dromara.system.oss.upload;
+
+/**
+ * 上传控制面的稳定错误类别。
+ */
+public enum OssUploadError {
+    INVALID_POLICY,
+    INVALID_FILE,
+    ACCESS_DENIED,
+    SESSION_NOT_FOUND,
+    SESSION_EXPIRED,
+    SESSION_OWNER_MISMATCH,
+    FINGERPRINT_MISMATCH,
+    INVALID_STATE,
+    INVALID_PARTS,
+    COMPLETE_VALIDATION_FAILED,
+    PROVIDER_FAILURE,
+    STATE_STORE_FAILURE
+}
