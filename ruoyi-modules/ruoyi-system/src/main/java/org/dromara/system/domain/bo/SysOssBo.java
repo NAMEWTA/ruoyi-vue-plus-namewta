@@ -57,6 +57,11 @@ public class SysOssBo implements Serializable {
     private String service;
 
     /**
+     * 是否为临时对象。
+     */
+    private String isTemp;
+
+    /**
      * 创建者
      */
     private Long createBy;

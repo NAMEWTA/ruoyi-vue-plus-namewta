@@ -2,4 +2,39 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.system.mapper.SysOssMapper">
 
+    <select id="selectByIdForUpdate" resultType="org.dromara.system.domain.SysOss">
+        select *
+        from sys_oss
+        where oss_id = #{ossId}
+        for update
+    </select>
+
+    <select id="selectByIdsForUpdate" resultType="org.dromara.system.domain.SysOss">
+        select *
+        from sys_oss
+        where oss_id in
+        <foreach collection="ossIds" item="ossId" open="(" separator="," close=")">
+            #{ossId}
+        </foreach>
+        order by oss_id
+        for update
+    </select>
+
+    <update id="updateLifecycle">
+        update sys_oss
+        set is_temp = #{isTemp},
+            expire_time = #{expireTime},
+            update_time = now()
+        where oss_id = #{ossId}
+    </update>
+
+    <select id="selectExpiredTempIds" resultType="java.lang.Long">
+        select oss_id
+        from sys_oss
+        where is_temp = 'Y'
+          and expire_time is not null
+          and expire_time &lt;= #{expireTime}
+        order by expire_time, oss_id
+        limit #{limit}
+    </select>
 </mapper>

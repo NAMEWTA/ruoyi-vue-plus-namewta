@@ -28,6 +28,7 @@ import org.dromara.system.domain.SysOssExt;
 import org.dromara.system.domain.bo.SysOssBo;
 import org.dromara.system.domain.vo.SysOssVo;
 import org.dromara.system.mapper.SysOssMapper;
+import org.dromara.system.oss.service.OssLifecycleManager;
 import org.dromara.system.service.ISysOssService;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.cache.annotation.Cacheable;
@@ -59,6 +60,8 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
 
     private final SysOssMapper ossMapper;
 
+    private final OssLifecycleManager lifecycleManager;
+
     /**
      * 查询OSS对象存储列表
      *
@@ -70,7 +73,7 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
     public PageResult<SysOssVo> queryPageList(SysOssBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<SysOss> lqw = buildQueryWrapper(bo);
         Page<SysOssVo> result = ossMapper.selectVoPage(pageQuery.build(), lqw);
-        List<SysOssVo> filterResult = StreamUtils.toList(result.getRecords(), this::matchingUrl);
+        List<SysOssVo> filterResult = StreamUtils.toList(result.getRecords(), this::managementView);
         result.setRecords(filterResult);
         return PageResult.build(result.getRecords(), result.getTotal());
     }
@@ -87,12 +90,7 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
         List<Supplier<SysOssVo>> suppliers = ossIds.stream().map(id -> (Supplier<SysOssVo>) () -> {
             SysOssVo vo = ossService.getById(id);
             if (ObjectUtil.isNotNull(vo)) {
-                try {
-                    return this.matchingUrl(vo);
-                } catch (Exception ignored) {
-                    // 如果oss异常无法连接则将数据直接返回
-                    return vo;
-                }
+                return this.managementView(vo);
             }
             return null;
         }).toList();
@@ -110,19 +108,9 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
     @Override
     public String selectUrlByIds(String ossIds) {
         List<Long> ids = StringUtils.splitTo(ossIds, Convert::toLong);
-        SysOssServiceImpl ossService = SpringUtils.getAopProxy(this);
-        List<Supplier<String>> suppliers = ids.stream().map(id -> (Supplier<String>) () -> {
-            SysOssVo vo = ossService.getById(id);
-            if (ObjectUtil.isNotNull(vo)) {
-                try {
-                    return this.matchingUrl(vo).getUrl();
-                } catch (Exception ignored) {
-                    // 如果oss异常无法连接则将数据直接返回
-                    return vo.getUrl();
-                }
-            }
-            return null;
-        }).toList();
+        List<Supplier<String>> suppliers = ids.stream()
+            .map(id -> (Supplier<String>) () -> lifecycleManager.presignDownload(id).url())
+            .toList();
         List<String> list = ThreadUtils.virtualSubmitAll(suppliers);
         list.removeAll(Collections.singleton(null));
         return StringUtils.joinComma(list);
@@ -141,13 +129,9 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
         List<Supplier<OssDTO>> suppliers = ids.stream().map(id -> (Supplier<OssDTO>) () -> {
             SysOssVo vo = ossService.getById(id);
             if (ObjectUtil.isNotNull(vo)) {
-                try {
-                    vo.setUrl(this.matchingUrl(vo).getUrl());
-                    return BeanUtil.toBean(vo, OssDTO.class);
-                } catch (Exception ignored) {
-                    // 如果oss异常无法连接则将数据直接返回
-                    return BeanUtil.toBean(vo, OssDTO.class);
-                }
+                OssDTO dto = BeanUtil.toBean(vo, OssDTO.class);
+                dto.setUrl(lifecycleManager.presignDownload(id).url());
+                return dto;
             }
             return null;
         }).toList();
@@ -172,6 +156,7 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
             .betweenParams(SysOss::getCreateTime, params, "beginCreateTime", "endCreateTime")
             .eqIfPresent(SysOss::getCreateBy, bo.getCreateBy())
             .eqIfText(SysOss::getService, bo.getService())
+            .eqIfText(SysOss::getIsTemp, bo.getIsTemp())
             .orderByAsc(SysOss::getOssId)
             .build();
     }
@@ -308,11 +293,39 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
         if (isValid) {
             // 做一些业务上的校验,判断是否需要校验
         }
-        List<SysOss> list = ossMapper.selectByIds(ids);
-        for (SysOss sysOss : list) {
-            OssFactory.instance(sysOss.getService()).delete(sysOss.getFileName());
-        }
-        return ossMapper.deleteByIds(ids) > 0;
+        return lifecycleManager.deleteObjects(ids);
+    }
+
+    @Override
+    public OssReferenceState bind(Long ossId, String refType, String refId) {
+        return lifecycleManager.bind(ossId, refType, refId);
+    }
+
+    @Override
+    public OssReferenceState unbind(Long ossId, String refType, String refId) {
+        return lifecycleManager.unbind(ossId, refType, refId);
+    }
+
+    @Override
+    public OssLifecycleSnapshot snapshot(Long ossId) {
+        return lifecycleManager.snapshot(ossId);
+    }
+
+    @Override
+    public OssDownloadUrl presignDownload(Long ossId) {
+        return lifecycleManager.presignDownload(ossId);
+    }
+
+    /**
+     * 管理查询不返回可直接使用的 URL；下载必须经过专用权限入口。
+     */
+    private SysOssVo managementView(SysOssVo oss) {
+        SysOssVo view = BeanUtil.toBean(oss, SysOssVo.class);
+        view.setUrl(null);
+        OssLifecycleSnapshot snapshot = lifecycleManager.snapshot(view.getOssId());
+        view.setReferenceCount((long) snapshot.references().size());
+        view.setReferences(snapshot.references());
+        return view;
     }
 
     /**

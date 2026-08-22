@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
 
+import java.time.LocalDateTime;
+
 /**
  * OSS对象存储对象
  *
@@ -51,5 +53,15 @@ public class SysOss extends BaseEntity {
      * 服务商
      */
     private String service;
+
+    /**
+     * 是否为尚未被业务引用的临时对象。
+     */
+    private String isTemp;
+
+    /**
+     * 临时对象到期时间。
+     */
+    private LocalDateTime expireTime;
 
 }

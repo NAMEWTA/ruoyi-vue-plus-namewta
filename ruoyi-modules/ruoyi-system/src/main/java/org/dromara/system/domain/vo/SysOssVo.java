@@ -73,5 +73,25 @@ public class SysOssVo implements Serializable {
      */
     private String service;
 
+    /**
+     * 是否为临时对象。
+     */
+    private String isTemp;
+
+    /**
+     * 临时对象到期时间。
+     */
+    private LocalDateTime expireTime;
+
+    /**
+     * 当前有效业务引用数。
+     */
+    private Long referenceCount;
+
+    /**
+     * 用于管理面反向定位的引用摘要。
+     */
+    private java.util.List<org.dromara.system.api.OssService.OssReference> references;
+
 
 }

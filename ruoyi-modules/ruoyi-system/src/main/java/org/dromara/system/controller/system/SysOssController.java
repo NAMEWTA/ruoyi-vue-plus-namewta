@@ -13,6 +13,7 @@ import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.web.core.BaseController;
 import org.dromara.system.domain.SysOssExt;
+import org.dromara.system.api.OssService;
 import org.dromara.system.domain.bo.SysOssBo;
 import org.dromara.system.domain.vo.SysOssVo;
 import org.dromara.system.service.ISysOssService;
@@ -38,6 +39,8 @@ import java.util.List;
 public class SysOssController extends BaseController {
 
     private final ISysOssService ossService;
+
+    private final OssService publicOssService;
 
     /**
      * 分页查询 OSS 对象存储列表。
@@ -91,6 +94,15 @@ public class SysOssController extends BaseController {
     @GetMapping("/download/{ossId}")
     public ResponseEntity<byte[]> download(@PathVariable Long ossId) throws IOException {
         return ossService.download(ossId);
+    }
+
+    /**
+     * 生成管理面短时下载授权。普通业务应先校验自身业务权限，再调用内部 OssService。
+     */
+    @SaCheckPermission("system:oss:download")
+    @GetMapping("/{ossId}/download-url")
+    public R<OssService.OssDownloadUrl> downloadUrl(@PathVariable Long ossId) {
+        return R.ok(publicOssService.presignDownload(ossId));
     }
 
     /**
