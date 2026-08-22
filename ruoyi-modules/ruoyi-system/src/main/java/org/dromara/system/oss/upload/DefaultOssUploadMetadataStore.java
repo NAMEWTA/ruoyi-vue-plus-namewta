@@ -1,13 +1,13 @@
 package org.dromara.system.oss.upload;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import org.dromara.system.domain.SysOss;
 import org.dromara.system.domain.SysOssExt;
 import org.dromara.system.mapper.SysOssMapper;
 import org.dromara.system.oss.config.OssLifecycleProperties;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDateTime;
@@ -34,7 +34,7 @@ public class DefaultOssUploadMetadataStore implements OssUploadMetadataStore {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public Long registerTemporary(OssUploadTicket ticket) {
         Long existing = findByObject(ticket.service(), ticket.objectKey());
         if (existing != null) {

@@ -1,5 +1,6 @@
 package org.dromara.system.oss.service;
 
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.oss.model.OssPresignedRequest;
 import org.dromara.system.api.OssService;
@@ -12,7 +13,6 @@ import org.dromara.system.oss.exception.OssLifecycleException;
 import org.dromara.system.oss.mapper.SysOssRefMapper;
 import org.dromara.system.oss.provider.OssObjectStore;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -36,7 +36,7 @@ public class OssLifecycleManager {
     private final OssObjectStore objectStore;
     private final OssLifecycleProperties properties;
 
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public OssService.OssReferenceState bind(Long ossId, String refType, String refId) {
         validateReference(refType, refId);
         SysOss oss = requireLocked(ossId);
@@ -58,7 +58,7 @@ public class OssLifecycleManager {
         return new OssService.OssReferenceState(ossId, false, null, before);
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public OssService.OssReferenceState unbind(Long ossId, String refType, String refId) {
         validateReference(refType, refId);
         SysOss oss = requireLocked(ossId);
@@ -90,7 +90,7 @@ public class OssLifecycleManager {
         return new OssService.OssDownloadUrl(request.url(), request.expiresAt(), oss.getOriginalName());
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public boolean deleteObjects(Collection<Long> ossIds) {
         if (ossIds == null || ossIds.isEmpty()) {
             return false;
@@ -113,7 +113,7 @@ public class OssLifecycleManager {
         return ossMapper.deleteByIds(orderedIds) > 0;
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public boolean cleanupExpired(Long ossId, LocalDateTime now, boolean dryRun) {
         SysOss oss = requireLocked(ossId);
         if (!"Y".equals(oss.getIsTemp()) || oss.getExpireTime() == null || oss.getExpireTime().isAfter(now)) {

@@ -1,6 +1,7 @@
 package org.dromara.system.notify.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,6 @@ import org.dromara.system.notify.support.NotifyTargetMasker;
 import org.dromara.system.notify.vo.SysNotifyDetailVo;
 import org.dromara.system.notify.vo.SysNotifyListVo;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDateTime;
@@ -47,7 +47,7 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
     private final OssService ossService;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public void record(NotifyDeliveryEvent event) {
         Objects.requireNonNull(event, "通知事件不能为空");
         NotifyRequest request = Objects.requireNonNull(event.request(), "通知请求快照不能为空");
@@ -122,7 +122,7 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int remove(Collection<Long> notifyLogIds) {
         if (notifyLogIds == null || notifyLogIds.isEmpty()) {
             return 0;
@@ -144,7 +144,7 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public void clean() {
         List<Long> ids = logMapper.selectList(new LambdaQueryWrapper<SysNotifyLog>())
             .stream().map(SysNotifyLog::getNotifyLogId).toList();
