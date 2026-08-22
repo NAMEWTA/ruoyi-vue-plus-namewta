@@ -41,10 +41,10 @@
             <artifactId>ruoyi-common-sms</artifactId>
         </dependency>
 
-        <!-- 邮件服务 -->
+        <!-- 统一通知服务 -->
         <dependency>
             <groupId>org.dromara</groupId>
-            <artifactId>ruoyi-common-mail</artifactId>
+            <artifactId>ruoyi-common-notify</artifactId>
         </dependency>
 
         <!-- 缓存服务 -->

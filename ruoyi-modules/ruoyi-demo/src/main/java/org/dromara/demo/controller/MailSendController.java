@@ -2,14 +2,16 @@ package org.dromara.demo.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
-import org.dromara.common.mail.core.MailBuilder;
+import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.common.notify.model.NotifyRequest;
+import org.dromara.common.notify.model.NotifyTarget;
+import org.dromara.common.notify.model.NotifyTextContent;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.File;
-import java.util.Arrays;
+import java.util.List;
 
 
 /**
@@ -23,6 +25,8 @@ import java.util.Arrays;
 @RequestMapping("/demo/mail")
 public class MailSendController {
 
+    private final NotifyClient notifyClient;
+
     /**
      * 发送邮件
      *
@@ -32,7 +36,7 @@ public class MailSendController {
      */
     @GetMapping("/sendSimpleMessage")
     public R<Void> sendSimpleMessage(String to, String subject, String text) {
-        MailBuilder.of().to(to).subject(subject).text(text).send();
+        send(to, subject, text, List.of());
         return R.ok();
     }
 
@@ -44,9 +48,8 @@ public class MailSendController {
      * @param text    内容
      */
     @GetMapping("/sendMessageWithAttachment")
-    public R<Void> sendMessageWithAttachment(String to, String subject, String text) {
-        // 附件路径 禁止前端传递 有任意读取系统文件风险
-        MailBuilder.of().to(to).subject(subject).text(text).files(new File("/xxx/xxx")).send();
+    public R<Void> sendMessageWithAttachment(String to, String subject, String text, Long ossId) {
+        send(to, subject, text, List.of(ossId));
         return R.ok();
     }
 
@@ -58,12 +61,19 @@ public class MailSendController {
      * @param text    内容
      */
     @GetMapping("/sendMessageWithAttachments")
-    public R<Void> sendMessageWithAttachments(String to, String subject, String text) {
-        // 附件路径 禁止前端传递 有任意读取系统文件风险
-        String[] paths = new String[]{"/xxx/xxx", "/xxx/xxx"};
-        File[] array = Arrays.stream(paths).map(File::new).toArray(File[]::new);
-        MailBuilder.of().to(to).subject(subject).text(text).files(array).send();
+    public R<Void> sendMessageWithAttachments(String to, String subject, String text, List<Long> ossIds) {
+        send(to, subject, text, ossIds);
         return R.ok();
+    }
+
+    private void send(String to, String subject, String text, List<Long> ossIds) {
+        notifyClient.send(NotifyRequest.builder()
+            .bizType("demo_mail")
+            .channel("mail")
+            .targets(List.of(NotifyTarget.email(to)))
+            .content(new NotifyTextContent(subject, text))
+            .attachmentOssIds(ossIds)
+            .build());
     }
 
 }

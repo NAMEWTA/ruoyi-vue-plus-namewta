@@ -11,8 +11,10 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StreamUtils;
 import org.dromara.common.core.utils.StringUtils;
-import org.dromara.common.core.utils.ThreadUtils;
-import org.dromara.common.mail.core.MailBuilder;
+import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.common.notify.model.NotifyRequest;
+import org.dromara.common.notify.model.NotifyTarget;
+import org.dromara.common.notify.model.NotifyTextContent;
 import org.dromara.system.api.MessageService;
 import org.dromara.system.api.domain.PushPayloadDTO;
 import org.dromara.system.api.domain.UserDTO;
@@ -46,6 +48,7 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
 
     private static final String DEFAULT_SUBJECT = "单据审批提醒";
     private final MessageService messageService;
+    private final NotifyClient notifyClient;
 
     /**
      * 根据流程实例发送消息给当前处理人
@@ -124,11 +127,12 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
         List<Long> userIds = new ArrayList<>(StreamUtils.toSet(userList, UserDTO::getUserId));
         Set<String> emails = StreamUtils.toSet(userList, UserDTO::getEmail);
         emails.removeIf(StringUtils::isBlank);
+        Set<String> phones = StreamUtils.toSet(userList, UserDTO::getPhoneNumber);
+        phones.removeIf(StringUtils::isBlank);
 
-        Runnable[] sendTasks = messageType.stream()
-            .map(code -> (Runnable) () -> sendMessageByType(code, message, subject, path, userIds, emails, userList.size()))
-            .toArray(Runnable[]::new);
-        ThreadUtils.virtualInvokeAll(sendTasks);
+        for (String code : messageType) {
+            sendMessageByType(code, message, subject, path, userIds, emails, phones);
+        }
     }
 
     /**
@@ -140,9 +144,10 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
      * @param path      前端跳转路径
      * @param userIds   接收用户 id 列表
      * @param emails    接收邮箱集合
-     * @param userCount 接收用户数量
+     * @param phones    接收手机号集合
      */
-    private void sendMessageByType(String code, String message, String subject, String path, List<Long> userIds, Set<String> emails, int userCount) {
+    private void sendMessageByType(String code, String message, String subject, String path, List<Long> userIds,
+                                   Set<String> emails, Set<String> phones) {
         MessageTypeEnum messageTypeEnum = MessageTypeEnum.getByCode(code);
         if (ObjectUtil.isEmpty(messageTypeEnum)) {
             return;
@@ -157,24 +162,28 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
                         message, null, path
                     ));
                 }
-                case EMAIL_MESSAGE -> MailBuilder.of().to(emails).subject(subject).text(message).send();
-                case SMS_MESSAGE -> {
-//                        LinkedHashMap<String, String> map = new LinkedHashMap<>(1);
-//                        // 根据具体短信服务商参数用法传参
-//                        map.put("code", "1234");
-//                        // 自动获取一个短信服务商
-//                        SmsBlend smsBlend = SmsFactory.getSmsBlend();
-//                        // 指定获取一个短信服务商 configKey
-//                        SmsBlend smsBlend = SmsFactory.getSmsBlend("config1");
-//                        SmsResponse smsResponse = smsBlend.sendMessage(phones, templateId, map);
-                    log.info("【短信发送 - TODO】用户数量={} 内容={}", userCount, message);
-                }
+                case EMAIL_MESSAGE -> sendExternalNotify("mail", emails.stream().map(NotifyTarget::email).toList(),
+                    subject, message);
+                case SMS_MESSAGE -> sendExternalNotify("sms", phones.stream().map(NotifyTarget::phone).toList(),
+                    subject, message);
                 default -> log.warn("【消息发送】未处理的消息类型：{}", messageTypeEnum);
             }
         } catch (Exception ex) {
             // 记录错误但不抛出，确保主逻辑不受影响
-            log.error("【消息发送失败】类型={}，原因={}", messageTypeEnum, ex.getMessage(), ex);
+            log.error("【消息发送失败】类型={}，异常类型={}", messageTypeEnum, ex.getClass().getSimpleName());
         }
+    }
+
+    private void sendExternalNotify(String channel, List<NotifyTarget> targets, String subject, String message) {
+        if (targets.isEmpty()) {
+            return;
+        }
+        notifyClient.send(NotifyRequest.builder()
+            .bizType("workflow")
+            .channel(channel)
+            .targets(targets)
+            .content(new NotifyTextContent(subject, message))
+            .build());
     }
 
     /**

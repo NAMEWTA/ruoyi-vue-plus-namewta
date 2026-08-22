@@ -62,6 +62,12 @@
             <artifactId>ruoyi-common-mail</artifactId>
         </dependency>
 
+        <!-- 统一通知服务 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-notify</artifactId>
+        </dependency>
+
         <!-- mcp模块 -->
         <dependency>
             <groupId>org.dromara</groupId>
