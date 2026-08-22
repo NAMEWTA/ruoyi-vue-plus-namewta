@@ -2,7 +2,6 @@ package org.dromara.system.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.convert.Convert;
-import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -32,15 +31,9 @@ import org.dromara.system.oss.service.OssLifecycleManager;
 import org.dromara.system.service.ISysOssService;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
@@ -173,67 +166,6 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
         return ossMapper.selectVoById(ossId);
     }
 
-
-    /**
-     * 文件下载方法，支持一次性下载完整文件
-     *
-     * @param ossId OSS对象ID
-     */
-    @Override
-    public ResponseEntity<byte[]> download(Long ossId) {
-        SysOssVo sysOss = SpringUtils.getAopProxy(this).getById(ossId);
-        if (ObjectUtil.isNull(sysOss)) {
-            throw new ServiceException("文件数据不存在!");
-        }
-        String percentEncodedFileName = FileUtils.percentEncode(sysOss.getOriginalName());
-        return OssFactory.instance(sysOss.getService())
-            .download(sysOss.getFileName(), (result, inputStream) -> {
-                // 尝试解析媒体类型，如果解析失败，则使用 application/octet-stream
-                MediaType mediaType;
-                try {
-                    mediaType = MediaType.parseMediaType(result.contentType());
-                } catch (Exception e) {
-                    mediaType = MediaType.APPLICATION_OCTET_STREAM;
-                }
-                // 构建响应实体
-                return ResponseEntity.ok()
-                    .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Disposition,download-filename")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=%s;filename*=utf-8''%s".formatted(percentEncodedFileName, percentEncodedFileName))
-                    .header("download-filename", percentEncodedFileName)
-                    .contentType(mediaType)
-                    .contentLength(result.size())
-                    .body(IoUtil.readBytes(inputStream));
-            });
-
-    }
-
-    /**
-     * 上传 MultipartFile 到对象存储服务，并保存文件信息到数据库
-     *
-     * @param file 要上传的 MultipartFile 对象
-     * @return 上传成功后的 SysOssVo 对象，包含文件信息
-     * @throws ServiceException 如果上传过程中发生异常，则抛出 ServiceException 异常
-     */
-    @Override
-    public SysOssVo upload(MultipartFile file, SysOssExt ossExt) {
-        if (ObjectUtil.isNull(file) || file.isEmpty()) {
-            throw new ServiceException("上传文件不能为空");
-        }
-        String originalfileName = file.getOriginalFilename();
-        String suffix = StringUtils.substring(originalfileName, originalfileName.lastIndexOf("."), originalfileName.length());
-        OssClient instance = OssFactory.instance();
-        String pathKey = instance.buildPathKey(originalfileName);
-        try (InputStream inputStream = file.getInputStream()) {
-            PutObjectResult result = instance.upload(pathKey, inputStream, file.getSize(), Options.builder().setContentType(file.getContentType()));
-            ossExt = ossExt == null ? new SysOssExt() : ossExt;
-            ossExt.setFileSize(file.getSize());
-            ossExt.setContentType(file.getContentType());
-            // 保存文件信息
-            return buildResultEntity(originalfileName, suffix, instance.clientId(), result, ossExt);
-        } catch (IOException e) {
-            throw new ServiceException(e.getMessage());
-        }
-    }
 
     /**
      * 上传文件到对象存储服务，并保存文件信息到数据库
