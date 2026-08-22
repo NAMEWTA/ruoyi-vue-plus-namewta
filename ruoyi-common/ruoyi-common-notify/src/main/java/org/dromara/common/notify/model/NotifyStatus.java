@@ -6,5 +6,6 @@ package org.dromara.common.notify.model;
 public enum NotifyStatus {
     ACCEPTED,
     PARTIAL_FAILURE,
-    FAILED
+    FAILED,
+    SKIPPED_DUPLICATE
 }

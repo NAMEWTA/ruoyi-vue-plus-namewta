@@ -3,7 +3,12 @@ package org.dromara.common.notify.core;
 import org.dromara.common.notify.event.NotifyDeliveryEvent;
 import org.dromara.common.notify.event.NotifyEventPublisher;
 import org.dromara.common.notify.exception.NotifyDeliveryException;
+import org.dromara.common.notify.exception.NotifyIdempotencyConflictException;
+import org.dromara.common.notify.exception.NotifyInProgressException;
 import org.dromara.common.notify.exception.NotifyValidationException;
+import org.dromara.common.notify.idempotency.NotifyIdempotencyCoordinator;
+import org.dromara.common.notify.idempotency.NotifyIdempotencyProperties;
+import org.dromara.common.notify.idempotency.NotifyIdempotencyStore;
 import org.dromara.common.notify.model.*;
 import org.dromara.common.notify.registry.NotifyChannelRegistry;
 import org.dromara.common.notify.spi.NotifyChannelAdapter;
@@ -25,12 +30,23 @@ public final class NotifyDispatcher implements NotifyClient {
     private final NotifyChannelRegistry registry;
     private final NotifyContextResolver contextResolver;
     private final NotifyEventPublisher eventPublisher;
+    private final NotifyIdempotencyCoordinator idempotencyCoordinator;
 
     public NotifyDispatcher(NotifyChannelRegistry registry, NotifyContextResolver contextResolver,
                             NotifyEventPublisher eventPublisher) {
+        this(registry, contextResolver, eventPublisher,
+            new NotifyIdempotencyCoordinator(null, new NotifyIdempotencyProperties()));
+    }
+
+    public NotifyDispatcher(NotifyChannelRegistry registry, NotifyContextResolver contextResolver,
+                            NotifyEventPublisher eventPublisher,
+                            NotifyIdempotencyCoordinator idempotencyCoordinator) {
         this.registry = registry;
         this.contextResolver = contextResolver;
         this.eventPublisher = eventPublisher;
+        this.idempotencyCoordinator = idempotencyCoordinator == null
+            ? new NotifyIdempotencyCoordinator(null, new NotifyIdempotencyProperties())
+            : idempotencyCoordinator;
     }
 
     @Override
@@ -39,11 +55,24 @@ public final class NotifyDispatcher implements NotifyClient {
         NotifyChannelAdapter adapter = registry.require(request.channel());
         validateTargets(request.targets(), adapter.supportedTargetTypes());
         NotifyContext context = resolveContext();
+        NotifyIdempotencyStore.Claim claim = beginIdempotency(request);
+        if (claim instanceof NotifyIdempotencyStore.InProgress inProgress) {
+            throw new NotifyInProgressException(inProgress.originalRequestId());
+        }
+        if (claim instanceof NotifyIdempotencyStore.Conflict conflict) {
+            throw new NotifyIdempotencyConflictException(conflict.originalRequestId());
+        }
+        if (claim instanceof NotifyIdempotencyStore.Completed completed) {
+            publishDuplicate(request, context, completed);
+            return requireAccepted(completed.result());
+        }
+
         NotifyAdapterResult adapterResult;
         try {
             adapterResult = adapter.send(new NotifyAdapterRequest(request, context));
             validateAdapterResult(request, adapterResult);
         } catch (NotifyValidationException exception) {
+            release(claim);
             throw exception;
         } catch (RuntimeException exception) {
             adapterResult = providerFailure(request);
@@ -52,11 +81,9 @@ public final class NotifyDispatcher implements NotifyClient {
         }
 
         NotifyResult result = aggregate(request, adapterResult);
+        complete(claim, result, request, context);
         publish(request, context, result);
-        if (result.status() != NotifyStatus.ACCEPTED) {
-            throw new NotifyDeliveryException(result);
-        }
-        return result;
+        return requireAccepted(result);
     }
 
     private void validateRequest(NotifyRequest request) {
@@ -78,9 +105,39 @@ public final class NotifyDispatcher implements NotifyClient {
         if (!request.attachmentOssIds().isEmpty()) {
             throw new NotifyValidationException("ATTACHMENT_SNAPSHOT_NOT_CONFIGURED", "附件快照能力尚未装配");
         }
-        if (!isBlank(request.idempotencyKey())) {
-            throw new NotifyValidationException("IDEMPOTENCY_NOT_CONFIGURED", "通知幂等能力尚未装配");
+    }
+
+    private NotifyIdempotencyStore.Claim beginIdempotency(NotifyRequest request) {
+        if (isBlank(request.idempotencyKey())) {
+            return null;
         }
+        return idempotencyCoordinator.begin(request);
+    }
+
+    private void complete(NotifyIdempotencyStore.Claim claim, NotifyResult result,
+                          NotifyRequest request, NotifyContext context) {
+        if (!(claim instanceof NotifyIdempotencyStore.Acquired acquired)) {
+            return;
+        }
+        try {
+            idempotencyCoordinator.complete(acquired, result);
+        } catch (RuntimeException exception) {
+            publish(request, context, result);
+            throw exception;
+        }
+    }
+
+    private void release(NotifyIdempotencyStore.Claim claim) {
+        if (claim instanceof NotifyIdempotencyStore.Acquired acquired) {
+            idempotencyCoordinator.releaseQuietly(acquired);
+        }
+    }
+
+    private NotifyResult requireAccepted(NotifyResult result) {
+        if (result.status() != NotifyStatus.ACCEPTED) {
+            throw new NotifyDeliveryException(result);
+        }
+        return result;
     }
 
     private void validateTargets(List<NotifyTarget> targets, Set<String> supportedTypes) {
@@ -141,6 +198,19 @@ public final class NotifyDispatcher implements NotifyClient {
             eventPublisher.publish(new NotifyDeliveryEvent(request, context, result, Instant.now()));
         } catch (RuntimeException exception) {
             log.warn("通知监控事件发布失败，requestId={}, exception={}", request.requestId(),
+                exception.getClass().getSimpleName());
+        }
+    }
+
+    private void publishDuplicate(NotifyRequest request, NotifyContext context,
+                                  NotifyIdempotencyStore.Completed completed) {
+        NotifyResult skipped = new NotifyResult(request.requestId(), request.channel(),
+            completed.result().providerKey(), NotifyStatus.SKIPPED_DUPLICATE, List.of());
+        try {
+            eventPublisher.publish(new NotifyDeliveryEvent(request, context, skipped,
+                completed.originalRequestId(), Instant.now()));
+        } catch (RuntimeException exception) {
+            log.warn("通知重复监控事件发布失败，requestId={}, exception={}", request.requestId(),
                 exception.getClass().getSimpleName());
         }
     }

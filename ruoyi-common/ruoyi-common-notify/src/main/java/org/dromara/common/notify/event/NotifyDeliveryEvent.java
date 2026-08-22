@@ -13,6 +13,12 @@ public record NotifyDeliveryEvent(
     NotifyRequest request,
     NotifyContext context,
     NotifyResult result,
+    String originalRequestId,
     Instant occurredAt
 ) {
+
+    public NotifyDeliveryEvent(NotifyRequest request, NotifyContext context, NotifyResult result,
+                               Instant occurredAt) {
+        this(request, context, result, null, occurredAt);
+    }
 }
