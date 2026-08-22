@@ -17,6 +17,12 @@
 
     <dependencies>
 
+        <!-- 统一通知契约 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-notify</artifactId>
+        </dependency>
+
         <!-- 短信模块 -->
         <dependency>
             <groupId>org.dromara.sms4j</groupId>

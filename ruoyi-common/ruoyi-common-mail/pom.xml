@@ -22,6 +22,12 @@
             <artifactId>ruoyi-common-core</artifactId>
         </dependency>
 
+        <!-- 统一通知契约 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-notify</artifactId>
+        </dependency>
+
         <!-- 邮件接口 -->
         <dependency>
             <groupId>jakarta.mail</groupId>

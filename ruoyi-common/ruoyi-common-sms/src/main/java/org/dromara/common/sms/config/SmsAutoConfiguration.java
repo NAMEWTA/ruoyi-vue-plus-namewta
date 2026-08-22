@@ -2,8 +2,12 @@ package org.dromara.common.sms.config;
 
 import org.dromara.common.sms.core.dao.PlusSmsDao;
 import org.dromara.common.sms.handler.SmsExceptionHandler;
+import org.dromara.common.sms.notify.Sms4jNotificationProviderResolver;
+import org.dromara.common.sms.notify.SmsNotificationProviderResolver;
+import org.dromara.common.sms.notify.SmsNotifyChannelAdapter;
 import org.dromara.sms4j.api.dao.SmsDao;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -33,6 +37,18 @@ public class SmsAutoConfiguration {
     @Bean
     public SmsExceptionHandler smsExceptionHandler() {
         return new SmsExceptionHandler();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public SmsNotificationProviderResolver smsNotificationProviderResolver() {
+        return new Sms4jNotificationProviderResolver();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public SmsNotifyChannelAdapter smsNotifyChannelAdapter(SmsNotificationProviderResolver providerResolver) {
+        return new SmsNotifyChannelAdapter(providerResolver);
     }
 
 }

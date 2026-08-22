@@ -54,6 +54,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- 统一通知契约 -->
+            <dependency>
+                <groupId>org.dromara</groupId>
+                <artifactId>ruoyi-common-notify</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
             <!-- 邮件服务 -->
             <dependency>
                 <groupId>org.dromara</groupId>
