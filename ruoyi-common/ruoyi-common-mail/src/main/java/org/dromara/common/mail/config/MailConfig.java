@@ -12,6 +12,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+import java.io.File;
+
 /**
  * JavaMail 配置
  *
@@ -43,6 +45,7 @@ public class MailConfig {
             .bcc(message.bcc())
             .subject(message.subject())
             .content(message.content(), message.html())
+            .files(message.attachments().stream().map(path -> path.toFile()).toArray(File[]::new))
             .send();
     }
 

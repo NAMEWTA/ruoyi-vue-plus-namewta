@@ -7,6 +7,7 @@ public record NotifyAttachmentResource(
     Long ossId,
     String fileName,
     String contentType,
-    long size
+    long size,
+    NotifyAttachmentMaterializer materializer
 ) {
 }

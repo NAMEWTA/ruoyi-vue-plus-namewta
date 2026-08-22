@@ -1,5 +1,7 @@
 package org.dromara.common.notify.config;
 
+import org.dromara.common.notify.attachment.NotifyAttachmentSnapshotService;
+import org.dromara.common.notify.attachment.NotifyLogIdGenerator;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.notify.core.NotifyDispatcher;
 import org.dromara.common.notify.event.NotifyEventPublisher;
@@ -67,7 +69,10 @@ public class NotifyAutoConfiguration {
     @ConditionalOnMissingBean(NotifyClient.class)
     public NotifyClient notifyClient(NotifyChannelRegistry registry, NotifyContextResolver contextResolver,
                                      NotifyEventPublisher eventPublisher,
-                                     NotifyIdempotencyCoordinator idempotencyCoordinator) {
-        return new NotifyDispatcher(registry, contextResolver, eventPublisher, idempotencyCoordinator);
+                                     NotifyIdempotencyCoordinator idempotencyCoordinator,
+                                     ObjectProvider<NotifyAttachmentSnapshotService> attachmentSnapshotService,
+                                     ObjectProvider<NotifyLogIdGenerator> notifyLogIdGenerator) {
+        return new NotifyDispatcher(registry, contextResolver, eventPublisher, idempotencyCoordinator,
+            attachmentSnapshotService.getIfAvailable(), notifyLogIdGenerator.getIfAvailable());
     }
 }

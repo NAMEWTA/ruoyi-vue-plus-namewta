@@ -1,7 +1,12 @@
 package org.dromara.common.notify.core;
 
+import org.dromara.common.notify.attachment.NotifyAttachmentResource;
+import org.dromara.common.notify.attachment.NotifyAttachmentSnapshot;
+import org.dromara.common.notify.attachment.NotifyAttachmentSnapshotService;
+import org.dromara.common.notify.attachment.NotifyLogIdGenerator;
 import org.dromara.common.notify.event.NotifyDeliveryEvent;
 import org.dromara.common.notify.event.NotifyEventPublisher;
+import org.dromara.common.notify.exception.NotifyAttachmentSnapshotException;
 import org.dromara.common.notify.exception.NotifyDeliveryException;
 import org.dromara.common.notify.exception.NotifyIdempotencyConflictException;
 import org.dromara.common.notify.exception.NotifyInProgressException;
@@ -17,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -31,6 +37,8 @@ public final class NotifyDispatcher implements NotifyClient {
     private final NotifyContextResolver contextResolver;
     private final NotifyEventPublisher eventPublisher;
     private final NotifyIdempotencyCoordinator idempotencyCoordinator;
+    private final NotifyAttachmentSnapshotService attachmentSnapshotService;
+    private final NotifyLogIdGenerator notifyLogIdGenerator;
 
     public NotifyDispatcher(NotifyChannelRegistry registry, NotifyContextResolver contextResolver,
                             NotifyEventPublisher eventPublisher) {
@@ -41,17 +49,28 @@ public final class NotifyDispatcher implements NotifyClient {
     public NotifyDispatcher(NotifyChannelRegistry registry, NotifyContextResolver contextResolver,
                             NotifyEventPublisher eventPublisher,
                             NotifyIdempotencyCoordinator idempotencyCoordinator) {
+        this(registry, contextResolver, eventPublisher, idempotencyCoordinator, null, null);
+    }
+
+    public NotifyDispatcher(NotifyChannelRegistry registry, NotifyContextResolver contextResolver,
+                            NotifyEventPublisher eventPublisher,
+                            NotifyIdempotencyCoordinator idempotencyCoordinator,
+                            NotifyAttachmentSnapshotService attachmentSnapshotService,
+                            NotifyLogIdGenerator notifyLogIdGenerator) {
         this.registry = registry;
         this.contextResolver = contextResolver;
         this.eventPublisher = eventPublisher;
         this.idempotencyCoordinator = idempotencyCoordinator == null
             ? new NotifyIdempotencyCoordinator(null, new NotifyIdempotencyProperties())
             : idempotencyCoordinator;
+        this.attachmentSnapshotService = attachmentSnapshotService;
+        this.notifyLogIdGenerator = notifyLogIdGenerator;
     }
 
     @Override
     public NotifyResult send(NotifyRequest request) {
         validateRequest(request);
+        request = normalizeAttachments(request);
         NotifyChannelAdapter adapter = registry.require(request.channel());
         validateTargets(request.targets(), adapter.supportedTargetTypes());
         NotifyContext context = resolveContext();
@@ -67,11 +86,20 @@ public final class NotifyDispatcher implements NotifyClient {
             return requireAccepted(completed.result());
         }
 
+        SnapshotBatch snapshotBatch;
+        try {
+            snapshotBatch = createSnapshots(request, context);
+        } catch (NotifyAttachmentSnapshotException | NotifyValidationException exception) {
+            release(claim);
+            throw exception;
+        }
+
         NotifyAdapterResult adapterResult;
         try {
-            adapterResult = adapter.send(new NotifyAdapterRequest(request, context));
+            adapterResult = adapter.send(new NotifyAdapterRequest(request, context, snapshotBatch.snapshots()));
             validateAdapterResult(request, adapterResult);
-        } catch (NotifyValidationException exception) {
+        } catch (NotifyAttachmentSnapshotException | NotifyValidationException exception) {
+            cleanupSnapshots(snapshotBatch.snapshots());
             release(claim);
             throw exception;
         } catch (RuntimeException exception) {
@@ -81,8 +109,8 @@ public final class NotifyDispatcher implements NotifyClient {
         }
 
         NotifyResult result = aggregate(request, adapterResult);
-        complete(claim, result, request, context);
-        publish(request, context, result);
+        complete(claim, result, request, context, snapshotBatch);
+        publish(request, context, result, snapshotBatch);
         return requireAccepted(result);
     }
 
@@ -102,8 +130,55 @@ public final class NotifyDispatcher implements NotifyClient {
         if (request.content() instanceof NotifyTemplateContent template && isBlank(template.contentSnapshot())) {
             throw new NotifyValidationException("CONTENT_SNAPSHOT_REQUIRED", "模板通知必须提供完整内容快照");
         }
-        if (!request.attachmentOssIds().isEmpty()) {
+        if (request.attachmentOssIds().stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new NotifyValidationException("INVALID_ATTACHMENT_OSS_ID", "附件 OSS ID 必须为正整数");
+        }
+    }
+
+    private NotifyRequest normalizeAttachments(NotifyRequest request) {
+        List<Long> normalized = List.copyOf(new LinkedHashSet<>(request.attachmentOssIds()));
+        if (normalized.equals(request.attachmentOssIds())) {
+            return request;
+        }
+        return new NotifyRequest(request.requestId(), request.bizType(), request.bizId(), request.channel(),
+            request.providerKey(), request.targets(), request.content(), normalized, request.idempotencyKey(),
+            request.idempotencyWindow(), request.metadata());
+    }
+
+    private SnapshotBatch createSnapshots(NotifyRequest request, NotifyContext context) {
+        if (request.attachmentOssIds().isEmpty()) {
+            return SnapshotBatch.empty();
+        }
+        if (attachmentSnapshotService == null || notifyLogIdGenerator == null) {
             throw new NotifyValidationException("ATTACHMENT_SNAPSHOT_NOT_CONFIGURED", "附件快照能力尚未装配");
+        }
+        long notifyLogId = notifyLogIdGenerator.nextId();
+        if (notifyLogId <= 0) {
+            throw new NotifyAttachmentSnapshotException("INVALID_NOTIFY_LOG_ID", "通知日志主键生成失败");
+        }
+        List<NotifyAttachmentSnapshot> snapshots = attachmentSnapshotService.createSnapshots(notifyLogId,
+            request.attachmentOssIds(), context);
+        try {
+            validateSnapshots(request.attachmentOssIds(), snapshots);
+        } catch (RuntimeException exception) {
+            cleanupSnapshots(snapshots);
+            throw exception;
+        }
+        return new SnapshotBatch(notifyLogId, snapshots);
+    }
+
+    private void validateSnapshots(List<Long> sourceOssIds, List<NotifyAttachmentSnapshot> snapshots) {
+        if (snapshots == null || snapshots.size() != sourceOssIds.size()) {
+            throw new NotifyAttachmentSnapshotException("INCOMPLETE_ATTACHMENT_SNAPSHOT", "附件快照结果不完整");
+        }
+        for (int index = 0; index < sourceOssIds.size(); index++) {
+            NotifyAttachmentSnapshot snapshot = snapshots.get(index);
+            NotifyAttachmentResource resource = snapshot == null ? null : snapshot.resource();
+            if (snapshot == null || !sourceOssIds.get(index).equals(snapshot.sourceOssId())
+                || resource == null || resource.ossId() == null || resource.ossId() <= 0
+                || isBlank(resource.fileName()) || resource.size() < 0 || resource.materializer() == null) {
+                throw new NotifyAttachmentSnapshotException("INVALID_ATTACHMENT_SNAPSHOT", "附件快照结果无效");
+            }
         }
     }
 
@@ -115,14 +190,14 @@ public final class NotifyDispatcher implements NotifyClient {
     }
 
     private void complete(NotifyIdempotencyStore.Claim claim, NotifyResult result,
-                          NotifyRequest request, NotifyContext context) {
+                          NotifyRequest request, NotifyContext context, SnapshotBatch snapshotBatch) {
         if (!(claim instanceof NotifyIdempotencyStore.Acquired acquired)) {
             return;
         }
         try {
             idempotencyCoordinator.complete(acquired, result);
         } catch (RuntimeException exception) {
-            publish(request, context, result);
+            publish(request, context, result, snapshotBatch);
             throw exception;
         }
     }
@@ -130,6 +205,18 @@ public final class NotifyDispatcher implements NotifyClient {
     private void release(NotifyIdempotencyStore.Claim claim) {
         if (claim instanceof NotifyIdempotencyStore.Acquired acquired) {
             idempotencyCoordinator.releaseQuietly(acquired);
+        }
+    }
+
+    private void cleanupSnapshots(List<NotifyAttachmentSnapshot> snapshots) {
+        if (attachmentSnapshotService == null || snapshots == null || snapshots.isEmpty()) {
+            return;
+        }
+        try {
+            attachmentSnapshotService.cleanupSnapshots(snapshots);
+        } catch (RuntimeException exception) {
+            log.warn("通知附件快照补偿失败，snapshotCount={}, exception={}", snapshots.size(),
+                exception.getClass().getSimpleName());
         }
     }
 
@@ -193,9 +280,11 @@ public final class NotifyDispatcher implements NotifyClient {
             adapterResult.deliveries());
     }
 
-    private void publish(NotifyRequest request, NotifyContext context, NotifyResult result) {
+    private void publish(NotifyRequest request, NotifyContext context, NotifyResult result,
+                         SnapshotBatch snapshotBatch) {
         try {
-            eventPublisher.publish(new NotifyDeliveryEvent(request, context, result, Instant.now()));
+            eventPublisher.publish(new NotifyDeliveryEvent(request, context, result, null,
+                snapshotBatch.notifyLogId(), snapshotBatch.snapshotOssIds(), Instant.now()));
         } catch (RuntimeException exception) {
             log.warn("通知监控事件发布失败，requestId={}, exception={}", request.requestId(),
                 exception.getClass().getSimpleName());
@@ -208,7 +297,7 @@ public final class NotifyDispatcher implements NotifyClient {
             completed.result().providerKey(), NotifyStatus.SKIPPED_DUPLICATE, List.of());
         try {
             eventPublisher.publish(new NotifyDeliveryEvent(request, context, skipped,
-                completed.originalRequestId(), Instant.now()));
+                completed.originalRequestId(), null, List.of(), Instant.now()));
         } catch (RuntimeException exception) {
             log.warn("通知重复监控事件发布失败，requestId={}, exception={}", request.requestId(),
                 exception.getClass().getSimpleName());
@@ -217,5 +306,20 @@ public final class NotifyDispatcher implements NotifyClient {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private record SnapshotBatch(Long notifyLogId, List<NotifyAttachmentSnapshot> snapshots) {
+
+        private SnapshotBatch {
+            snapshots = snapshots == null ? List.of() : List.copyOf(snapshots);
+        }
+
+        private static SnapshotBatch empty() {
+            return new SnapshotBatch(null, List.of());
+        }
+
+        private List<Long> snapshotOssIds() {
+            return snapshots.stream().map(snapshot -> snapshot.resource().ossId()).toList();
+        }
     }
 }
