@@ -18,7 +18,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -78,6 +80,21 @@ public class OssLifecycleManager {
             return new OssService.OssReferenceState(ossId, true, expireTime, 0);
         }
         return new OssService.OssReferenceState(ossId, false, null, count);
+    }
+
+    @DSTransactional
+    public void reconcileReferences(String refType, String refId,
+                                    Collection<Long> previousOssIds, Collection<Long> currentOssIds) {
+        validateReference(refType, refId);
+        List<Long> previous = normalizeOssIds(previousOssIds);
+        List<Long> current = normalizeOssIds(currentOssIds);
+        Set<Long> previousSet = new HashSet<>(previous);
+        Set<Long> currentSet = new HashSet<>(current);
+
+        current.stream().filter(ossId -> !previousSet.contains(ossId))
+            .forEach(ossId -> bind(ossId, refType, refId));
+        previous.stream().filter(ossId -> !currentSet.contains(ossId))
+            .forEach(ossId -> unbind(ossId, refType, refId));
     }
 
     public OssService.OssLifecycleSnapshot snapshot(Long ossId) {
@@ -171,5 +188,16 @@ public class OssLifecycleManager {
             throw new OssLifecycleException(OssLifecycleError.INVALID_REFERENCE,
                 "refType 必须是实际物理表名，refId 必须是真实主键");
         }
+    }
+
+    private List<Long> normalizeOssIds(Collection<Long> ossIds) {
+        if (ossIds == null || ossIds.isEmpty()) {
+            return List.of();
+        }
+        if (ossIds.stream().anyMatch(ossId -> ossId == null || ossId <= 0)) {
+            throw new OssLifecycleException(OssLifecycleError.INVALID_REFERENCE,
+                "ossId 必须是正数");
+        }
+        return ossIds.stream().distinct().sorted().toList();
     }
 }

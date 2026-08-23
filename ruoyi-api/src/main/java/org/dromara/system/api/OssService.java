@@ -4,6 +4,7 @@ import org.dromara.system.api.domain.OssDTO;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -38,6 +39,20 @@ public interface OssService {
      * 解除 OSS 对象与一条真实业务数据的绑定。
      */
     OssReferenceState unbind(Long ossId, String refType, String refId);
+
+    /**
+     * 将一条业务数据保存前后的 OSS 集合协调为真实引用。
+     *
+     * <p>调用方必须先完成业务授权，并在保存业务数据的同一个动态数据源事务中调用。
+     * null 集合按空集合处理；集合中的 ID 必须是正数。</p>
+     *
+     * @param refType       真实物理表名
+     * @param refId         真实业务主键
+     * @param previousOssIds 保存前的 OSS ID 集合
+     * @param currentOssIds  保存后的 OSS ID 集合
+     */
+    void reconcileReferences(String refType, String refId,
+                             Collection<Long> previousOssIds, Collection<Long> currentOssIds);
 
     /**
      * 查询对象当前生命周期及反向定位信息。

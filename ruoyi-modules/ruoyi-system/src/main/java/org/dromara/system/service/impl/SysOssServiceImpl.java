@@ -239,6 +239,12 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
     }
 
     @Override
+    public void reconcileReferences(String refType, String refId,
+                                    Collection<Long> previousOssIds, Collection<Long> currentOssIds) {
+        lifecycleManager.reconcileReferences(refType, refId, previousOssIds, currentOssIds);
+    }
+
+    @Override
     public OssLifecycleSnapshot snapshot(Long ossId) {
         return lifecycleManager.snapshot(ossId);
     }
