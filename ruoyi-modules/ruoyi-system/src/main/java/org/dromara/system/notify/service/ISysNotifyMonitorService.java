@@ -6,6 +6,7 @@ import org.dromara.common.notify.event.NotifyDeliveryEvent;
 import org.dromara.system.notify.bo.SysNotifyQuery;
 import org.dromara.system.notify.vo.SysNotifyDetailVo;
 import org.dromara.system.notify.vo.SysNotifyListVo;
+import org.dromara.system.api.OssService;
 
 import java.util.Collection;
 
@@ -19,6 +20,8 @@ public interface ISysNotifyMonitorService {
     PageResult<SysNotifyListVo> page(SysNotifyQuery query, PageQuery pageQuery);
 
     SysNotifyDetailVo detail(Long notifyLogId);
+
+    OssService.OssDownloadUrl attachmentDownload(Long notifyLogId, Long ossId);
 
     int remove(Collection<Long> notifyLogIds);
 

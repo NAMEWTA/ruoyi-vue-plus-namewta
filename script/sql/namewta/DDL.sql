@@ -202,3 +202,24 @@ create table sys_notify_delivery_log (
     key idx_sys_notify_delivery_status_time (status, create_time),
     key idx_sys_notify_delivery_provider_msg (provider_message_id)
 ) engine=innodb comment='通知目标投递日志表';
+
+-- ============================================================================
+-- 变更标识：NAMEWTA-OSS-NOTIFY-DDL-002
+-- 变更内容：OSS 可重试删除状态；通知请求 ID 改为非唯一审计索引
+-- 执行前置：已执行 NAMEWTA-OSS-NOTIFY-DDL-001
+-- 适用范围：已完成 NAMEWTA-OSS-NOTIFY-DDL-001 的环境
+-- 重复执行：否
+-- 回滚方式：确认无 PENDING 对象后删除 delete_state，并恢复 request_id 唯一索引
+-- ============================================================================
+
+alter table sys_oss
+    add column delete_state varchar(16) not null default 'ACTIVE'
+        comment '删除状态（ACTIVE正常 PENDING等待供应商删除）' after expire_time;
+
+alter table sys_notify_log
+    drop index uk_sys_notify_log_request,
+    add key idx_sys_notify_log_request (request_id);
+
+alter table sys_notify_delivery_log
+    modify column target_value varchar(1000) not null
+        comment '物理目标（敏感审计策略下脱敏）';

@@ -40,6 +40,7 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
 
     private static final String NOTIFY_LOG_TABLE = "sys_notify_log";
     private static final long SYSTEM_USER_ID = -1L;
+    private static final int CLEANUP_BATCH_SIZE = 500;
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final SysNotifyLogMapper logMapper;
@@ -66,7 +67,7 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
         if (result.status() != NotifyStatus.SKIPPED_DUPLICATE) {
             for (NotifyTargetResult targetResult : result.deliveries()) {
                 deliveryMapper.insert(buildDelivery(notifyLogId, result.providerKey(), targetResult,
-                    context.userId(), occurredAt));
+                    request.auditPolicy(), context.userId(), occurredAt));
             }
         }
         for (Long ossId : event.attachmentSnapshotOssIds()) {
@@ -122,6 +123,18 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
     }
 
     @Override
+    public OssService.OssDownloadUrl attachmentDownload(Long notifyLogId, Long ossId) {
+        SysNotifyLog log = logMapper.selectById(notifyLogId);
+        if (log == null) {
+            throw new ServiceException("通知日志不存在");
+        }
+        if (!parseOssIds(log.getAttachmentOssIds()).contains(ossId)) {
+            throw new ServiceException("附件不属于当前通知");
+        }
+        return ossService.presignDownload(ossId);
+    }
+
+    @Override
     @DSTransactional
     public int remove(Collection<Long> notifyLogIds) {
         if (notifyLogIds == null || notifyLogIds.isEmpty()) {
@@ -138,17 +151,18 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
                 ossService.unbind(ossId, NOTIFY_LOG_TABLE, String.valueOf(log.getNotifyLogId()));
             }
         }
-        deliveryMapper.delete(new LambdaQueryWrapper<SysNotifyDeliveryLog>()
-            .in(SysNotifyDeliveryLog::getNotifyLogId, ids));
-        return logMapper.deleteByIds(ids);
+        deliveryMapper.physicalDeleteByNotifyLogIds(ids);
+        return logMapper.physicalDeleteByIds(ids);
     }
 
     @Override
     @DSTransactional
     public void clean() {
-        List<Long> ids = logMapper.selectList(new LambdaQueryWrapper<SysNotifyLog>())
-            .stream().map(SysNotifyLog::getNotifyLogId).toList();
-        remove(ids);
+        List<Long> ids;
+        do {
+            ids = logMapper.selectCleanupBatch(CLEANUP_BATCH_SIZE);
+            remove(ids);
+        } while (ids.size() == CLEANUP_BATCH_SIZE);
     }
 
     private SysNotifyLog buildLog(NotifyDeliveryEvent event, NotifyRequest request, NotifyResult result,
@@ -161,7 +175,9 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
         log.setBizId(request.bizId());
         log.setChannel(result.channel());
         log.setProviderKey(result.providerKey());
-        mapContent(log, request.content());
+        if (request.auditPolicy() == NotifyAuditPolicy.FULL) {
+            mapContent(log, request.content());
+        }
         log.setAttachmentOssIds(JSON.writeValueAsString(event.attachmentSnapshotOssIds()));
         log.setStatus(result.status().name());
         result.deliveries().stream()
@@ -199,13 +215,15 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
     }
 
     private SysNotifyDeliveryLog buildDelivery(Long notifyLogId, String providerKey,
-                                                NotifyTargetResult result, Long userId,
+                                                NotifyTargetResult result, NotifyAuditPolicy auditPolicy, Long userId,
                                                 LocalDateTime occurredAt) {
         SysNotifyDeliveryLog delivery = new SysNotifyDeliveryLog();
         delivery.setNotifyLogId(notifyLogId);
         delivery.setTargetType(result.target().type());
         delivery.setTargetRole(result.target().role());
-        delivery.setTargetValue(result.target().value());
+        delivery.setTargetValue(auditPolicy == NotifyAuditPolicy.REDACT_SENSITIVE
+            ? NotifyTargetMasker.mask(result.target().type(), result.target().value())
+            : result.target().value());
         delivery.setProviderKey(providerKey);
         delivery.setProviderMessageId(result.providerMessageId());
         delivery.setAttemptNo(1);

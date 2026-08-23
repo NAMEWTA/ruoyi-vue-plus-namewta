@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -75,15 +76,42 @@ class NotifyMonitorManagementUnitTest {
         SysNotifyLog first = log(100L, "[77,78]");
         SysNotifyLog second = log(101L, "[]");
         when(logMapper.selectBatchIds(List.of(100L, 101L))).thenReturn(List.of(first, second));
-        when(logMapper.deleteByIds(List.of(100L, 101L))).thenReturn(2);
+        when(logMapper.physicalDeleteByIds(List.of(100L, 101L))).thenReturn(2);
 
         int removed = service.remove(List.of(101L, 100L, 100L));
 
         assertEquals(2, removed);
         verify(ossService).unbind(77L, "sys_notify_log", "100");
         verify(ossService).unbind(78L, "sys_notify_log", "100");
-        verify(deliveryMapper).delete(any(Wrapper.class));
-        verify(logMapper).deleteByIds(List.of(100L, 101L));
+        verify(deliveryMapper).physicalDeleteByNotifyLogIds(List.of(100L, 101L));
+        verify(logMapper).physicalDeleteByIds(List.of(100L, 101L));
+    }
+
+    @Test
+    void attachmentDownloadRequiresMembershipInNotificationSnapshot() {
+        when(logMapper.selectById(100L)).thenReturn(log(100L, "[77]"));
+
+        assertThrows(org.dromara.common.core.exception.ServiceException.class,
+            () -> service.attachmentDownload(100L, 78L));
+        verify(ossService, never()).presignDownload(anyLong());
+
+        service.attachmentDownload(100L, 77L);
+        verify(ossService).presignDownload(77L);
+    }
+
+    @Test
+    void cleanReadsAndDeletesFixedBatchesUntilEmpty() {
+        List<Long> ids = LongStream.rangeClosed(1, 500).boxed().toList();
+        List<SysNotifyLog> logs = ids.stream().map(id -> log(id, "[]")).toList();
+        when(logMapper.selectCleanupBatch(500)).thenReturn(ids, List.of());
+        when(logMapper.selectBatchIds(ids)).thenReturn(logs);
+        when(logMapper.physicalDeleteByIds(ids)).thenReturn(500);
+
+        service.clean();
+
+        verify(logMapper, times(2)).selectCleanupBatch(500);
+        verify(deliveryMapper).physicalDeleteByNotifyLogIds(ids);
+        verify(logMapper).physicalDeleteByIds(ids);
     }
 
     private SysNotifyLog log(Long id, String attachments) {

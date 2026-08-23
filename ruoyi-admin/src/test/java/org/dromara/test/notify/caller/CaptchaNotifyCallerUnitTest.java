@@ -81,6 +81,7 @@ class CaptchaNotifyCallerUnitTest {
         NotifyTextContent content = assertInstanceOf(NotifyTextContent.class, request.getValue().content());
         assertAll(
             () -> assertEquals("mail", request.getValue().channel()),
+            () -> assertEquals(NotifyAuditPolicy.REDACT_SENSITIVE, request.getValue().auditPolicy()),
             () -> assertEquals(NotifyTarget.email("user@example.com"), request.getValue().targets().getFirst()),
             () -> assertTrue(request.getValue().idempotencyKey().startsWith("captcha:mail:user@example.com:")),
             () -> assertTrue(content.text().contains(controller.cachedCode)),

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.system.notify.mapper.SysNotifyLogMapper">
+
+    <select id="selectCleanupBatch" resultType="java.lang.Long">
+        select notify_log_id
+        from sys_notify_log
+        order by notify_log_id
+        limit #{limit}
+    </select>
+
+    <delete id="physicalDeleteByIds">
+        delete from sys_notify_log
+        where notify_log_id in
+        <foreach collection="notifyLogIds" item="notifyLogId" open="(" separator="," close=")">
+            #{notifyLogId}
+        </foreach>
+    </delete>
+</mapper>

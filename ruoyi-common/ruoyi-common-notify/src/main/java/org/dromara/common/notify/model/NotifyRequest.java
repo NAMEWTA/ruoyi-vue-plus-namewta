@@ -17,6 +17,7 @@ public record NotifyRequest(
     List<NotifyTarget> targets,
     NotifyContent content,
     List<Long> attachmentOssIds,
+    NotifyAuditPolicy auditPolicy,
     String idempotencyKey,
     Duration idempotencyWindow,
     Map<String, String> metadata
@@ -26,6 +27,7 @@ public record NotifyRequest(
         requestId = requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
         targets = targets == null ? List.of() : List.copyOf(targets);
         attachmentOssIds = attachmentOssIds == null ? List.of() : List.copyOf(attachmentOssIds);
+        auditPolicy = auditPolicy == null ? NotifyAuditPolicy.FULL : auditPolicy;
         metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
     }
 
@@ -46,6 +48,7 @@ public record NotifyRequest(
         private List<NotifyTarget> targets = List.of();
         private NotifyContent content;
         private List<Long> attachmentOssIds = List.of();
+        private NotifyAuditPolicy auditPolicy = NotifyAuditPolicy.FULL;
         private String idempotencyKey;
         private Duration idempotencyWindow;
         private Map<String, String> metadata = Map.of();
@@ -93,6 +96,11 @@ public record NotifyRequest(
             return this;
         }
 
+        public Builder auditPolicy(NotifyAuditPolicy value) {
+            auditPolicy = value;
+            return this;
+        }
+
         public Builder idempotencyKey(String value) {
             idempotencyKey = value;
             return this;
@@ -110,7 +118,7 @@ public record NotifyRequest(
 
         public NotifyRequest build() {
             return new NotifyRequest(requestId, bizType, bizId, channel, providerKey, targets, content,
-                attachmentOssIds, idempotencyKey, idempotencyWindow, metadata);
+                attachmentOssIds, auditPolicy, idempotencyKey, idempotencyWindow, metadata);
         }
     }
 }

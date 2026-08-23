@@ -92,4 +92,34 @@ class NotifyMonitorPersistenceUnitTest {
         verify(deliveryMapper, never()).insert(any(SysNotifyDeliveryLog.class));
         verifyNoInteractions(ossService);
     }
+
+    @Test
+    void sensitiveAuditPolicyNeverPersistsCaptchaOrFullTarget() {
+        NotifyTarget target = NotifyTarget.phone("13812345678");
+        NotifyRequest request = NotifyRequest.builder()
+            .requestId("captcha-1")
+            .bizType("auth_captcha")
+            .channel("sms")
+            .targets(List.of(target))
+            .content(new NotifyTemplateContent(null, "CAPTCHA", java.util.Map.of("code", "123456"),
+                "验证码 123456"))
+            .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
+            .build();
+        NotifyResult result = new NotifyResult("captcha-1", "sms", "sms-main", NotifyStatus.ACCEPTED,
+            List.of(NotifyTargetResult.accepted(target, "message-1", 5L)));
+
+        service.record(new NotifyDeliveryEvent(request, NotifyContext.empty(), result,
+            null, 902L, List.of(), Instant.now()));
+
+        ArgumentCaptor<SysNotifyLog> log = ArgumentCaptor.forClass(SysNotifyLog.class);
+        verify(logMapper).insert(log.capture());
+        assertAll(
+            () -> assertNull(log.getValue().getContent()),
+            () -> assertNull(log.getValue().getContentSnapshot()),
+            () -> assertNull(log.getValue().getTemplateParams())
+        );
+        ArgumentCaptor<SysNotifyDeliveryLog> delivery = ArgumentCaptor.forClass(SysNotifyDeliveryLog.class);
+        verify(deliveryMapper).insert(delivery.capture());
+        assertEquals("138****5678", delivery.getValue().getTargetValue());
+    }
 }

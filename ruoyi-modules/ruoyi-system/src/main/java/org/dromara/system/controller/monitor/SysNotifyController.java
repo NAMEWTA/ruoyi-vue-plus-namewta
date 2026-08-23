@@ -14,6 +14,7 @@ import org.dromara.system.notify.bo.SysNotifyQuery;
 import org.dromara.system.notify.service.ISysNotifyMonitorService;
 import org.dromara.system.notify.vo.SysNotifyDetailVo;
 import org.dromara.system.notify.vo.SysNotifyListVo;
+import org.dromara.system.api.OssService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -40,6 +41,13 @@ public class SysNotifyController extends BaseController {
     @GetMapping("/{notifyLogId}")
     public R<SysNotifyDetailVo> detail(@PathVariable Long notifyLogId) {
         return R.ok(monitorService.detail(notifyLogId));
+    }
+
+    @SaCheckPermission("system:notify:query")
+    @GetMapping("/{notifyLogId}/attachments/{ossId}/download-url")
+    public R<OssService.OssDownloadUrl> attachmentDownload(@PathVariable Long notifyLogId,
+                                                            @PathVariable Long ossId) {
+        return R.ok(monitorService.attachmentDownload(notifyLogId, ossId));
     }
 
     @Log(title = "通知监控", businessType = BusinessType.DELETE)

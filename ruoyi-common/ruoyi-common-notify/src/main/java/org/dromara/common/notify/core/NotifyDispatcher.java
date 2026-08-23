@@ -141,8 +141,8 @@ public final class NotifyDispatcher implements NotifyClient {
             return request;
         }
         return new NotifyRequest(request.requestId(), request.bizType(), request.bizId(), request.channel(),
-            request.providerKey(), request.targets(), request.content(), normalized, request.idempotencyKey(),
-            request.idempotencyWindow(), request.metadata());
+            request.providerKey(), request.targets(), request.content(), normalized, request.auditPolicy(),
+            request.idempotencyKey(), request.idempotencyWindow(), request.metadata());
     }
 
     private SnapshotBatch createSnapshots(NotifyRequest request, NotifyContext context) {

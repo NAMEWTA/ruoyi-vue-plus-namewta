@@ -20,6 +20,7 @@ import org.dromara.common.mail.config.properties.MailProperties;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.notify.exception.NotifyDeliveryException;
 import org.dromara.common.notify.model.NotifyDeliveryStatus;
+import org.dromara.common.notify.model.NotifyAuditPolicy;
 import org.dromara.common.notify.model.NotifyRequest;
 import org.dromara.common.notify.model.NotifyTarget;
 import org.dromara.common.notify.model.NotifyTargetResult;
@@ -85,6 +86,7 @@ public class CaptchaController {
                 .providerKey("config1")
                 .targets(List.of(NotifyTarget.phone(phoneNumber)))
                 .content(new NotifyTemplateContent(null, templateId, map, content))
+                .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
                 .idempotencyKey(captchaIdempotencyKey("sms", phoneNumber))
                 .build());
         } catch (NotifyDeliveryException ex) {
@@ -137,6 +139,7 @@ public class CaptchaController {
                 .channel("mail")
                 .targets(List.of(NotifyTarget.email(email)))
                 .content(new NotifyTextContent("登录验证码", content))
+                .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
                 .idempotencyKey(captchaIdempotencyKey("mail", email))
                 .build());
             cacheCaptchaCode(key, code);
