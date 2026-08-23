@@ -13,6 +13,7 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.redis.annotation.RepeatSubmit;
 import org.dromara.common.web.core.BaseController;
 import org.dromara.system.api.MessageService;
+import org.dromara.system.api.OssService;
 import org.dromara.system.api.domain.PushPayloadDTO;
 import org.dromara.system.domain.bo.SysNoticeBo;
 import org.dromara.system.domain.vo.SysNoticeVo;
@@ -61,6 +62,12 @@ public class SysNoticeController extends BaseController {
     @GetMapping(value = "/{noticeId}")
     public R<SysNoticeVo> getInfo(@PathVariable Long noticeId) {
         return R.ok(noticeService.selectNoticeById(noticeId));
+    }
+
+    @SaCheckPermission("system:notice:query")
+    @GetMapping(value = "/{noticeId}/attachments/download-urls")
+    public R<Map<Long, OssService.OssDownloadUrl>> attachmentDownloads(@PathVariable Long noticeId) {
+        return R.ok(noticeService.attachmentDownloads(noticeId));
     }
 
     /**

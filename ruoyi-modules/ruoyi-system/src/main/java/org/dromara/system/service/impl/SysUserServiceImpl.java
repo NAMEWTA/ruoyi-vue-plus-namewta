@@ -8,6 +8,7 @@ import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.CacheNames;
@@ -19,6 +20,7 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.query.QueryBuilder;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.system.api.UserService;
+import org.dromara.system.api.OssService;
 import org.dromara.system.api.domain.UserDTO;
 import org.dromara.system.api.model.LoginUser;
 import org.dromara.system.domain.SysUser;
@@ -65,6 +67,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     private final SysUserTypeMapper userTypeMapper;
     private final ClientSessionService clientSessionService;
     private final ISysUserTypeRelService userTypeRelService;
+    private final OssService ossService;
 
     /**
      * 分页查询用户列表。
@@ -417,9 +420,15 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @return 结果
      */
     @CacheEvict(cacheNames = CacheNames.SYS_NICKNAME, key = "#user.userId")
+    @DSTransactional
     @Override
     public int updateUserProfile(SysUserBo user) {
-        return userMapper.lambda()
+        Long previousAvatar = null;
+        if (user.getAvatar() != null) {
+            SysUser existing = userMapper.selectById(user.getUserId());
+            previousAvatar = existing == null ? null : existing.getAvatar();
+        }
+        int rows = userMapper.lambda()
             .setIfPresent(SysUser::getNickName, user.getNickName())
             .setIfPresent(SysUser::getAvatar, user.getAvatar())
             .setIfPresent(SysUser::getPhoneNumber, user.getPhoneNumber())
@@ -427,6 +436,14 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             .setIfPresent(SysUser::getGender, user.getGender())
             .eq(SysUser::getUserId, user.getUserId())
             .updateCount();
+        if (rows > 0 && user.getAvatar() != null && !Objects.equals(user.getAvatar(), previousAvatar)) {
+            String userId = String.valueOf(user.getUserId());
+            ossService.bind(user.getAvatar(), "sys_user", userId);
+            if (previousAvatar != null) {
+                ossService.unbind(previousAvatar, "sys_user", userId);
+            }
+        }
+        return rows;
     }
 
     /**

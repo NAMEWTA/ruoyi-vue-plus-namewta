@@ -4,8 +4,10 @@ import org.dromara.common.core.domain.PageResult;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.system.domain.bo.SysNoticeBo;
 import org.dromara.system.domain.vo.SysNoticeVo;
+import org.dromara.system.api.OssService;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 公告 服务层
@@ -30,6 +32,8 @@ public interface ISysNoticeService {
      * @return 公告信息
      */
     SysNoticeVo selectNoticeById(Long noticeId);
+
+    Map<Long, OssService.OssDownloadUrl> attachmentDownloads(Long noticeId);
 
     /**
      * 查询公告列表
