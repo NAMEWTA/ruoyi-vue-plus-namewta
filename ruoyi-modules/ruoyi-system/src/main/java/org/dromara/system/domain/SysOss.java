@@ -64,4 +64,9 @@ public class SysOss extends BaseEntity {
      */
     private LocalDateTime expireTime;
 
+    /**
+     * 对象删除状态（ACTIVE 正常，PENDING 等待供应商删除）。
+     */
+    private String deleteState;
+
 }

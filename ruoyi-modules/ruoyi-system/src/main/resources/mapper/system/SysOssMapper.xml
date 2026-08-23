@@ -24,6 +24,16 @@
         update sys_oss
         set is_temp = #{isTemp},
             expire_time = #{expireTime},
+            delete_state = 'ACTIVE',
+            update_time = now()
+        where oss_id = #{ossId}
+    </update>
+
+    <update id="markDeletePending">
+        update sys_oss
+        set is_temp = 'Y',
+            expire_time = #{expireTime},
+            delete_state = 'PENDING',
             update_time = now()
         where oss_id = #{ossId}
     </update>

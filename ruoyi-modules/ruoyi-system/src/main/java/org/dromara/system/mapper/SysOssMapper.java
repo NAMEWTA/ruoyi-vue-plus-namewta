@@ -23,6 +23,8 @@ public interface SysOssMapper extends BaseMapperPlus<SysOss, SysOssVo> {
     int updateLifecycle(@Param("ossId") Long ossId, @Param("isTemp") String isTemp,
                         @Param("expireTime") LocalDateTime expireTime);
 
+    int markDeletePending(@Param("ossId") Long ossId, @Param("expireTime") LocalDateTime expireTime);
+
     List<Long> selectExpiredTempIds(@Param("expireTime") LocalDateTime expireTime,
                                     @Param("limit") int limit);
 }

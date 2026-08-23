@@ -29,7 +29,7 @@ public class OssTempCleanupTask {
             try {
                 boolean matched = manager.cleanupExpired(ossId, now, properties.isCleanupDryRun());
                 if (matched) {
-                    log.info("OSS 临时对象清理{}: ossId={}", properties.isCleanupDryRun() ? "待执行" : "完成", ossId);
+                    log.info("OSS 临时对象清理{}: ossId={}", properties.isCleanupDryRun() ? "待执行" : "已处理", ossId);
                 }
             } catch (RuntimeException e) {
                 log.error("OSS 临时对象清理失败: ossId={}", ossId, e);

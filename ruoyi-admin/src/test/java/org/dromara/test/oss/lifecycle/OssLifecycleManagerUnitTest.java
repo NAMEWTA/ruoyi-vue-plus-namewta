@@ -68,6 +68,21 @@ class OssLifecycleManagerUnitTest {
     }
 
     @Test
+    void existingBindShouldCancelPendingDeletion() {
+        Fixture fixture = fixture();
+        SysOss pending = oss(10L, "Y", LocalDateTime.now().minusMinutes(1));
+        pending.setDeleteState("PENDING");
+        when(fixture.ossMapper.selectByIdForUpdate(10L)).thenReturn(pending);
+        when(fixture.refMapper.countActiveByOssId(10L)).thenReturn(1L);
+        when(fixture.refMapper.existsActive(10L, "biz_contract", "100")).thenReturn(true);
+
+        OssService.OssReferenceState state = fixture.manager.bind(10L, "biz_contract", "100");
+
+        assertFalse(state.temporary());
+        verify(fixture.ossMapper).updateLifecycle(10L, "N", null);
+    }
+
+    @Test
     void shouldRejectNonPhysicalReferenceBeforeDatabaseAccess() {
         Fixture fixture = fixture();
 
@@ -99,6 +114,21 @@ class OssLifecycleManagerUnitTest {
     }
 
     @Test
+    void missingOrRepeatedUnbindMustNotChangeLifecycle() {
+        Fixture fixture = fixture();
+        LocalDateTime existingExpiry = LocalDateTime.now().plusHours(3);
+        when(fixture.ossMapper.selectByIdForUpdate(10L)).thenReturn(oss(10L, "Y", existingExpiry));
+        when(fixture.refMapper.countActiveByOssId(10L)).thenReturn(0L);
+        when(fixture.refMapper.existsActive(10L, "biz_contract", "100")).thenReturn(false);
+
+        OssService.OssReferenceState state = fixture.manager.unbind(10L, "biz_contract", "100");
+
+        assertTrue(state.temporary());
+        assertEquals(existingExpiry, state.expireTime());
+        verify(fixture.ossMapper, never()).updateLifecycle(anyLong(), anyString(), any());
+    }
+
+    @Test
     void shouldRejectDeletingReferencedObjectBeforeProviderCall() {
         Fixture fixture = fixture();
         SysOss oss = oss(10L, "N", null);
@@ -114,17 +144,50 @@ class OssLifecycleManagerUnitTest {
     }
 
     @Test
-    void shouldLockAndRecheckBeforeDeletingExpiredTempObject() {
+    void manualDeleteShouldOnlyPersistPendingState() {
+        Fixture fixture = fixture();
+        SysOss oss = oss(10L, "N", null);
+        when(fixture.ossMapper.selectByIdsForUpdate(List.of(10L))).thenReturn(List.of(oss));
+        when(fixture.refMapper.countActiveByOssId(10L)).thenReturn(0L);
+
+        assertTrue(fixture.manager.deleteObjects(List.of(10L)));
+
+        verify(fixture.ossMapper).markDeletePending(eq(10L), any(LocalDateTime.class));
+        verifyNoInteractions(fixture.objectStore);
+        verify(fixture.ossMapper, never()).deleteByIds(anyCollection());
+    }
+
+    @Test
+    void shouldPersistPendingStateBeforeDeletingExpiredTempObject() {
         Fixture fixture = fixture();
         LocalDateTime now = LocalDateTime.now();
         SysOss oss = oss(10L, "Y", now.minusMinutes(1));
         when(fixture.ossMapper.selectByIdForUpdate(10L)).thenReturn(oss);
         when(fixture.refMapper.countActiveByOssId(10L)).thenReturn(0L);
+
+        boolean pending = fixture.manager.cleanupExpired(10L, now, false);
+
+        assertTrue(pending);
+        InOrder order = inOrder(fixture.ossMapper, fixture.refMapper, fixture.objectStore);
+        order.verify(fixture.ossMapper).selectByIdForUpdate(10L);
+        order.verify(fixture.refMapper).countActiveByOssId(10L);
+        order.verify(fixture.ossMapper).markDeletePending(10L, now);
+        verifyNoInteractions(fixture.objectStore);
+        verify(fixture.ossMapper, never()).deleteById(anyLong());
+    }
+
+    @Test
+    void shouldDeleteProviderOnlyAfterPendingStateWasCommitted() {
+        Fixture fixture = fixture();
+        LocalDateTime now = LocalDateTime.now();
+        SysOss oss = oss(10L, "Y", now.minusMinutes(1));
+        oss.setDeleteState("PENDING");
+        when(fixture.ossMapper.selectByIdForUpdate(10L)).thenReturn(oss);
+        when(fixture.refMapper.countActiveByOssId(10L)).thenReturn(0L);
         when(fixture.ossMapper.deleteById(10L)).thenReturn(1);
 
-        boolean deleted = fixture.manager.cleanupExpired(10L, now, false);
+        assertTrue(fixture.manager.cleanupExpired(10L, now, false));
 
-        assertTrue(deleted);
         InOrder order = inOrder(fixture.ossMapper, fixture.refMapper, fixture.objectStore);
         order.verify(fixture.ossMapper).selectByIdForUpdate(10L);
         order.verify(fixture.refMapper).countActiveByOssId(10L);
@@ -150,6 +213,7 @@ class OssLifecycleManagerUnitTest {
         Fixture fixture = fixture();
         LocalDateTime now = LocalDateTime.now();
         SysOss oss = oss(10L, "Y", now.minusMinutes(1));
+        oss.setDeleteState("PENDING");
         when(fixture.ossMapper.selectByIdForUpdate(10L)).thenReturn(oss);
         when(fixture.refMapper.countActiveByOssId(10L)).thenReturn(0L);
         doThrow(new OssLifecycleException(OssLifecycleError.PROVIDER_DELETE_FAILED, "failed"))
@@ -179,6 +243,20 @@ class OssLifecycleManagerUnitTest {
     }
 
     @Test
+    void shouldRejectDownloadWhileDeletionIsPending() {
+        Fixture fixture = fixture();
+        SysOss pending = oss(10L, "Y", LocalDateTime.now());
+        pending.setDeleteState("PENDING");
+        when(fixture.ossMapper.selectById(10L)).thenReturn(pending);
+
+        OssLifecycleException exception = assertThrows(OssLifecycleException.class,
+            () -> fixture.manager.presignDownload(10L));
+
+        assertEquals(OssLifecycleError.OBJECT_DELETE_PENDING, exception.error());
+        verifyNoInteractions(fixture.objectStore);
+    }
+
+    @Test
     void lifecycleDefaultsRequireExplicitCleanupEnablement() {
         OssLifecycleProperties properties = new OssLifecycleProperties();
 
@@ -205,6 +283,7 @@ class OssLifecycleManagerUnitTest {
         oss.setService("minio");
         oss.setIsTemp(temporary);
         oss.setExpireTime(expireTime);
+        oss.setDeleteState("ACTIVE");
         return oss;
     }
 

@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class OssLifecycleManager {
 
+    private static final String DELETE_PENDING = "PENDING";
     private static final Pattern PHYSICAL_TABLE = Pattern.compile("[a-z][a-z0-9_]{0,63}");
     private static final Pattern PHYSICAL_ID = Pattern.compile("[^\\s]{1,64}");
 
@@ -52,7 +53,8 @@ public class OssLifecycleManager {
             }
             before++;
         }
-        if ("Y".equals(oss.getIsTemp()) || oss.getExpireTime() != null) {
+        if ("Y".equals(oss.getIsTemp()) || oss.getExpireTime() != null
+            || DELETE_PENDING.equals(oss.getDeleteState())) {
             ossMapper.updateLifecycle(ossId, "N", null);
         }
         return new OssService.OssReferenceState(ossId, false, null, before);
@@ -63,10 +65,13 @@ public class OssLifecycleManager {
         validateReference(refType, refId);
         SysOss oss = requireLocked(ossId);
         long count = refMapper.countActiveByOssId(ossId);
-        if (refMapper.existsActive(ossId, refType, refId)
-            && refMapper.deactivateReference(ossId, refType, refId) > 0) {
-            count--;
+        boolean deactivated = refMapper.existsActive(ossId, refType, refId)
+            && refMapper.deactivateReference(ossId, refType, refId) > 0;
+        if (!deactivated) {
+            return new OssService.OssReferenceState(ossId, "Y".equals(oss.getIsTemp()),
+                oss.getExpireTime(), count);
         }
+        count--;
         if (count == 0) {
             LocalDateTime expireTime = LocalDateTime.now().plus(properties.getTempRetention());
             ossMapper.updateLifecycle(ossId, "Y", expireTime);
@@ -86,6 +91,10 @@ public class OssLifecycleManager {
 
     public OssService.OssDownloadUrl presignDownload(Long ossId) {
         SysOss oss = require(ossId);
+        if (DELETE_PENDING.equals(oss.getDeleteState())) {
+            throw new OssLifecycleException(OssLifecycleError.OBJECT_DELETE_PENDING,
+                "OSS 对象正在删除: " + ossId);
+        }
         OssPresignedRequest request = objectStore.presign(oss, properties.getDownloadTtl());
         return new OssService.OssDownloadUrl(request.url(), request.expiresAt(), oss.getOriginalName());
     }
@@ -107,10 +116,11 @@ public class OssLifecycleManager {
                     "OSS 对象仍被业务数据引用: " + oss.getOssId());
             }
         }
+        LocalDateTime now = LocalDateTime.now();
         for (SysOss oss : objects) {
-            objectStore.delete(oss);
+            ossMapper.markDeletePending(oss.getOssId(), now);
         }
-        return ossMapper.deleteByIds(orderedIds) > 0;
+        return true;
     }
 
     @DSTransactional
@@ -124,6 +134,10 @@ public class OssLifecycleManager {
             return false;
         }
         if (dryRun) {
+            return true;
+        }
+        if (!DELETE_PENDING.equals(oss.getDeleteState())) {
+            ossMapper.markDeletePending(ossId, now);
             return true;
         }
         objectStore.delete(oss);
