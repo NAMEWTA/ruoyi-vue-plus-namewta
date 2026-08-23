@@ -125,7 +125,8 @@ public class SysNoticeServiceImpl implements ISysNoticeService {
         int rows = noticeMapper.insert(notice);
         bo.setNoticeId(notice.getNoticeId());
         if (rows > 0) {
-            bindAll(ossIds(bo.getNoticeContent()), notice.getNoticeId());
+            ossService.reconcileReferences(NOTICE_TABLE, String.valueOf(notice.getNoticeId()),
+                Set.of(), ossIds(bo.getNoticeContent()));
         }
         return rows;
     }
@@ -143,8 +144,9 @@ public class SysNoticeServiceImpl implements ISysNoticeService {
         SysNotice notice = MapstructUtils.convert(bo, SysNotice.class);
         int rows = noticeMapper.updateById(notice);
         if (rows > 0) {
-            reconcile(existing == null ? Set.of() : ossIds(existing.getNoticeContent()),
-                ossIds(bo.getNoticeContent()), bo.getNoticeId());
+            ossService.reconcileReferences(NOTICE_TABLE, String.valueOf(bo.getNoticeId()),
+                existing == null ? Set.of() : ossIds(existing.getNoticeContent()),
+                ossIds(bo.getNoticeContent()));
         }
         return rows;
     }
@@ -161,7 +163,8 @@ public class SysNoticeServiceImpl implements ISysNoticeService {
         SysNotice existing = noticeMapper.selectById(noticeId);
         int rows = noticeMapper.deleteById(noticeId);
         if (rows > 0 && existing != null) {
-            unbindAll(ossIds(existing.getNoticeContent()), noticeId);
+            ossService.reconcileReferences(NOTICE_TABLE, String.valueOf(noticeId),
+                ossIds(existing.getNoticeContent()), Set.of());
         }
         return rows;
     }
@@ -179,7 +182,8 @@ public class SysNoticeServiceImpl implements ISysNoticeService {
         List<SysNotice> existing = noticeMapper.selectBatchIds(ids);
         int rows = noticeMapper.deleteByIds(ids);
         if (rows > 0) {
-            existing.forEach(notice -> unbindAll(ossIds(notice.getNoticeContent()), notice.getNoticeId()));
+            existing.forEach(notice -> ossService.reconcileReferences(NOTICE_TABLE,
+                String.valueOf(notice.getNoticeId()), ossIds(notice.getNoticeContent()), Set.of()));
         }
         return rows;
     }
@@ -196,24 +200,4 @@ public class SysNoticeServiceImpl implements ISysNoticeService {
         return ids;
     }
 
-    private void reconcile(Set<Long> previous, Set<Long> current, Long noticeId) {
-        current.stream().filter(id -> !previous.contains(id)).forEach(id -> bind(id, noticeId));
-        previous.stream().filter(id -> !current.contains(id)).forEach(id -> unbind(id, noticeId));
-    }
-
-    private void bindAll(Set<Long> ids, Long noticeId) {
-        ids.forEach(id -> bind(id, noticeId));
-    }
-
-    private void unbindAll(Set<Long> ids, Long noticeId) {
-        ids.forEach(id -> unbind(id, noticeId));
-    }
-
-    private void bind(Long ossId, Long noticeId) {
-        ossService.bind(ossId, NOTICE_TABLE, String.valueOf(noticeId));
-    }
-
-    private void unbind(Long ossId, Long noticeId) {
-        ossService.unbind(ossId, NOTICE_TABLE, String.valueOf(noticeId));
-    }
 }

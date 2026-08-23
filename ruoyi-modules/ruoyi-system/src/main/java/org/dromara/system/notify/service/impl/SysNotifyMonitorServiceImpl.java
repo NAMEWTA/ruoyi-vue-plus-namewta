@@ -70,9 +70,8 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
                     request.auditPolicy(), context.userId(), occurredAt));
             }
         }
-        for (Long ossId : event.attachmentSnapshotOssIds()) {
-            ossService.bind(ossId, NOTIFY_LOG_TABLE, String.valueOf(notifyLogId));
-        }
+        ossService.reconcileReferences(NOTIFY_LOG_TABLE, String.valueOf(notifyLogId),
+            List.of(), event.attachmentSnapshotOssIds());
     }
 
     @Override
@@ -146,13 +145,15 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
         }
         List<SysNotifyLog> logs = logMapper.selectBatchIds(ids).stream()
             .sorted(Comparator.comparing(SysNotifyLog::getNotifyLogId)).toList();
-        for (SysNotifyLog log : logs) {
-            for (Long ossId : parseOssIds(log.getAttachmentOssIds())) {
-                ossService.unbind(ossId, NOTIFY_LOG_TABLE, String.valueOf(log.getNotifyLogId()));
+        deliveryMapper.physicalDeleteByNotifyLogIds(ids);
+        int rows = logMapper.physicalDeleteByIds(ids);
+        if (rows > 0) {
+            for (SysNotifyLog log : logs) {
+                ossService.reconcileReferences(NOTIFY_LOG_TABLE, String.valueOf(log.getNotifyLogId()),
+                    parseOssIds(log.getAttachmentOssIds()), List.of());
             }
         }
-        deliveryMapper.physicalDeleteByNotifyLogIds(ids);
-        return logMapper.physicalDeleteByIds(ids);
+        return rows;
     }
 
     @Override

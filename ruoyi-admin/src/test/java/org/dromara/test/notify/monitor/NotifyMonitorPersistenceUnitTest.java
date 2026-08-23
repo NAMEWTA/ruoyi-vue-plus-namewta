@@ -66,7 +66,7 @@ class NotifyMonitorPersistenceUnitTest {
         verify(deliveryMapper, times(2)).insert(delivery.capture());
         assertEquals(List.of("13812345678", "secret@example.com"),
             delivery.getAllValues().stream().map(SysNotifyDeliveryLog::getTargetValue).toList());
-        verify(ossService).bind(77L, "sys_notify_log", "900");
+        verify(ossService).reconcileReferences("sys_notify_log", "900", List.of(), List.of(77L));
     }
 
     @Test
@@ -90,7 +90,7 @@ class NotifyMonitorPersistenceUnitTest {
         assertNull(log.getValue().getClientPk());
         assertEquals(-1L, log.getValue().getCreateBy());
         verify(deliveryMapper, never()).insert(any(SysNotifyDeliveryLog.class));
-        verifyNoInteractions(ossService);
+        verify(ossService).reconcileReferences("sys_notify_log", "901", List.of(), List.of());
     }
 
     @Test

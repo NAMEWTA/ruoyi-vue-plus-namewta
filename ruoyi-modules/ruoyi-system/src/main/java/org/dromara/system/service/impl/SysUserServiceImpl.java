@@ -57,6 +57,8 @@ import java.util.*;
 @Service
 public class SysUserServiceImpl implements ISysUserService, UserService {
 
+    private static final String USER_TABLE = "sys_user";
+
     private final SysUserMapper userMapper;
     private final SysDeptMapper deptMapper;
     private final SysRoleMapper roleMapper;
@@ -315,7 +317,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @return 结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int insertUser(SysUserBo user) {
         SysUser sysUser = MapstructUtils.convert(user, SysUser.class);
         // 新增用户信息
@@ -326,6 +328,9 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         insertUserPost(user, false);
         // 新增用户与角色管理
         insertUserRole(user, false);
+        if (rows > 0) {
+            reconcileAvatarReferences(user.getUserId(), null, user.getAvatar());
+        }
         return rows;
     }
 
@@ -336,6 +341,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @return 结果
      */
     @Override
+    @DSTransactional
     public boolean registerUser(SysUserBo user) {
         user.setCreateBy(0L);
         user.setUpdateBy(0L);
@@ -343,6 +349,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         boolean flag = userMapper.insert(sysUser) > 0;
         if (flag) {
             user.setUserId(sysUser.getUserId());
+            reconcileAvatarReferences(user.getUserId(), null, user.getAvatar());
         }
         return flag;
     }
@@ -355,8 +362,13 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      */
     @Override
     @CacheEvict(cacheNames = CacheNames.SYS_NICKNAME, key = "#user.userId")
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int updateUser(SysUserBo user) {
+        Long previousAvatar = null;
+        if (user.getAvatar() != null) {
+            SysUser existing = userMapper.selectById(user.getUserId());
+            previousAvatar = existing == null ? null : existing.getAvatar();
+        }
         if (user.getUserTypeIds() != null) {
             userTypeRelService.coverUserTypes(user.getUserId(), user.getUserTypeIds(), UserTypeGrantSource.ADMIN_GRANT);
         }
@@ -372,6 +384,9 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         }
         if (SystemConstants.DISABLE.equals(sysUser.getStatus())) {
             kickoutUserTypes(user.getUserId(), userTypeRelService.selectByUserId(user.getUserId()));
+        }
+        if (user.getAvatar() != null) {
+            reconcileAvatarReferences(user.getUserId(), previousAvatar, user.getAvatar());
         }
         return flag;
     }
@@ -436,12 +451,8 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             .setIfPresent(SysUser::getGender, user.getGender())
             .eq(SysUser::getUserId, user.getUserId())
             .updateCount();
-        if (rows > 0 && user.getAvatar() != null && !Objects.equals(user.getAvatar(), previousAvatar)) {
-            String userId = String.valueOf(user.getUserId());
-            ossService.bind(user.getAvatar(), "sys_user", userId);
-            if (previousAvatar != null) {
-                ossService.unbind(previousAvatar, "sys_user", userId);
-            }
+        if (rows > 0 && user.getAvatar() != null) {
+            reconcileAvatarReferences(user.getUserId(), previousAvatar, user.getAvatar());
         }
         return rows;
     }
@@ -632,8 +643,9 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @return 结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteUserById(Long userId) {
+        SysUser existing = userMapper.selectById(userId);
         List<SysUserTypeRelVo> userTypes = userTypeRelService.selectByUserId(userId);
         // 删除用户与角色关联
         userRoleMapper.lambda().eq(SysUserRole::getUserId, userId).delete();
@@ -646,6 +658,9 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (flag < 1) {
             throw new ServiceException("删除用户失败!");
         }
+        if (existing != null) {
+            reconcileAvatarReferences(userId, existing.getAvatar(), null);
+        }
         return flag;
     }
 
@@ -656,13 +671,14 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @return 结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteUserByIds(Long[] userIds) {
         for (Long userId : userIds) {
             checkUserAllowed(userId);
             checkUserDataScope(userId);
         }
         List<Long> ids = List.of(userIds);
+        List<SysUser> existingUsers = userMapper.selectBatchIds(ids);
         List<SysUserTypeRelVo> userTypes = userTypeRelService.selectByUserIds(ids);
         // 删除用户与角色关联
         userRoleMapper.lambda().in(SysUserRole::getUserId, ids).delete();
@@ -678,7 +694,19 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (flag < 1) {
             throw new ServiceException("删除用户失败!");
         }
+        for (SysUser existing : existingUsers) {
+            reconcileAvatarReferences(existing.getUserId(), existing.getAvatar(), null);
+        }
         return flag;
+    }
+
+    private void reconcileAvatarReferences(Long userId, Long previousAvatar, Long currentAvatar) {
+        ossService.reconcileReferences(USER_TABLE, String.valueOf(userId),
+            avatarOssIds(previousAvatar), avatarOssIds(currentAvatar));
+    }
+
+    private List<Long> avatarOssIds(Long avatar) {
+        return avatar == null ? List.of() : List.of(avatar);
     }
 
     /**

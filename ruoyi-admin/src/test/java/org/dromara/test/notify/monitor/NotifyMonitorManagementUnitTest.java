@@ -72,7 +72,7 @@ class NotifyMonitorManagementUnitTest {
     }
 
     @Test
-    void removeUnbindsEverySnapshotBeforeDeletingChildrenAndParents() {
+    void removeReconcilesEverySnapshotAfterDeletingChildrenAndParents() {
         SysNotifyLog first = log(100L, "[77,78]");
         SysNotifyLog second = log(101L, "[]");
         when(logMapper.selectBatchIds(List.of(100L, 101L))).thenReturn(List.of(first, second));
@@ -81,8 +81,8 @@ class NotifyMonitorManagementUnitTest {
         int removed = service.remove(List.of(101L, 100L, 100L));
 
         assertEquals(2, removed);
-        verify(ossService).unbind(77L, "sys_notify_log", "100");
-        verify(ossService).unbind(78L, "sys_notify_log", "100");
+        verify(ossService).reconcileReferences("sys_notify_log", "100", List.of(77L, 78L), List.of());
+        verify(ossService).reconcileReferences("sys_notify_log", "101", List.of(), List.of());
         verify(deliveryMapper).physicalDeleteByNotifyLogIds(List.of(100L, 101L));
         verify(logMapper).physicalDeleteByIds(List.of(100L, 101L));
     }
