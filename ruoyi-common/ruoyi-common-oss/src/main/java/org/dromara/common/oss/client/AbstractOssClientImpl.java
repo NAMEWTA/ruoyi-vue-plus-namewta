@@ -13,6 +13,7 @@ import org.dromara.common.oss.model.HandleAsyncResult;
 import org.dromara.common.oss.model.Options;
 import org.dromara.common.oss.model.OssChecksumAlgorithm;
 import org.dromara.common.oss.model.OssClientCapabilities;
+import org.dromara.common.oss.model.OssBucketConfiguration;
 import org.dromara.common.oss.model.OssCompletedPart;
 import org.dromara.common.oss.model.OssCopyResult;
 import org.dromara.common.oss.model.OssMultipartCompleteResult;
@@ -989,6 +990,49 @@ public abstract class AbstractOssClientImpl implements OssClient {
     @Override
     public OssClientCapabilities capabilities() {
         return OssClientCapabilities.s3CompatibleBaseline();
+    }
+
+    @Override
+    public OssBucketConfiguration bucketConfiguration() {
+        String bucket = config.bucket()
+            .filter(value -> !value.isBlank())
+            .orElseThrow(() -> S3StorageException.form("bucket is not configured."));
+        List<String> issues = new ArrayList<>();
+        boolean explicitOrigins = false;
+        boolean allowsPut = false;
+        boolean exposesEtag = false;
+        boolean abortIncomplete = false;
+        try {
+            var cors = s3AsyncClient.getBucketCors(builder -> builder.bucket(bucket)).join();
+            explicitOrigins = cors.corsRules().stream()
+                .flatMap(rule -> rule.allowedOrigins().stream())
+                .anyMatch(origin -> !"*".equals(origin));
+            allowsPut = cors.corsRules().stream()
+                .flatMap(rule -> rule.allowedMethods().stream())
+                .anyMatch("PUT"::equalsIgnoreCase);
+            exposesEtag = cors.corsRules().stream()
+                .flatMap(rule -> rule.exposeHeaders().stream())
+                .anyMatch("ETag"::equalsIgnoreCase);
+        } catch (RuntimeException ex) {
+            issues.add("无法读取 Bucket CORS: " + rootMessage(ex));
+        }
+        try {
+            var lifecycle = s3AsyncClient.getBucketLifecycleConfiguration(builder -> builder.bucket(bucket)).join();
+            abortIncomplete = lifecycle.rules().stream()
+                .anyMatch(rule -> rule.status() == software.amazon.awssdk.services.s3.model.ExpirationStatus.ENABLED
+                    && rule.abortIncompleteMultipartUpload() != null);
+        } catch (RuntimeException ex) {
+            issues.add("无法读取 Bucket Lifecycle: " + rootMessage(ex));
+        }
+        return new OssBucketConfiguration(bucket, explicitOrigins, allowsPut, exposesEtag, abortIncomplete, issues);
+    }
+
+    private String rootMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        return StringUtils.defaultIfBlank(current.getMessage(), current.getClass().getSimpleName());
     }
 
     @Override

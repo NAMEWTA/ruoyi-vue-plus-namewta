@@ -7,6 +7,7 @@ import org.dromara.common.oss.model.GetObjectResult;
 import org.dromara.common.oss.model.HandleAsyncResult;
 import org.dromara.common.oss.model.Options;
 import org.dromara.common.oss.model.OssClientCapabilities;
+import org.dromara.common.oss.model.OssBucketConfiguration;
 import org.dromara.common.oss.model.OssCompletedPart;
 import org.dromara.common.oss.model.OssCopyResult;
 import org.dromara.common.oss.model.OssMultipartCompleteResult;
@@ -387,6 +388,11 @@ public interface OssClient extends AutoCloseable {
      * @return 能力快照
      */
     OssClientCapabilities capabilities();
+
+    /**
+     * 只读检查默认 Bucket 的浏览器直传前置配置。
+     */
+    OssBucketConfiguration bucketConfiguration();
 
     /**
      * 生成指定存储桶对象的结构化下载预签名请求。

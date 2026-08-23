@@ -1,6 +1,7 @@
 package org.dromara.system.oss.upload;
 
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.oss.factory.OssFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,27 @@ public class OssUploadDiagnostics {
 
     @EventListener(ApplicationReadyEvent.class)
     public void report() {
-        requirements().forEach(requirement -> log.warn("OSS Direct Upload 运维前置检查: {}", requirement));
+        try {
+            var result = OssFactory.instance().bucketConfiguration();
+            if (result.compliant()) {
+                log.info("OSS Direct Upload Bucket [{}] 前置配置检查通过", result.bucket());
+                return;
+            }
+            if (!result.explicitCorsOrigins()) {
+                log.warn("OSS Direct Upload Bucket [{}] CORS 未配置明确 Origin", result.bucket());
+            }
+            if (!result.corsAllowsPut()) {
+                log.warn("OSS Direct Upload Bucket [{}] CORS 未允许 PUT", result.bucket());
+            }
+            if (!result.corsExposesEtag()) {
+                log.warn("OSS Direct Upload Bucket [{}] CORS 未暴露 ETag", result.bucket());
+            }
+            if (!result.abortIncompleteMultipartUpload()) {
+                log.warn("OSS Direct Upload Bucket [{}] 未配置 AbortIncompleteMultipartUpload", result.bucket());
+            }
+            result.issues().forEach(issue -> log.warn("OSS Direct Upload Bucket [{}]: {}", result.bucket(), issue));
+        } catch (RuntimeException ex) {
+            log.error("OSS Direct Upload 默认 Bucket 前置配置检查失败: {}", ex.getMessage());
+        }
     }
 }
