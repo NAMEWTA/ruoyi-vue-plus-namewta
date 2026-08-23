@@ -1,5 +1,6 @@
 package org.dromara.demo.controller;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.notify.core.NotifyClient;
@@ -48,6 +49,7 @@ public class MailSendController {
      * @param text    内容
      */
     @GetMapping("/sendMessageWithAttachment")
+    @SaCheckPermission("system:oss:download")
     public R<Void> sendMessageWithAttachment(String to, String subject, String text, Long ossId) {
         send(to, subject, text, List.of(ossId));
         return R.ok();
@@ -61,6 +63,7 @@ public class MailSendController {
      * @param text    内容
      */
     @GetMapping("/sendMessageWithAttachments")
+    @SaCheckPermission("system:oss:download")
     public R<Void> sendMessageWithAttachments(String to, String subject, String text, List<Long> ossIds) {
         send(to, subject, text, ossIds);
         return R.ok();
