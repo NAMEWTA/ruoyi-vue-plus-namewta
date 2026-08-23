@@ -86,30 +86,6 @@
             <artifactId>ruoyi-system</artifactId>
         </dependency>
 
-        <!-- 调度任务模块 -->
-        <dependency>
-            <groupId>org.dromara</groupId>
-            <artifactId>ruoyi-job</artifactId>
-        </dependency>
-
-        <!-- AI业务模块 -->
-        <dependency>
-            <groupId>org.dromara</groupId>
-            <artifactId>ruoyi-ai</artifactId>
-        </dependency>
-
-        <!--  demo模块  -->
-        <dependency>
-            <groupId>org.dromara</groupId>
-            <artifactId>ruoyi-demo</artifactId>
-        </dependency>
-
-        <!--  工作流模块  -->
-        <dependency>
-            <groupId>org.dromara</groupId>
-            <artifactId>ruoyi-workflow</artifactId>
-        </dependency>
-
         <!-- Spring Boot Admin 客户端 -->
         <dependency>
             <groupId>de.codecentric</groupId>
@@ -139,21 +115,59 @@
 
 
     <profiles>
-        <!-- 仅在激活 'gen' profile 时，才引入代码生成模块 -->
+        <!-- 默认全量部署组合；显式激活其他 bundle-* profile 时自动停用 -->
         <profile>
-            <id>gen</id>
+            <id>bundle-full</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
             <dependencies>
-                <!-- 代码生成-->
+                <!-- 调度任务模块 -->
+                <dependency>
+                    <groupId>org.dromara</groupId>
+                    <artifactId>ruoyi-job</artifactId>
+                </dependency>
+
+                <!-- AI业务模块 -->
+                <dependency>
+                    <groupId>org.dromara</groupId>
+                    <artifactId>ruoyi-ai</artifactId>
+                </dependency>
+
+                <!-- demo模块 -->
+                <dependency>
+                    <groupId>org.dromara</groupId>
+                    <artifactId>ruoyi-demo</artifactId>
+                </dependency>
+
+                <!-- 工作流模块 -->
+                <dependency>
+                    <groupId>org.dromara</groupId>
+                    <artifactId>ruoyi-workflow</artifactId>
+                </dependency>
+
+                <!-- 代码生成模块 -->
                 <dependency>
                     <groupId>org.dromara</groupId>
                     <artifactId>ruoyi-gen</artifactId>
                 </dependency>
             </dependencies>
-            <activation>
-                <!-- 默认激活 -->
-                <activeByDefault>true</activeByDefault>
-            </activation>
         </profile>
+
+        <!--
+            独立部署组合示例：复制并取消注释后，在 dependencies 中明确列出所需业务模块。
+            所有组合都会继承上方 dependencies 中的 API、系统、认证和通用 Web 基础能力。
+
+        <profile>
+            <id>bundle-platform-x</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.dromara</groupId>
+                    <artifactId>ruoyi-your-business-module</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
+        -->
     </profiles>
 
     <build>
