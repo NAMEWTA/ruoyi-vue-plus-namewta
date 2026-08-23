@@ -5,6 +5,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.yulichang.wrapper.MPJLambdaWrapper;
 import lombok.RequiredArgsConstructor;
@@ -238,7 +239,7 @@ public class FlwInstanceServiceImpl implements IFlwInstanceService {
      * @return 删除成功返回 {@code true}，未找到实例时返回 {@code false}
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public boolean deleteHisByInstanceIds(Collection<Long> instanceIds) {
         InstanceDeleteContext context = InstanceDeleteContext.byHistoryInstanceIds(instanceIds);
         LiteFlowUtils.execute(DELETE_INSTANCE_CHAIN, context);

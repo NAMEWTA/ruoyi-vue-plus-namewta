@@ -15,6 +15,7 @@ import org.dromara.warm.flow.orm.mapper.FlowTaskMapper;
 import org.dromara.workflow.common.ConditionalOnEnable;
 import org.dromara.workflow.common.enums.TaskStatusEnum;
 import org.dromara.workflow.domain.context.InstanceDeleteContext;
+import org.dromara.workflow.oss.WorkflowHistoryOssOwner;
 
 import java.util.List;
 import java.util.Objects;
@@ -32,6 +33,7 @@ public class InstanceDeleteExecuteComponent extends NodeComponent {
     private final InsService insService;
     private final FlowHisTaskMapper flowHisTaskMapper;
     private final FlowTaskMapper flowTaskMapper;
+    private final WorkflowHistoryOssOwner historyOssOwner;
 
     @Override
     public void process() {
@@ -48,6 +50,7 @@ public class InstanceDeleteExecuteComponent extends NodeComponent {
             FlowEngine.userService().deleteByTaskIds(StreamUtils.toList(flowTaskList, FlowTask::getId));
         }
         FlowEngine.taskService().deleteByInsIds(context.getDeleteInstanceIds());
+        historyOssOwner.releaseByInstanceIds(context.getDeleteInstanceIds());
         FlowEngine.hisTaskService().deleteByInsIds(context.getDeleteInstanceIds());
         FlowEngine.insService().removeByIds(context.getDeleteInstanceIds());
         context.setResult(true);

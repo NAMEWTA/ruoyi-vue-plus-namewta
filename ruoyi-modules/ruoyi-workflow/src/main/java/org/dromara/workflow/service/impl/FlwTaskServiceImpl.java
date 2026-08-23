@@ -5,6 +5,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.lock.annotation.Lock4j;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,7 @@ import org.dromara.workflow.domain.vo.NodeExtVo;
 import org.dromara.workflow.mapper.FlwCategoryMapper;
 import org.dromara.workflow.mapper.FlwHisTaskMapper;
 import org.dromara.workflow.mapper.FlwTaskMapper;
+import org.dromara.workflow.oss.WorkflowHistoryOssOwner;
 import org.dromara.workflow.service.IFlwCommonService;
 import org.dromara.workflow.service.IFlwNodeExtService;
 import org.dromara.workflow.service.IFlwTaskAssigneeService;
@@ -95,6 +97,7 @@ public class FlwTaskServiceImpl implements IFlwTaskService {
     private final IFlwTaskAssigneeService flwTaskAssigneeService;
     private final IFlwCommonService flwCommonService;
     private final IFlwNodeExtService flwNodeExtService;
+    private final WorkflowHistoryOssOwner historyOssOwner;
 
     /**
      * 启动任务
@@ -118,7 +121,7 @@ public class FlwTaskServiceImpl implements IFlwTaskService {
      * @return 办理成功返回 {@code true}
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     @Lock4j(keys = {"#completeTaskBo.taskId"})
     public boolean completeTask(CompleteTaskBo completeTaskBo) {
         // 办理任务的业务编排交给 LiteFlow 链路，当前方法只保留事务、锁和异常透传边界。
@@ -285,7 +288,7 @@ public class FlwTaskServiceImpl implements IFlwTaskService {
      * @return 驳回成功返回 {@code true}
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public boolean backProcess(BackProcessBo bo) {
         Long taskId = bo.getTaskId();
         String notice = bo.getNotice();
@@ -315,7 +318,9 @@ public class FlwTaskServiceImpl implements IFlwTaskService {
             .flowStatus(applyNodeCode.equals(bo.getNodeCode()) ? TaskStatusEnum.BACK.getStatus() : TaskStatusEnum.WAITING.getStatus())
             .hisStatus(TaskStatusEnum.BACK.getStatus())
             .hisTaskExt(bo.getFileId());
+        WorkflowHistoryOssOwner.PendingHistoryAttachments pending = historyOssOwner.capture(task.getId(), bo.getFileId());
         taskService.skip(task.getId(), flowParams);
+        historyOssOwner.reconcileCreated(pending);
         return true;
     }
 

@@ -12,6 +12,7 @@ import org.dromara.workflow.common.ConditionalOnEnable;
 import org.dromara.workflow.common.enums.TaskStatusEnum;
 import org.dromara.workflow.domain.bo.CompleteTaskBo;
 import org.dromara.workflow.domain.context.CompleteTaskContext;
+import org.dromara.workflow.oss.WorkflowHistoryOssOwner;
 
 import java.util.Map;
 
@@ -28,6 +29,7 @@ import static org.dromara.workflow.common.constant.FlowConstant.*;
 public class CompleteExecuteComponent extends NodeComponent {
 
     private final TaskService taskService;
+    private final WorkflowHistoryOssOwner historyOssOwner;
 
     @Override
     public void process() {
@@ -48,7 +50,10 @@ public class CompleteExecuteComponent extends NodeComponent {
 
         context.setFlowParams(flowParams);
         context.setAutoPass(Convert.toBool(context.getInstance().getVariableMap().getOrDefault(AUTO_PASS, false)));
+        WorkflowHistoryOssOwner.PendingHistoryAttachments pending = historyOssOwner.capture(
+            context.getFlowTask().getId(), completeTaskBo.getFileId());
         taskService.skip(context.getFlowTask().getId(), flowParams);
+        historyOssOwner.reconcileCreated(pending);
     }
 
 }
