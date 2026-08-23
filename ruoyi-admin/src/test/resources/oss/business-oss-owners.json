@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "owners": [
+    {
+      "id": "system-user-avatar",
+      "module": "ruoyi-system",
+      "table": "sys_user",
+      "carrier": "avatar",
+      "encoding": "single-positive-oss-id",
+      "primaryKey": "user_id",
+      "ownerService": "org.dromara.system.service.impl.SysUserServiceImpl",
+      "callerClass": "org.dromara.system.service.impl.SysUserServiceImpl",
+      "insertStrategy": "reconcile empty set to persisted avatar after insert",
+      "updateStrategy": "reconcile persisted avatar to requested avatar after update",
+      "deleteStrategy": "reconcile persisted avatar to empty set before single or batch logical delete",
+      "restoreStrategy": "not supported; deleted users are not restored",
+      "carrierSource": "ruoyi-modules/ruoyi-system/src/main/java/org/dromara/system/domain/SysUser.java",
+      "contractTest": "ruoyi-admin/src/test/java/org/dromara/test/oss/owner/system/SystemBusinessOssOwnerUnitTest.java"
+    },
+    {
+      "id": "system-notice-content",
+      "module": "ruoyi-system",
+      "table": "sys_notice",
+      "carrier": "notice_content",
+      "encoding": "rich-text oss-resource markers",
+      "primaryKey": "notice_id",
+      "ownerService": "org.dromara.system.service.impl.SysNoticeServiceImpl",
+      "callerClass": "org.dromara.system.service.impl.SysNoticeServiceImpl",
+      "insertStrategy": "extract markers and reconcile empty set to persisted content after insert",
+      "updateStrategy": "extract markers and reconcile persisted content to requested content after update",
+      "deleteStrategy": "reconcile persisted content markers to empty set before single or batch logical delete",
+      "restoreStrategy": "not supported; deleted notices are not restored",
+      "carrierSource": "ruoyi-modules/ruoyi-system/src/main/java/org/dromara/system/domain/SysNotice.java",
+      "contractTest": "ruoyi-admin/src/test/java/org/dromara/test/oss/owner/system/SystemBusinessOssOwnerUnitTest.java"
+    },
+    {
+      "id": "system-notify-log-attachments",
+      "module": "ruoyi-system",
+      "table": "sys_notify_log",
+      "carrier": "attachment_oss_ids",
+      "encoding": "json array of positive oss ids",
+      "primaryKey": "notify_log_id",
+      "ownerService": "org.dromara.system.notify.service.impl.SysNotifyMonitorServiceImpl",
+      "callerClass": "org.dromara.system.notify.service.impl.SysNotifyMonitorServiceImpl",
+      "insertStrategy": "reconcile empty set to persisted attachment snapshot after insert",
+      "updateStrategy": "immutable attachment snapshot; no attachment update path",
+      "deleteStrategy": "reconcile persisted snapshot to empty set before single, batch, or clean logical delete",
+      "restoreStrategy": "not supported; deleted notification logs are not restored",
+      "carrierSource": "ruoyi-modules/ruoyi-system/src/main/java/org/dromara/system/notify/domain/SysNotifyLog.java",
+      "contractTest": "ruoyi-admin/src/test/java/org/dromara/test/oss/owner/system/SystemBusinessOssOwnerUnitTest.java"
+    },
+    {
+      "id": "workflow-history-task-attachments",
+      "module": "ruoyi-workflow",
+      "table": "flow_his_task",
+      "carrier": "ext",
+      "encoding": "comma-separated positive oss ids when attachment input is supplied",
+      "primaryKey": "id",
+      "ownerService": "org.dromara.workflow.oss.WorkflowHistoryOssOwner",
+      "callerClass": "org.dromara.workflow.oss.WorkflowHistoryOssOwner",
+      "insertStrategy": "capture runtime transition then reconcile empty set to each created history row ext",
+      "updateStrategy": "reconcile persisted history ext to requested attachment ids for transition-created rows",
+      "deleteStrategy": "reconcile each persisted history ext to empty set before instance history deletion",
+      "restoreStrategy": "not supported; deleted workflow history is not restored",
+      "carrierSource": "script/sql/ry_workflow.sql",
+      "contractTest": "ruoyi-admin/src/test/java/org/dromara/test/oss/owner/workflow/WorkflowHistoryOssOwnerUnitTest.java"
+    }
+  ],
+  "carrierAllowlist": [
+    {
+      "candidate": "sys_oss.oss_id",
+      "reason": "OSS lifecycle aggregate primary key, not a business-owned reference carrier"
+    },
+    {
+      "candidate": "sys_oss_config.oss_config_id",
+      "reason": "storage provider configuration primary key, not an OSS object reference"
+    },
+    {
+      "candidate": "sys_oss_ref.oss_id",
+      "reason": "lifecycle reference index maintained internally by OssLifecycleManager"
+    },
+    {
+      "candidate": "sys_oss_ref.oss_ref_id",
+      "reason": "lifecycle reference row primary key, not a business-owned reference carrier"
+    }
+  ],
+  "callerAllowlist": [
+    {
+      "callerClass": "org.dromara.system.service.impl.SysOssServiceImpl",
+      "reason": "public OssService adapter delegates the collection reconciliation contract to OssLifecycleManager"
+    }
+  ]
+}

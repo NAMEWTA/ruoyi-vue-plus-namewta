@@ -20,16 +20,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class OssLifecycleContractUnitTest {
 
     @Test
-    void publicApiExposesPhysicalReferenceAndAuthorizedPresignWithoutClientOwnership() throws Exception {
-        Method bind = OssService.class.getMethod("bind", Long.class, String.class, String.class);
-        Method unbind = OssService.class.getMethod("unbind", Long.class, String.class, String.class);
+    void publicApiExposesReconciliationAndAuthorizedPresignWithoutClientOwnership() throws Exception {
+        Method reconcile = OssService.class.getMethod("reconcileReferences", String.class, String.class,
+            java.util.Collection.class, java.util.Collection.class);
         Method snapshot = OssService.class.getMethod("snapshot", Long.class);
         Method presign = OssService.class.getMethod("presignDownload", Long.class);
 
-        assertNotNull(bind);
-        assertNotNull(unbind);
+        assertNotNull(reconcile);
         assertNotNull(snapshot);
         assertEquals(OssService.OssDownloadUrl.class, presign.getReturnType());
+        assertTrue(Arrays.stream(OssService.class.getMethods())
+            .noneMatch(method -> method.getName().equals("bind") || method.getName().equals("unbind")));
         assertTrue(Arrays.stream(OssService.class.getMethods())
             .flatMap(method -> Arrays.stream(method.getParameterTypes()))
             .noneMatch(type -> type.getSimpleName().toLowerCase().contains("client")));

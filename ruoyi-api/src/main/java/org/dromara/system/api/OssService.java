@@ -31,16 +31,6 @@ public interface OssService {
     List<OssDTO> selectByIds(String ossIds);
 
     /**
-     * 将 OSS 对象绑定到一条真实业务数据。
-     */
-    OssReferenceState bind(Long ossId, String refType, String refId);
-
-    /**
-     * 解除 OSS 对象与一条真实业务数据的绑定。
-     */
-    OssReferenceState unbind(Long ossId, String refType, String refId);
-
-    /**
      * 将一条业务数据保存前后的 OSS 集合协调为真实引用。
      *
      * <p>调用方必须先完成业务授权，并在保存业务数据的同一个动态数据源事务中调用。
