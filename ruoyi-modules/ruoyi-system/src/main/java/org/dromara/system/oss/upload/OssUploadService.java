@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.dromara.common.oss.model.OssCompletedPart;
 import org.dromara.common.oss.model.OssMultipartPart;
 import org.dromara.common.oss.model.OssObjectStat;
+import org.dromara.common.oss.model.OssPresignedRequest;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -117,9 +118,11 @@ public class OssUploadService {
                 throw providerFailure("查询已上传 Part 失败", e);
             }
         }
+        OssPresignedRequest presignedRequest = ticket.mode() == OssUploadMode.SINGLE
+            ? objectStore.presignSingle(ticket, properties.getPresignTtl()) : null;
         return new ResumeResponse(token, ticket.mode(), ticket.originalName(), ticket.fileSize(),
             ticket.contentType(), ticket.partSize(), ticket.partCount(), Instant.ofEpochMilli(ticket.expiresAt()),
-            uploaded);
+            presignedRequest, uploaded);
     }
 
     public String complete(String token, CompleteRequest request) {
@@ -296,8 +299,9 @@ public class OssUploadService {
 
     private void requireOwner(OssUploadTicket ticket) {
         OssUploadIdentityResolver.Identity current = identityResolver.resolve();
-        if (!Objects.equals(ticket.userId(), current.userId())) {
-            throw new OssUploadException(OssUploadError.SESSION_OWNER_MISMATCH, "上传会话不属于当前用户");
+        if (!Objects.equals(ticket.userId(), current.userId())
+            || !Objects.equals(ticket.clientPk(), current.clientPk())) {
+            throw new OssUploadException(OssUploadError.SESSION_OWNER_MISMATCH, "上传会话不属于当前用户或 Client");
         }
     }
 

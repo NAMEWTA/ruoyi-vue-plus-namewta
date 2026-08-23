@@ -73,6 +73,7 @@ public final class OssUploadContracts {
         long partSize,
         int partCount,
         Instant expiresAt,
+        OssPresignedRequest presignedRequest,
         List<UploadedPart> uploadedParts
     ) {
         public ResumeResponse {

@@ -19,6 +19,8 @@ public interface OssUploadObjectStore {
 
     List<OssUploadContracts.SignedPart> signParts(OssUploadTicket ticket, List<Integer> partNumbers, Duration ttl);
 
+    OssPresignedRequest presignSingle(OssUploadTicket ticket, Duration ttl);
+
     List<OssMultipartPart> listParts(OssUploadTicket ticket);
 
     void completeMultipart(OssUploadTicket ticket, List<OssCompletedPart> parts);

@@ -49,6 +49,13 @@ public class DefaultOssUploadObjectStore implements OssUploadObjectStore {
     }
 
     @Override
+    public OssPresignedRequest presignSingle(OssUploadTicket ticket, Duration ttl) {
+        OssObjectOptions options = new OssObjectOptions(ticket.contentType(),
+            Map.of("upload-fingerprint", ticket.fingerprintDigest()), null);
+        return client(ticket.service()).presignPut(ticket.objectKey(), ttl, options);
+    }
+
+    @Override
     public List<OssMultipartPart> listParts(OssUploadTicket ticket) {
         return client(ticket.service()).listParts(ticket.objectKey(), ticket.uploadId());
     }

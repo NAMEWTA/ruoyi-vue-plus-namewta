@@ -41,7 +41,7 @@ class OssUploadServiceUnitTest {
     }
 
     @Test
-    void shouldCompleteSingleOnceAndAllowSameUserFromAnotherClient() {
+    void shouldCompleteSingleOnceWithinOwningClient() {
         InitResponse init = service.init(new InitRequest("general", "avatar.png", 8, "image/png", "fp-1"));
         assertEquals(OssUploadMode.SINGLE, init.mode());
         assertEquals("PUT", init.presignedRequest().method());
@@ -51,7 +51,6 @@ class OssUploadServiceUnitTest {
         objects.contentType = "image/png";
         objects.prefix = HexFormat.of().parseHex("89504e470d0a1a0a");
 
-        identity.clientPk = 200L;
         String first = service.complete(init.uploadToken(), new CompleteRequest(List.of()));
         String duplicate = service.complete(init.uploadToken(), new CompleteRequest(List.of()));
 
@@ -91,7 +90,7 @@ class OssUploadServiceUnitTest {
     }
 
     @Test
-    void shouldRejectOtherUserButNotTreatClientAsOwnership() {
+    void shouldRejectOtherUserAndOtherClient() {
         InitResponse init = service.init(new InitRequest("general", "file.bin", 8,
             "application/octet-stream", "fp-owner"));
         identity.userId = 8L;
@@ -101,7 +100,19 @@ class OssUploadServiceUnitTest {
 
         identity.userId = 7L;
         identity.clientPk = 999L;
-        assertDoesNotThrow(() -> service.resume(init.uploadToken(), "fp-owner"));
+        assertEquals(OssUploadError.SESSION_OWNER_MISMATCH, assertThrows(OssUploadException.class,
+            () -> service.resume(init.uploadToken(), "fp-owner")).error());
+    }
+
+    @Test
+    void shouldRenewSinglePutAuthorizationWhenResuming() {
+        InitResponse init = service.init(new InitRequest("general", "file.bin", 8,
+            "application/octet-stream", "fp-single-resume"));
+
+        ResumeResponse resumed = service.resume(init.uploadToken(), "fp-single-resume");
+
+        assertNotNull(resumed.presignedRequest());
+        assertEquals("PUT", resumed.presignedRequest().method());
     }
 
     @Test
@@ -290,6 +301,12 @@ class OssUploadServiceUnitTest {
         public List<SignedPart> signParts(OssUploadTicket ticket, List<Integer> numbers, Duration ttl) {
             return numbers.stream().map(number -> new SignedPart(number, "PUT",
                 "https://oss.example/object?part=" + number, Map.of(), Instant.now().plus(ttl))).toList();
+        }
+
+        @Override
+        public OssPresignedRequest presignSingle(OssUploadTicket ticket, Duration ttl) {
+            return new OssPresignedRequest("PUT", "https://oss.example/object",
+                Map.of("x-amz-meta-upload-fingerprint", ticket.fingerprintDigest()), Instant.now().plus(ttl));
         }
 
         @Override

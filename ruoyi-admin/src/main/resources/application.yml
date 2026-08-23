@@ -36,7 +36,7 @@ oss:
     cleanup-dry-run: true
     policies:
       general:
-        max-size: 2147483648
+        max-size: 10485760
         allowed-content-types:
           - image/jpeg
           - image/png
@@ -50,6 +50,56 @@ oss:
         mode: AUTO
         multipart-threshold: 104857600
         part-size: 16777216
+        required-permission: system:oss:upload
+      avatar:
+        max-size: 10485760
+        allowed-content-types: [image/jpeg, image/png, image/webp]
+        object-prefix: direct/avatar
+        mode: SINGLE
+        multipart-threshold: 10485760
+        part-size: 5242880
+        required-permission: system:oss:upload
+      image:
+        max-size: 20971520
+        allowed-content-types: [image/jpeg, image/png, image/gif, image/webp]
+        object-prefix: direct/image
+        mode: AUTO
+        multipart-threshold: 10485760
+        part-size: 5242880
+        required-permission: system:oss:upload
+      editor-image:
+        max-size: 20971520
+        allowed-content-types: [image/jpeg, image/png, image/gif, image/webp, image/svg+xml]
+        object-prefix: direct/editor/image
+        mode: AUTO
+        multipart-threshold: 10485760
+        part-size: 5242880
+        required-permission: system:oss:upload
+      editor-video:
+        max-size: 524288000
+        allowed-content-types: [video/mp4, video/webm, video/ogg]
+        object-prefix: direct/editor/video
+        mode: AUTO
+        multipart-threshold: 104857600
+        part-size: 16777216
+        required-permission: system:oss:upload
+      document:
+        max-size: 104857600
+        allowed-content-types:
+          - application/msword
+          - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+          - application/vnd.ms-excel
+          - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+          - application/vnd.ms-powerpoint
+          - application/vnd.openxmlformats-officedocument.presentationml.presentation
+          - application/pdf
+          - application/zip
+          - application/octet-stream
+          - text/plain
+        object-prefix: direct/document
+        mode: AUTO
+        multipart-threshold: 52428800
+        part-size: 8388608
         required-permission: system:oss:upload
 
 # 日志配置
