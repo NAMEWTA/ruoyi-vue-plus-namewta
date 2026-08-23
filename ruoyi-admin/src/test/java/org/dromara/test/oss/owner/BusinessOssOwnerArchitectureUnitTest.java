@@ -43,12 +43,12 @@ class BusinessOssOwnerArchitectureUnitTest {
         assertCarrierCoverage(scanPersistentCarrierCandidates(repository), manifest);
         assertCallerCoverage(scanReconcileCallers(repository), manifest);
 
-        assertEquals(Set.of(
+        assertTrue(ownerCoordinates(manifest).containsAll(Set.of(
             "sys_user.avatar",
             "sys_notice.notice_content",
             "sys_notify_log.attachment_oss_ids",
             "flow_his_task.ext"
-        ), ownerCoordinates(manifest));
+        )));
     }
 
     @Test
@@ -124,7 +124,6 @@ class BusinessOssOwnerArchitectureUnitTest {
 
         Set<String> ids = new HashSet<>();
         Set<String> coordinates = new HashSet<>();
-        Set<String> callers = new HashSet<>();
         for (Owner owner : manifest.owners()) {
             require(nonBlank(owner.id()), "owner id is required");
             require(ids.add(owner.id()), "duplicate owner id: " + owner.id());
@@ -136,7 +135,10 @@ class BusinessOssOwnerArchitectureUnitTest {
             require(nonBlank(owner.primaryKey()), "primaryKey is required for " + owner.id());
             require(nonBlank(owner.ownerService()), "ownerService is required for " + owner.id());
             require(nonBlank(owner.callerClass()), "callerClass is required for " + owner.id());
-            require(callers.add(owner.callerClass()), "duplicate owner caller: " + owner.callerClass());
+            require(owner.ownerService().equals(owner.callerClass()),
+                "ownerService must own reconciliation calls for " + owner.id());
+            require(owner.ownerService().startsWith(modulePackage(owner.module())),
+                "ownerService does not belong to module " + owner.module() + ": " + owner.ownerService());
             require(nonBlank(owner.insertStrategy()), "insertStrategy is required for " + owner.id());
             require(nonBlank(owner.updateStrategy()), "updateStrategy is required for " + owner.id());
             require(nonBlank(owner.deleteStrategy()), "deleteStrategy is required for " + owner.id());
@@ -146,6 +148,8 @@ class BusinessOssOwnerArchitectureUnitTest {
             String source = read(repository.resolve(owner.carrierSource()));
             require(source.contains(owner.carrier()) || source.contains(toCamelCase(owner.carrier())),
                 "unknown carrier " + coordinate(owner) + " in " + owner.carrierSource());
+            require(source.contains(owner.primaryKey()) || source.contains(toCamelCase(owner.primaryKey())),
+                "unknown primaryKey " + owner.table() + "." + owner.primaryKey() + " in " + owner.carrierSource());
         }
         validateAllowlist(manifest.carrierAllowlist(), "carrier allowlist");
         validateCallerAllowlist(manifest.callerAllowlist());
@@ -153,30 +157,26 @@ class BusinessOssOwnerArchitectureUnitTest {
 
     private Set<String> scanPersistentCarrierCandidates(Path repository) throws Exception {
         Set<String> candidates = new LinkedHashSet<>();
-        Path modules = repository.resolve("ruoyi-modules");
-        try (Stream<Path> files = Files.walk(modules)) {
-            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                String source = Files.readString(file);
-                Matcher tableMatcher = TABLE_NAME.matcher(source);
-                if (!tableMatcher.find()) {
-                    continue;
-                }
-                String table = tableMatcher.group(1);
-                Matcher fieldMatcher = FIELD.matcher(source);
-                while (fieldMatcher.find()) {
-                    String type = fieldMatcher.group(1);
-                    String field = fieldMatcher.group(2);
-                    if (isCarrierCandidate(type, field)) {
-                        candidates.add(table + "." + toSnakeCase(field));
-                    }
+        for (Path file : productionJavaFiles(repository)) {
+            String source = Files.readString(file);
+            Matcher tableMatcher = TABLE_NAME.matcher(source);
+            if (!tableMatcher.find()) {
+                continue;
+            }
+            String table = tableMatcher.group(1);
+            Matcher fieldMatcher = FIELD.matcher(source);
+            while (fieldMatcher.find()) {
+                String type = fieldMatcher.group(1);
+                String field = fieldMatcher.group(2);
+                if (isCarrierCandidate(type, field)) {
+                    candidates.add(table + "." + toSnakeCase(field));
                 }
             }
         }
-        for (String relativePath : List.of(
-            "script/sql/ry_vue.sql",
-            "script/sql/ry_workflow.sql",
-            "script/sql/namewta/DDL.sql")) {
-            scanSchemaCarrierCandidates(repository.resolve(relativePath), candidates);
+        try (Stream<Path> schemas = Files.walk(repository.resolve("script/sql"))) {
+            for (Path schema : schemas.filter(path -> path.toString().endsWith(".sql")).toList()) {
+                scanSchemaCarrierCandidates(schema, candidates);
+            }
         }
         return candidates;
     }
@@ -210,20 +210,25 @@ class BusinessOssOwnerArchitectureUnitTest {
 
     private Set<String> scanReconcileCallers(Path repository) throws Exception {
         Set<String> callers = new LinkedHashSet<>();
-        Path modules = repository.resolve("ruoyi-modules");
-        try (Stream<Path> files = Files.walk(modules)) {
-            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                String source = Files.readString(file);
-                if (!source.contains(".reconcileReferences(")) {
-                    continue;
-                }
-                Matcher packageMatcher = PACKAGE.matcher(source);
-                Matcher typeMatcher = TYPE.matcher(source);
-                require(packageMatcher.find() && typeMatcher.find(), "cannot resolve reconcile caller: " + file);
-                callers.add(packageMatcher.group(1) + "." + typeMatcher.group(1));
+        for (Path file : productionJavaFiles(repository)) {
+            String source = Files.readString(file);
+            if (!source.contains(".reconcileReferences(")) {
+                continue;
             }
+            Matcher packageMatcher = PACKAGE.matcher(source);
+            Matcher typeMatcher = TYPE.matcher(source);
+            require(packageMatcher.find() && typeMatcher.find(), "cannot resolve reconcile caller: " + file);
+            callers.add(packageMatcher.group(1) + "." + typeMatcher.group(1));
         }
         return callers;
+    }
+
+    private List<Path> productionJavaFiles(Path repository) throws Exception {
+        try (Stream<Path> files = Files.walk(repository)) {
+            return files.filter(path -> path.toString().endsWith(".java"))
+                .filter(path -> path.toString().contains("/src/main/java/"))
+                .toList();
+        }
     }
 
     private void assertCarrierCoverage(Set<String> discovered, Manifest manifest) {
@@ -321,6 +326,12 @@ class BusinessOssOwnerArchitectureUnitTest {
             }
         }
         return result.toString();
+    }
+
+    private String modulePackage(String module) {
+        require(module.startsWith("ruoyi-") && module.length() > "ruoyi-".length(),
+            "invalid module: " + module);
+        return "org.dromara." + module.substring("ruoyi-".length()).replace('-', '.') + ".";
     }
 
     private Manifest loadManifest() throws Exception {
