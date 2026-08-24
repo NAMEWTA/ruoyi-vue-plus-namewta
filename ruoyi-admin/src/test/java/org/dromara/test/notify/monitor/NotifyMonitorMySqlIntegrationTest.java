@@ -44,7 +44,7 @@ import static org.mockito.Mockito.mock;
 class NotifyMonitorMySqlIntegrationTest {
 
     @Test
-    void roundTripsEventGlobalQueryDetailDuplicateAndLogicalDelete() throws Exception {
+    void roundTripsEventGlobalQueryDetailDuplicateAndPhysicalDelete() throws Exception {
         String url = System.getProperty("notify.mysql.integration.url");
         Assumptions.assumeTrue(url != null && !url.isBlank(), "需要一次性 MySQL JDBC URL");
         String username = System.getProperty("notify.mysql.integration.username", "root");
@@ -81,8 +81,8 @@ class NotifyMonitorMySqlIntegrationTest {
                 assertNull(logMapper.selectById(900L));
                 assertEquals(0, deliveryMapper.selectCount(null));
             }
-            assertEquals(2, countDeleted(dataSource, "sys_notify_log"));
-            assertEquals(1, countDeleted(dataSource, "sys_notify_delivery_log"));
+            assertEquals(0, countRows(dataSource, "sys_notify_log"));
+            assertEquals(0, countRows(dataSource, "sys_notify_delivery_log"));
         } finally {
             dropSchema(dataSource);
             dataSource.forceCloseAll();
@@ -159,9 +159,9 @@ class NotifyMonitorMySqlIntegrationTest {
         }
     }
 
-    private long countDeleted(PooledDataSource dataSource, String table) throws Exception {
+    private long countRows(PooledDataSource dataSource, String table) throws Exception {
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement();
-             var result = statement.executeQuery("select count(*) from " + table + " where del_flag = '1'")) {
+             var result = statement.executeQuery("select count(*) from " + table)) {
             assertTrue(result.next());
             return result.getLong(1);
         }
