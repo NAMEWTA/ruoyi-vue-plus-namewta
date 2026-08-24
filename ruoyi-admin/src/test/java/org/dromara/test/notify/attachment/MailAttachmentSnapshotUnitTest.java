@@ -33,7 +33,7 @@ class MailAttachmentSnapshotUnitTest {
             return "message-1";
         });
         NotifyRequest request = NotifyRequest.builder()
-            .channel("mail")
+            .channel(NotifyChannel.MAIL)
             .targets(List.of(NotifyTarget.email("to@example.com", NotifyTargetRole.TO)))
             .content(new NotifyRichContent("subject", "content", false))
             .attachmentOssIds(List.of(10L))
@@ -67,7 +67,7 @@ class MailAttachmentSnapshotUnitTest {
             return "message-1";
         });
         NotifyRequest request = NotifyRequest.builder()
-            .channel("mail")
+            .channel(NotifyChannel.MAIL)
             .targets(List.of(NotifyTarget.email("to@example.com", NotifyTargetRole.TO)))
             .content(new NotifyRichContent("subject", "content", false))
             .attachmentOssIds(List.of(10L))

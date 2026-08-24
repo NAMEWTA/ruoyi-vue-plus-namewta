@@ -35,7 +35,7 @@ class NotifyDispatcherUnitTest {
             .requestId("request-1")
             .bizType("account")
             .bizId("100")
-            .channel("test")
+            .channel(NotifyChannel.of("test"))
             .providerKey("provider-b")
             .targets(List.of(NotifyTarget.phone("13800000000")))
             .content(new NotifyTextContent("subject", "content"))
@@ -44,6 +44,7 @@ class NotifyDispatcherUnitTest {
         NotifyResult result = dispatcher.send(request);
 
         assertEquals(NotifyStatus.ACCEPTED, result.status());
+        assertEquals(NotifyChannel.of("test"), result.channel());
         assertEquals("provider-b", result.providerKey());
         assertEquals(1, result.deliveries().size());
         assertEquals(34L, adapter.context.clientPk());
@@ -57,7 +58,7 @@ class NotifyDispatcherUnitTest {
         RecordingAdapter adapter = new RecordingAdapter(true);
         NotifyDispatcher dispatcher = dispatcher(adapter);
         NotifyRequest request = NotifyRequest.builder()
-            .channel("test")
+            .channel(NotifyChannel.of("test"))
             .targets(List.of(
                 NotifyTarget.phone("13800000000"),
                 NotifyTarget.phone("13900000000"),
@@ -81,12 +82,12 @@ class NotifyDispatcherUnitTest {
         RecordingAdapter adapter = new RecordingAdapter(false);
         NotifyDispatcher dispatcher = dispatcher(adapter);
         NotifyRequest userRequest = NotifyRequest.builder()
-            .channel("test")
+            .channel(NotifyChannel.of("test"))
             .targets(List.of(NotifyTarget.user("100")))
             .content(new NotifyTextContent("subject", "content"))
             .build();
         NotifyRequest templateRequest = NotifyRequest.builder()
-            .channel("test")
+            .channel(NotifyChannel.of("test"))
             .targets(List.of(NotifyTarget.phone("13800000000")))
             .content(new NotifyTemplateContent("subject", "SMS_001", Map.of("code", "123456"), ""))
             .build();
@@ -110,6 +111,23 @@ class NotifyDispatcherUnitTest {
     }
 
     @Test
+    void shouldRejectWellFormedButUnregisteredChannel() {
+        NotifyDispatcher dispatcher = new NotifyDispatcher(new NotifyChannelRegistry(List.of()),
+            NotifyContext::empty, event -> {
+            });
+        NotifyRequest request = NotifyRequest.builder()
+            .channel(NotifyChannel.of("feishu"))
+            .targets(List.of(NotifyTarget.openId("open-id")))
+            .content(new NotifyTextContent("subject", "content"))
+            .build();
+
+        NotifyValidationException exception = assertThrows(NotifyValidationException.class,
+            () -> dispatcher.send(request));
+
+        assertEquals("UNKNOWN_CHANNEL", exception.code());
+    }
+
+    @Test
     void shouldNotChangeProviderResultWhenEventPublishingFails() {
         RecordingAdapter adapter = new RecordingAdapter(false);
         NotifyDispatcher dispatcher = new NotifyDispatcher(
@@ -118,7 +136,7 @@ class NotifyDispatcherUnitTest {
                 throw new IllegalStateException("listener unavailable");
             });
         NotifyRequest request = NotifyRequest.builder()
-            .channel("test")
+            .channel(NotifyChannel.of("test"))
             .targets(List.of(NotifyTarget.phone("13800000000")))
             .content(new NotifyTextContent("subject", "content"))
             .build();
@@ -144,8 +162,8 @@ class NotifyDispatcherUnitTest {
         }
 
         @Override
-        public String channel() {
-            return "test";
+        public NotifyChannel channel() {
+            return NotifyChannel.of("test");
         }
 
         @Override

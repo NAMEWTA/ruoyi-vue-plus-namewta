@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.common.notify.model.NotifyChannel;
 import org.dromara.common.notify.model.NotifyRequest;
 import org.dromara.common.notify.model.NotifyTarget;
 import org.dromara.common.notify.model.NotifyTextContent;
@@ -72,7 +73,7 @@ public class MailSendController {
     private void send(String to, String subject, String text, List<Long> ossIds) {
         notifyClient.send(NotifyRequest.builder()
             .bizType("demo_mail")
-            .channel("mail")
+            .channel(NotifyChannel.MAIL)
             .targets(List.of(NotifyTarget.email(to)))
             .content(new NotifyTextContent(subject, text))
             .attachmentOssIds(ossIds)

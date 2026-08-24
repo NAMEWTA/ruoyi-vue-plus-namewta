@@ -31,7 +31,7 @@ class DemoNotifyCallerUnitTest {
         assertEquals(List.of(), requests.getAllValues().get(0).attachmentOssIds());
         assertEquals(List.of(77L), requests.getAllValues().get(1).attachmentOssIds());
         assertEquals(List.of(77L, 88L), requests.getAllValues().get(2).attachmentOssIds());
-        assertTrue(requests.getAllValues().stream().allMatch(request -> request.channel().equals("mail")));
+        assertTrue(requests.getAllValues().stream().allMatch(request -> request.channel().equals(NotifyChannel.MAIL)));
     }
 
     @Test

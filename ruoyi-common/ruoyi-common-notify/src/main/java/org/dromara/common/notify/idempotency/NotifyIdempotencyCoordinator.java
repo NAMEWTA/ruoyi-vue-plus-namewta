@@ -70,14 +70,14 @@ public final class NotifyIdempotencyCoordinator {
     }
 
     public String storageKey(NotifyRequest request) {
-        return KEY_PREFIX + sha256(normalize(request.channel()) + "\n" + normalize(request.idempotencyKey()));
+        return KEY_PREFIX + sha256(request.channel().value() + "\n" + normalize(request.idempotencyKey()));
     }
 
     public String digest(NotifyRequest request) {
         StringBuilder canonical = new StringBuilder();
         append(canonical, "bizType", request.bizType());
         append(canonical, "bizId", request.bizId());
-        append(canonical, "channel", request.channel());
+        append(canonical, "channel", request.channel().value());
         append(canonical, "providerKey", request.providerKey());
         for (NotifyTarget target : request.targets()) {
             append(canonical, "target.type", target.type());

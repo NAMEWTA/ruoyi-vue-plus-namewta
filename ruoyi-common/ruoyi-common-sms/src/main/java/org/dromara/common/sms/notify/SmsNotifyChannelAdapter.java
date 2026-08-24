@@ -13,8 +13,6 @@ import java.util.concurrent.TimeUnit;
  */
 public final class SmsNotifyChannelAdapter implements NotifyChannelAdapter {
 
-    public static final String CHANNEL = "sms";
-
     private final SmsNotificationProviderResolver providerResolver;
 
     public SmsNotifyChannelAdapter(SmsNotificationProviderResolver providerResolver) {
@@ -22,8 +20,8 @@ public final class SmsNotifyChannelAdapter implements NotifyChannelAdapter {
     }
 
     @Override
-    public String channel() {
-        return CHANNEL;
+    public NotifyChannel channel() {
+        return NotifyChannel.SMS;
     }
 
     @Override

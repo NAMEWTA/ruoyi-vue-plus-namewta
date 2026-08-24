@@ -28,7 +28,7 @@ class SmsNotifyChannelAdapterUnitTest {
                         : SmsNotificationReceipt.accepted();
                 }));
         NotifyRequest request = NotifyRequest.builder()
-            .channel("sms")
+            .channel(NotifyChannel.SMS)
             .providerKey("sms-b")
             .targets(List.of(
                 NotifyTarget.phone("13800000000"),

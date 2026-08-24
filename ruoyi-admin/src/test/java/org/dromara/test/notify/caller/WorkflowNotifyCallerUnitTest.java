@@ -33,9 +33,9 @@ class WorkflowNotifyCallerUnitTest {
         ArgumentCaptor<NotifyRequest> requests = ArgumentCaptor.forClass(NotifyRequest.class);
         verify(notifyClient, times(2)).send(requests.capture());
         NotifyRequest mail = requests.getAllValues().stream()
-            .filter(request -> request.channel().equals("mail")).findFirst().orElseThrow();
+            .filter(request -> request.channel().equals(NotifyChannel.MAIL)).findFirst().orElseThrow();
         NotifyRequest sms = requests.getAllValues().stream()
-            .filter(request -> request.channel().equals("sms")).findFirst().orElseThrow();
+            .filter(request -> request.channel().equals(NotifyChannel.SMS)).findFirst().orElseThrow();
         assertAll(
             () -> assertEquals(List.of(NotifyTarget.email("user@example.com")), mail.targets()),
             () -> assertEquals(List.of(NotifyTarget.phone("13812345678")), sms.targets()),
@@ -50,7 +50,7 @@ class WorkflowNotifyCallerUnitTest {
         MessageService messageService = mock(MessageService.class);
         NotifyClient notifyClient = mock(NotifyClient.class);
         NotifyTarget target = NotifyTarget.email("user@example.com");
-        NotifyResult failed = new NotifyResult("request-failed", "mail", "smtp", NotifyStatus.FAILED,
+        NotifyResult failed = new NotifyResult("request-failed", NotifyChannel.MAIL, "smtp", NotifyStatus.FAILED,
             List.of(NotifyTargetResult.failed(target, "FAILED", "rejected", 1L)));
         when(notifyClient.send(any())).thenThrow(new NotifyDeliveryException(failed));
         FlwCommonServiceImpl service = new FlwCommonServiceImpl(messageService, notifyClient);

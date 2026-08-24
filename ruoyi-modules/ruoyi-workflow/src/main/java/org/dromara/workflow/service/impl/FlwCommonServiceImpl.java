@@ -12,6 +12,7 @@ import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StreamUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.common.notify.model.NotifyChannel;
 import org.dromara.common.notify.model.NotifyRequest;
 import org.dromara.common.notify.model.NotifyTarget;
 import org.dromara.common.notify.model.NotifyTextContent;
@@ -162,9 +163,11 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
                         message, null, path
                     ));
                 }
-                case EMAIL_MESSAGE -> sendExternalNotify("mail", emails.stream().map(NotifyTarget::email).toList(),
+                case EMAIL_MESSAGE -> sendExternalNotify(NotifyChannel.MAIL,
+                    emails.stream().map(NotifyTarget::email).toList(),
                     subject, message);
-                case SMS_MESSAGE -> sendExternalNotify("sms", phones.stream().map(NotifyTarget::phone).toList(),
+                case SMS_MESSAGE -> sendExternalNotify(NotifyChannel.SMS,
+                    phones.stream().map(NotifyTarget::phone).toList(),
                     subject, message);
                 default -> log.warn("【消息发送】未处理的消息类型：{}", messageTypeEnum);
             }
@@ -174,7 +177,8 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
         }
     }
 
-    private void sendExternalNotify(String channel, List<NotifyTarget> targets, String subject, String message) {
+    private void sendExternalNotify(NotifyChannel channel, List<NotifyTarget> targets,
+                                    String subject, String message) {
         if (targets.isEmpty()) {
             return;
         }

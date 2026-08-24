@@ -69,7 +69,8 @@ class RedisNotifyIdempotencyStoreIntegrationTest {
                 .map(NotifyIdempotencyStore.Acquired.class::cast)
                 .findFirst().orElseThrow();
             NotifyTarget target = NotifyTarget.phone("13800000000");
-            NotifyResult result = new NotifyResult(acquired.requestId(), "sms", "provider-a", NotifyStatus.ACCEPTED,
+            NotifyResult result = new NotifyResult(acquired.requestId(), NotifyChannel.SMS, "provider-a",
+                NotifyStatus.ACCEPTED,
                 List.of(NotifyTargetResult.accepted(target, "message-1", 1L)));
             store.complete(acquired, result);
 

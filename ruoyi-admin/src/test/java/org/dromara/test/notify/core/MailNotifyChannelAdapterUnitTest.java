@@ -24,7 +24,7 @@ class MailNotifyChannelAdapterUnitTest {
             return "mail-message-id";
         });
         NotifyRequest request = NotifyRequest.builder()
-            .channel("mail")
+            .channel(NotifyChannel.MAIL)
             .targets(List.of(
                 NotifyTarget.email("to@example.com", NotifyTargetRole.TO),
                 NotifyTarget.email("cc@example.com", NotifyTargetRole.CC),

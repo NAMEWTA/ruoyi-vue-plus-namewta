@@ -3,6 +3,7 @@ package org.dromara.test.notify.core;
 import org.dromara.common.mail.config.MailConfig;
 import org.dromara.common.notify.config.NotifyAutoConfiguration;
 import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.common.notify.model.NotifyChannel;
 import org.dromara.common.notify.registry.NotifyChannelRegistry;
 import org.dromara.common.sms.config.SmsAutoConfiguration;
 import org.junit.jupiter.api.Tag;
@@ -38,8 +39,8 @@ class NotifyAutoConfigurationUnitTest {
             .run(context -> {
                 context.getBean(NotifyClient.class);
                 NotifyChannelRegistry registry = context.getBean(NotifyChannelRegistry.class);
-                assertDoesNotThrow(() -> registry.require("mail"));
-                assertDoesNotThrow(() -> registry.require("sms"));
+                assertDoesNotThrow(() -> registry.require(NotifyChannel.MAIL));
+                assertDoesNotThrow(() -> registry.require(NotifyChannel.SMS));
             });
     }
 }

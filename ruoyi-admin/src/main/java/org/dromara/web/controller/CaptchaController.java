@@ -19,8 +19,9 @@ import org.dromara.common.core.utils.regex.RegexValidator;
 import org.dromara.common.mail.config.properties.MailProperties;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.notify.exception.NotifyDeliveryException;
-import org.dromara.common.notify.model.NotifyDeliveryStatus;
 import org.dromara.common.notify.model.NotifyAuditPolicy;
+import org.dromara.common.notify.model.NotifyChannel;
+import org.dromara.common.notify.model.NotifyDeliveryStatus;
 import org.dromara.common.notify.model.NotifyRequest;
 import org.dromara.common.notify.model.NotifyTarget;
 import org.dromara.common.notify.model.NotifyTargetResult;
@@ -82,12 +83,12 @@ public class CaptchaController {
             notifyClient.send(NotifyRequest.builder()
                 .bizType("auth_captcha")
                 .bizId(phoneNumber)
-                .channel("sms")
+                .channel(NotifyChannel.SMS)
                 .providerKey("config1")
                 .targets(List.of(NotifyTarget.phone(phoneNumber)))
                 .content(new NotifyTemplateContent(null, templateId, map, content))
                 .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
-                .idempotencyKey(captchaIdempotencyKey("sms", phoneNumber))
+                .idempotencyKey(captchaIdempotencyKey(NotifyChannel.SMS, phoneNumber))
                 .build());
         } catch (NotifyDeliveryException ex) {
             NotifyTargetResult failed = ex.result().deliveries().stream()
@@ -136,11 +137,11 @@ public class CaptchaController {
             notifyClient.send(NotifyRequest.builder()
                 .bizType("auth_captcha")
                 .bizId(email)
-                .channel("mail")
+                .channel(NotifyChannel.MAIL)
                 .targets(List.of(NotifyTarget.email(email)))
                 .content(new NotifyTextContent("登录验证码", content))
                 .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
-                .idempotencyKey(captchaIdempotencyKey("mail", email))
+                .idempotencyKey(captchaIdempotencyKey(NotifyChannel.MAIL, email))
                 .build());
             cacheCaptchaCode(key, code);
         } catch (Exception e) {
@@ -149,9 +150,9 @@ public class CaptchaController {
         }
     }
 
-    private String captchaIdempotencyKey(String channel, String target) {
+    private String captchaIdempotencyKey(NotifyChannel channel, String target) {
         long minute = System.currentTimeMillis() / Duration.ofMinutes(1).toMillis();
-        return "captcha:" + channel + ":" + target + ":" + minute;
+        return "captcha:" + channel.value() + ":" + target + ":" + minute;
     }
 
     protected void cacheCaptchaCode(String key, String code) {

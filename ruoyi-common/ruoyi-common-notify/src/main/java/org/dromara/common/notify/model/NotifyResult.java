@@ -7,7 +7,7 @@ import java.util.List;
  */
 public record NotifyResult(
     String requestId,
-    String channel,
+    NotifyChannel channel,
     String providerKey,
     NotifyStatus status,
     List<NotifyTargetResult> deliveries

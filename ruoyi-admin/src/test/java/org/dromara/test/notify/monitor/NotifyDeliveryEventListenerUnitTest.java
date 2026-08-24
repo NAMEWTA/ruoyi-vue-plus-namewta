@@ -37,11 +37,12 @@ class NotifyDeliveryEventListenerUnitTest {
         NotifyTarget target = NotifyTarget.phone("13812345678");
         NotifyRequest request = NotifyRequest.builder()
             .requestId("request-listener")
-            .channel("sms")
+            .channel(NotifyChannel.SMS)
             .targets(List.of(target))
             .content(new NotifyTextContent(null, "content"))
             .build();
-        NotifyResult result = new NotifyResult(request.requestId(), "sms", "sms-main", NotifyStatus.ACCEPTED,
+        NotifyResult result = new NotifyResult(request.requestId(), NotifyChannel.SMS, "sms-main",
+            NotifyStatus.ACCEPTED,
             List.of(NotifyTargetResult.accepted(target, "message-1", 1)));
         return new NotifyDeliveryEvent(request, new NotifyContext(1L, null, "trace"), result, Instant.now());
     }

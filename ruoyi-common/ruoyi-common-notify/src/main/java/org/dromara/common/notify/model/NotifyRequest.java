@@ -12,7 +12,7 @@ public record NotifyRequest(
     String requestId,
     String bizType,
     String bizId,
-    String channel,
+    NotifyChannel channel,
     String providerKey,
     List<NotifyTarget> targets,
     NotifyContent content,
@@ -43,7 +43,7 @@ public record NotifyRequest(
         private String requestId;
         private String bizType;
         private String bizId;
-        private String channel;
+        private NotifyChannel channel;
         private String providerKey;
         private List<NotifyTarget> targets = List.of();
         private NotifyContent content;
@@ -71,7 +71,7 @@ public record NotifyRequest(
             return this;
         }
 
-        public Builder channel(String value) {
+        public Builder channel(NotifyChannel value) {
             channel = value;
             return this;
         }

@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import io.github.linpeilie.Converter;
 import org.dromara.common.mybatis.core.mapper.LambdaCrudChainWrapper;
 import org.dromara.common.notify.event.NotifyDeliveryEvent;
+import org.dromara.common.notify.model.NotifyChannel;
 import org.dromara.common.notify.model.NotifyContext;
 import org.dromara.common.notify.model.NotifyRequest;
 import org.dromara.common.notify.model.NotifyResult;
@@ -250,11 +251,11 @@ class SystemBusinessOssOwnerUnitTest {
     private NotifyDeliveryEvent notifyEvent(Long notifyLogId, List<Long> attachments) {
         NotifyRequest request = NotifyRequest.builder()
             .requestId("request-" + notifyLogId)
-            .channel("mail")
+            .channel(NotifyChannel.MAIL)
             .targets(List.of())
             .content(new NotifyTextContent(null, "content"))
             .build();
-        NotifyResult result = new NotifyResult(request.requestId(), "mail", "provider",
+        NotifyResult result = new NotifyResult(request.requestId(), NotifyChannel.MAIL, "provider",
             NotifyStatus.ACCEPTED, List.of());
         return new NotifyDeliveryEvent(request, NotifyContext.empty(), result, null,
             notifyLogId, attachments, Instant.parse("2026-08-23T00:00:00Z"));

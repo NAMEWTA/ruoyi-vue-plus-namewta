@@ -118,7 +118,7 @@ public final class NotifyDispatcher implements NotifyClient {
         if (request == null) {
             throw new NotifyValidationException("REQUEST_REQUIRED", "通知请求不能为空");
         }
-        if (isBlank(request.channel())) {
+        if (request.channel() == null) {
             throw new NotifyValidationException("CHANNEL_REQUIRED", "通知渠道不能为空");
         }
         if (request.targets().isEmpty()) {

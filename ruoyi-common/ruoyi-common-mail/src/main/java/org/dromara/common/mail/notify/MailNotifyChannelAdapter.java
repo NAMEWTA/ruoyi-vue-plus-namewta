@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit;
  */
 public final class MailNotifyChannelAdapter implements NotifyChannelAdapter {
 
-    public static final String CHANNEL = "mail";
     public static final String PROVIDER = "smtp";
 
     private final MailNotificationSender sender;
@@ -31,8 +30,8 @@ public final class MailNotifyChannelAdapter implements NotifyChannelAdapter {
     }
 
     @Override
-    public String channel() {
-        return CHANNEL;
+    public NotifyChannel channel() {
+        return NotifyChannel.MAIL;
     }
 
     @Override

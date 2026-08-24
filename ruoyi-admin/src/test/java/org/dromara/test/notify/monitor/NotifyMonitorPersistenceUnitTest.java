@@ -36,13 +36,14 @@ class NotifyMonitorPersistenceUnitTest {
             .requestId("request-1")
             .bizType("contract")
             .bizId("100")
-            .channel("mail")
+            .channel(NotifyChannel.MAIL)
             .providerKey("requested-provider")
             .targets(List.of(accepted, failed))
             .content(new NotifyTemplateContent("主题", "TPL-1", java.util.Map.of("code", "123456"),
                 "验证码 123456"))
             .build();
-        NotifyResult result = new NotifyResult("request-1", "mail", "smtp-main", NotifyStatus.PARTIAL_FAILURE,
+        NotifyResult result = new NotifyResult("request-1", NotifyChannel.MAIL, "smtp-main",
+            NotifyStatus.PARTIAL_FAILURE,
             List.of(
                 NotifyTargetResult.accepted(accepted, "provider-message-1", 12),
                 NotifyTargetResult.failed(failed, "MAIL_REJECTED", "rejected", 18)
@@ -56,6 +57,7 @@ class NotifyMonitorPersistenceUnitTest {
         verify(logMapper).insert(log.capture());
         assertAll(
             () -> assertEquals(900L, log.getValue().getNotifyLogId()),
+            () -> assertEquals("mail", log.getValue().getChannel()),
             () -> assertEquals("验证码 123456", log.getValue().getContentSnapshot()),
             () -> assertTrue(log.getValue().getTemplateParams().contains("123456")),
             () -> assertEquals("PARTIAL_FAILURE", log.getValue().getStatus()),
@@ -73,11 +75,11 @@ class NotifyMonitorPersistenceUnitTest {
     void duplicatePersistsOnlyLogicalSkippedRow() {
         NotifyRequest request = NotifyRequest.builder()
             .requestId("duplicate-2")
-            .channel("sms")
+            .channel(NotifyChannel.SMS)
             .targets(List.of(NotifyTarget.phone("13812345678")))
             .content(new NotifyTextContent(null, "same content"))
             .build();
-        NotifyResult result = new NotifyResult("duplicate-2", "sms", "sms-main",
+        NotifyResult result = new NotifyResult("duplicate-2", NotifyChannel.SMS, "sms-main",
             NotifyStatus.SKIPPED_DUPLICATE, List.of());
 
         service.record(new NotifyDeliveryEvent(request, NotifyContext.empty(), result,
@@ -99,13 +101,13 @@ class NotifyMonitorPersistenceUnitTest {
         NotifyRequest request = NotifyRequest.builder()
             .requestId("captcha-1")
             .bizType("auth_captcha")
-            .channel("sms")
+            .channel(NotifyChannel.SMS)
             .targets(List.of(target))
             .content(new NotifyTemplateContent(null, "CAPTCHA", java.util.Map.of("code", "123456"),
                 "验证码 123456"))
             .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
             .build();
-        NotifyResult result = new NotifyResult("captcha-1", "sms", "sms-main", NotifyStatus.ACCEPTED,
+        NotifyResult result = new NotifyResult("captcha-1", NotifyChannel.SMS, "sms-main", NotifyStatus.ACCEPTED,
             List.of(NotifyTargetResult.accepted(target, "message-1", 5L)));
 
         service.record(new NotifyDeliveryEvent(request, NotifyContext.empty(), result,

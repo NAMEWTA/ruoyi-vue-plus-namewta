@@ -39,7 +39,7 @@ class CaptchaNotifyCallerUnitTest {
             request.getValue().content());
         String code = content.params().get("code");
         assertAll(
-            () -> assertEquals("sms", request.getValue().channel()),
+            () -> assertEquals(NotifyChannel.SMS, request.getValue().channel()),
             () -> assertEquals("config1", request.getValue().providerKey()),
             () -> assertEquals("13812345678", request.getValue().targets().getFirst().value()),
             () -> assertTrue(request.getValue().idempotencyKey().startsWith("captcha:sms:13812345678:")),
@@ -53,7 +53,7 @@ class CaptchaNotifyCallerUnitTest {
     void smsCaptchaReturnsFailureAndDoesNotCacheWhenProviderRejects() {
         NotifyClient notifyClient = mock(NotifyClient.class);
         NotifyTarget target = NotifyTarget.phone("13812345678");
-        NotifyResult failed = new NotifyResult("request-failed", "sms", "config1", NotifyStatus.FAILED,
+        NotifyResult failed = new NotifyResult("request-failed", NotifyChannel.SMS, "config1", NotifyStatus.FAILED,
             List.of(NotifyTargetResult.failed(target, "REJECTED", "provider rejected", 1L)));
         when(notifyClient.send(any())).thenThrow(new NotifyDeliveryException(failed));
         RecordingCaptchaController controller = new RecordingCaptchaController(
@@ -80,7 +80,7 @@ class CaptchaNotifyCallerUnitTest {
         verify(notifyClient).send(request.capture());
         NotifyTextContent content = assertInstanceOf(NotifyTextContent.class, request.getValue().content());
         assertAll(
-            () -> assertEquals("mail", request.getValue().channel()),
+            () -> assertEquals(NotifyChannel.MAIL, request.getValue().channel()),
             () -> assertEquals(NotifyAuditPolicy.REDACT_SENSITIVE, request.getValue().auditPolicy()),
             () -> assertEquals(NotifyTarget.email("user@example.com"), request.getValue().targets().getFirst()),
             () -> assertTrue(request.getValue().idempotencyKey().startsWith("captcha:mail:user@example.com:")),

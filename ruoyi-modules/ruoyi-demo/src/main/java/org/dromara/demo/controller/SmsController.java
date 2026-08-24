@@ -3,6 +3,7 @@ package org.dromara.demo.controller;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.common.notify.model.NotifyChannel;
 import org.dromara.common.notify.model.NotifyRequest;
 import org.dromara.common.notify.model.NotifyTarget;
 import org.dromara.common.notify.model.NotifyTemplateContent;
@@ -91,7 +92,7 @@ public class SmsController {
             .toList();
         return R.ok(notifyClient.send(NotifyRequest.builder()
             .bizType("demo_sms")
-            .channel("sms")
+            .channel(NotifyChannel.SMS)
             .providerKey(providerKey)
             .targets(targets)
             .content(new NotifyTemplateContent(null, templateId, params, contentSnapshot))

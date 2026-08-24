@@ -6,6 +6,7 @@ import org.dromara.common.notify.exception.NotifyIdempotencyUnavailableException
 import org.dromara.common.notify.idempotency.NotifyIdempotencyCoordinator;
 import org.dromara.common.notify.idempotency.NotifyIdempotencyStore;
 import org.dromara.common.notify.idempotency.RedisNotifyIdempotencyStore;
+import org.dromara.common.notify.model.NotifyChannel;
 import org.dromara.common.notify.model.NotifyRequest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,8 @@ class NotifyIdempotencyAutoConfigurationUnitTest {
             assertNotNull(context.getBean(NotifyClient.class));
             NotifyIdempotencyCoordinator coordinator = context.getBean(NotifyIdempotencyCoordinator.class);
             assertThrows(NotifyIdempotencyUnavailableException.class,
-                () -> coordinator.begin(NotifyRequest.builder().channel("sms").idempotencyKey("order-1").build()));
+                () -> coordinator.begin(NotifyRequest.builder().channel(NotifyChannel.SMS)
+                    .idempotencyKey("order-1").build()));
         });
     }
 

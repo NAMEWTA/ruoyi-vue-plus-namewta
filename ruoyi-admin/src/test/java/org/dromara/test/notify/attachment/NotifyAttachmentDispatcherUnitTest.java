@@ -75,8 +75,8 @@ class NotifyAttachmentDispatcherUnitTest {
         AtomicInteger calls = new AtomicInteger();
         NotifyChannelAdapter adapter = new NotifyChannelAdapter() {
             @Override
-            public String channel() {
-                return "test";
+            public NotifyChannel channel() {
+                return NotifyChannel.of("test");
             }
 
             @Override
@@ -106,7 +106,7 @@ class NotifyAttachmentDispatcherUnitTest {
     private NotifyRequest request(List<Long> attachments) {
         return NotifyRequest.builder()
             .requestId("request-1")
-            .channel("test")
+            .channel(NotifyChannel.of("test"))
             .targets(List.of(NotifyTarget.email("to@example.com", NotifyTargetRole.TO)))
             .content(new NotifyRichContent("subject", "content", false))
             .attachmentOssIds(attachments)
@@ -153,8 +153,8 @@ class NotifyAttachmentDispatcherUnitTest {
         }
 
         @Override
-        public String channel() {
-            return "test";
+        public NotifyChannel channel() {
+            return NotifyChannel.of("test");
         }
 
         @Override

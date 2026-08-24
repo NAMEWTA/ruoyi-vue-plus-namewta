@@ -110,7 +110,7 @@ class NotifyIdempotencyDispatcherUnitTest {
             () -> dispatcher.send(request("request-1", "order-100", "content")));
         NotifyResult withoutKey = assertDoesNotThrow(() -> dispatcher.send(NotifyRequest.builder()
             .requestId("request-2")
-            .channel("test")
+            .channel(NotifyChannel.of("test"))
             .targets(List.of(NotifyTarget.phone("13800000000")))
             .content(new NotifyTextContent("subject", "content"))
             .build()));
@@ -148,8 +148,8 @@ class NotifyIdempotencyDispatcherUnitTest {
         List<NotifyDeliveryEvent> events = new ArrayList<>();
         NotifyChannelAdapter adapter = new NotifyChannelAdapter() {
             @Override
-            public String channel() {
-                return "test";
+            public NotifyChannel channel() {
+                return NotifyChannel.of("test");
             }
 
             @Override
@@ -201,8 +201,8 @@ class NotifyIdempotencyDispatcherUnitTest {
                                         CountDownLatch release) {
         NotifyChannelAdapter adapter = new NotifyChannelAdapter() {
             @Override
-            public String channel() {
-                return "test";
+            public NotifyChannel channel() {
+                return NotifyChannel.of("test");
             }
 
             @Override
@@ -234,7 +234,7 @@ class NotifyIdempotencyDispatcherUnitTest {
             .requestId(requestId)
             .bizType("order")
             .bizId("100")
-            .channel("test")
+            .channel(NotifyChannel.of("test"))
             .targets(List.of(NotifyTarget.phone("13800000000")))
             .content(new NotifyTextContent("subject", content))
             .idempotencyKey(idempotencyKey)

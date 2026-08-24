@@ -174,7 +174,7 @@ public class SysNotifyMonitorServiceImpl implements ISysNotifyMonitorService {
         log.setOriginalRequestId(event.originalRequestId());
         log.setBizType(request.bizType());
         log.setBizId(request.bizId());
-        log.setChannel(result.channel());
+        log.setChannel(result.channel().value());
         log.setProviderKey(result.providerKey());
         if (request.auditPolicy() == NotifyAuditPolicy.FULL) {
             mapContent(log, request.content());

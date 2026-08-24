@@ -95,12 +95,12 @@ class NotifyMonitorMySqlIntegrationTest {
             .requestId(requestId)
             .bizType("contract")
             .bizId("100")
-            .channel("sms")
+            .channel(NotifyChannel.SMS)
             .targets(List.of(target))
             .content(new NotifyTemplateContent(null, "SMS_001", java.util.Map.of("code", "123456"),
                 "验证码 123456"))
             .build();
-        NotifyResult result = new NotifyResult(requestId, "sms", "sms-main", NotifyStatus.ACCEPTED,
+        NotifyResult result = new NotifyResult(requestId, NotifyChannel.SMS, "sms-main", NotifyStatus.ACCEPTED,
             List.of(NotifyTargetResult.accepted(target, "provider-message-1", 12L)));
         return new NotifyDeliveryEvent(request, new NotifyContext(7L, 9L, "trace-mysql"), result,
             null, notifyLogId, List.of(), Instant.parse("2026-08-22T08:00:00Z"));
@@ -109,11 +109,11 @@ class NotifyMonitorMySqlIntegrationTest {
     private NotifyDeliveryEvent duplicateEvent(Long notifyLogId, String requestId, String originalRequestId) {
         NotifyRequest request = NotifyRequest.builder()
             .requestId(requestId)
-            .channel("sms")
+            .channel(NotifyChannel.SMS)
             .targets(List.of(NotifyTarget.phone("13812345678")))
             .content(new NotifyTextContent(null, "验证码 123456"))
             .build();
-        NotifyResult result = new NotifyResult(requestId, "sms", "sms-main",
+        NotifyResult result = new NotifyResult(requestId, NotifyChannel.SMS, "sms-main",
             NotifyStatus.SKIPPED_DUPLICATE, List.of());
         return new NotifyDeliveryEvent(request, NotifyContext.empty(), result,
             originalRequestId, notifyLogId, List.of(), Instant.now());
