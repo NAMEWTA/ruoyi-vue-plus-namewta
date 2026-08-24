@@ -1,4 +1,4 @@
-package org.dromara.system.notify.bo;
+package org.dromara.system.notify.domain.bo;
 
 import lombok.Data;
 import org.springframework.format.annotation.DateTimeFormat;

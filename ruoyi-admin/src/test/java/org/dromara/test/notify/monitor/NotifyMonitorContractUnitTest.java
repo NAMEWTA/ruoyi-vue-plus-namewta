@@ -35,7 +35,7 @@ class NotifyMonitorContractUnitTest {
             SysNotifyController.class.getAnnotation(RequestMapping.class).value());
 
         Method list = SysNotifyController.class.getDeclaredMethod("list",
-            org.dromara.system.notify.bo.SysNotifyQuery.class,
+            org.dromara.system.notify.domain.bo.SysNotifyQuery.class,
             org.dromara.common.mybatis.core.page.PageQuery.class);
         assertArrayEquals(new String[]{"system:notify:list"}, list.getAnnotation(SaCheckPermission.class).value());
         assertNotNull(list.getAnnotation(GetMapping.class));

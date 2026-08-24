@@ -1,4 +1,4 @@
-package org.dromara.system.notify.vo;
+package org.dromara.system.notify.domain.vo;
 
 import lombok.Data;
 import org.dromara.system.notify.domain.SysNotifyDeliveryLog;

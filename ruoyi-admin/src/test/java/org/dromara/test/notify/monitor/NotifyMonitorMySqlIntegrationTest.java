@@ -18,7 +18,7 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.notify.event.NotifyDeliveryEvent;
 import org.dromara.common.notify.model.*;
 import org.dromara.system.api.OssService;
-import org.dromara.system.notify.bo.SysNotifyQuery;
+import org.dromara.system.notify.domain.bo.SysNotifyQuery;
 import org.dromara.system.notify.mapper.SysNotifyDeliveryLogMapper;
 import org.dromara.system.notify.mapper.SysNotifyLogMapper;
 import org.dromara.system.notify.service.impl.SysNotifyMonitorServiceImpl;

@@ -10,11 +10,11 @@ import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.web.core.BaseController;
-import org.dromara.system.notify.bo.SysNotifyQuery;
-import org.dromara.system.notify.service.ISysNotifyMonitorService;
-import org.dromara.system.notify.vo.SysNotifyDetailVo;
-import org.dromara.system.notify.vo.SysNotifyListVo;
 import org.dromara.system.api.OssService;
+import org.dromara.system.notify.domain.bo.SysNotifyQuery;
+import org.dromara.system.notify.domain.vo.SysNotifyDetailVo;
+import org.dromara.system.notify.domain.vo.SysNotifyListVo;
+import org.dromara.system.notify.service.ISysNotifyMonitorService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
