@@ -67,6 +67,8 @@ public final class OssUploadContracts {
     public record ResumeResponse(
         String uploadToken,
         OssUploadMode mode,
+        OssUploadState state,
+        String completedOssId,
         String fileName,
         long fileSize,
         String contentType,

@@ -116,6 +116,27 @@ class OssUploadServiceUnitTest {
     }
 
     @Test
+    void shouldResumeCompletedTicketWithoutRenewingUploadAuthorization() throws ReflectiveOperationException {
+        InitResponse init = service.init(new InitRequest("general", "file.bin", 8,
+            "application/octet-stream", "fp-completed-resume"));
+        objects.objectPresent = true;
+        objects.objectSize = 8;
+        objects.contentType = "application/octet-stream";
+        assertEquals("1001", service.complete(init.uploadToken(), new CompleteRequest(List.of())));
+
+        ResumeResponse resumed = service.resume(init.uploadToken(), "fp-completed-resume");
+        Map<String, Object> values = new HashMap<>();
+        for (java.lang.reflect.RecordComponent component : ResumeResponse.class.getRecordComponents()) {
+            values.put(component.getName(), component.getAccessor().invoke(resumed));
+        }
+
+        assertEquals(OssUploadState.COMPLETED, values.get("state"));
+        assertEquals("1001", values.get("completedOssId"));
+        assertNull(resumed.presignedRequest());
+        assertEquals(0, objects.presignSingleCalls.get());
+    }
+
+    @Test
     void shouldUseClientOnlyForOptionalPolicyAdmissionAtInit() {
         properties.requirePolicy("general").setAllowedClientPks(Set.of(100L));
         identity.clientPk = 200L;
@@ -278,6 +299,7 @@ class OssUploadServiceUnitTest {
     private static final class FakeObjectStore implements OssUploadObjectStore {
         private final AtomicInteger completeCalls = new AtomicInteger();
         private final AtomicInteger deleteCalls = new AtomicInteger();
+        private final AtomicInteger presignSingleCalls = new AtomicInteger();
         private boolean objectPresent;
         private long objectSize;
         private String contentType;
@@ -305,6 +327,7 @@ class OssUploadServiceUnitTest {
 
         @Override
         public OssPresignedRequest presignSingle(OssUploadTicket ticket, Duration ttl) {
+            presignSingleCalls.incrementAndGet();
             return new OssPresignedRequest("PUT", "https://oss.example/object",
                 Map.of("x-amz-meta-upload-fingerprint", ticket.fingerprintDigest()), Instant.now().plus(ttl));
         }

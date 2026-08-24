@@ -171,3 +171,27 @@ insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path,
 select 1761400000000001081, 1762000000000000001, '通知删除', 1761400000000000125, 2, '', '', '', 'N', 'Y', 'F', '0', '0', 'system:notify:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), ''
 from dual
 where not exists (select 1 from sys_menu where menu_id = 1761400000000001081);
+
+-- ============================================================================
+-- NAMEWTA-BASE-DSL-003
+-- 变更内容：下线尚未具备业务合同的三个用户端工作台菜单
+-- 变更标识：2026-08-24_01:42:05
+-- 执行前置：已执行 NAMEWTA-BASE-DSL-002
+-- 适用范围：fresh 与已存在三个用户端基础菜单的 upgrade 环境
+-- 重复执行：是
+-- 回滚方式：业务页面完成后将三个 menu_id 的 visible/status 恢复为 '0'，并按固定 role_id/menu_id 恢复三条关系
+-- ============================================================================
+
+delete from sys_role_menu
+where (role_id = 1761300000000000010 and menu_id = 1761400000000002001)
+   or (role_id = 1761300000000000011 and menu_id = 1761400000000002002)
+   or (role_id = 1761300000000000012 and menu_id = 1761400000000002003);
+
+update sys_menu
+set visible = '1',
+    status = '1',
+    update_by = 1761100000000000001,
+    update_time = sysdate()
+where menu_id in (1761400000000002001, 1761400000000002002, 1761400000000002003);
+
+-- NAMEWTA-BASE-DSL-003-END

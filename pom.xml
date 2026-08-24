@@ -74,8 +74,8 @@
         <maven-surefire-plugin.version>3.5.5</maven-surefire-plugin.version>
         <!-- 统一版本号管理：Maven3.X需要，Maven4.0之后已原生支持 -->
         <flatten-maven-plugin.version>1.7.3</flatten-maven-plugin.version>
-        <!-- 打包默认跳过测试 -->
-        <maven.test.skip>true</maven.test.skip>
+        <!-- 默认执行测试；仅允许调用方在已独立运行测试后显式跳过 -->
+        <maven.test.skip>false</maven.test.skip>
     </properties>
 
     <profiles>

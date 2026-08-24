@@ -1,83 +1,111 @@
+name: ruoyi-namewta
+
 services:
+  # 固定 NAMEWTA 前缀，避免与上游默认 Compose 实例的容器名冲突。
   mysql:
     image: mysql:8.4.9
-    container_name: mysql
+    container_name: ruoyi-namewta-mysql
     environment:
       # 时区上海
       TZ: Asia/Shanghai
       # root 密码
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"
       # 初始化数据库(后续的初始化sql会在这个库执行)
-      MYSQL_DATABASE: ry-vue
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-ry-vue}"
+      MYSQL_USER: "${MYSQL_APP_USER:?MYSQL_APP_USER is required}"
+      MYSQL_PASSWORD: "${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}"
     ports:
-      - "3306:3306"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:43306:3306"
     volumes:
       # 数据挂载
-      - /docker/mysql/data/:/var/lib/mysql/
-      # 配置挂载
-      - /docker/mysql/conf/:/etc/mysql/conf.d/
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/mysql/data:/var/lib/mysql"
+      # 初始化客户端统一使用 utf8mb4，避免中文 SQL 被按单字节字符计数。
+      - ./mysql/conf/namewta-client.cnf:/etc/mysql/conf.d/namewta-client.cnf:ro
+      # fresh 数据卷按文件名顺序完成上游与 NAMEWTA 初始化
+      - ../sql/ry_vue.sql:/docker-entrypoint-initdb.d/10-ry-vue.sql:ro
+      - ../sql/ry_job.sql:/docker-entrypoint-initdb.d/20-ry-job.sql:ro
+      - ../sql/ry_workflow.sql:/docker-entrypoint-initdb.d/30-ry-workflow.sql:ro
+      - ../sql/ry_ai.sql:/docker-entrypoint-initdb.d/40-ry-ai.sql:ro
+      - ../sql/namewta/DDL.sql:/docker-entrypoint-initdb.d/50-namewta-ddl.sql:ro
+      - ../sql/namewta/DSL.sql:/docker-entrypoint-initdb.d/60-namewta-dsl.sql:ro
     command:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_general_ci
       --explicit_defaults_for_timestamp=true
       --lower_case_table_names=1
-    privileged: true
-    network_mode: "host"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
   nginx-web:
     image: nginx:1.31.1
-    container_name: nginx-web
+    container_name: ruoyi-namewta-nginx-web
+    profiles: [frontend]
     environment:
       # 时区上海
       TZ: Asia/Shanghai
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:40080:80"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:40443:443"
     volumes:
       # 证书映射
-      - /docker/nginx/cert:/etc/nginx/cert
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/nginx/cert:/etc/nginx/cert"
       # 配置文件映射
-      - /docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro
       # 页面目录
-      - /docker/nginx/html:/usr/share/nginx/html
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/nginx/html:/usr/share/nginx/html"
       # 日志目录
-      - /docker/nginx/log:/var/log/nginx
-    privileged: true
-    network_mode: "host"
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/nginx/log:/var/log/nginx"
+    restart: unless-stopped
 
   redis:
     image: redis:8.6.3
-    container_name: redis
+    container_name: ruoyi-namewta-redis
+    working_dir: /redis/data
     ports:
-      - "6379:6379"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:46379:6379"
     environment:
       # 时区上海
       TZ: Asia/Shanghai
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
     volumes:
       # 配置文件
-      - /docker/redis/conf:/redis/config:rw
+      - ./redis/conf/redis.conf:/redis/config/redis.conf:ro
       # 数据文件
-      - /docker/redis/data/:/redis/data/:rw
-    command: "redis-server /redis/config/redis.conf"
-    privileged: true
-    network_mode: "host"
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/redis/data:/redis/data"
+    command:
+      - redis-server
+      - /redis/config/redis.conf
+      - --requirepass
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   minio:
     # pgsty 开源社区 fork 重新维护的最新版 minio
     image: pgsty/minio:RELEASE.2026-04-17T00-00-00Z
-    container_name: minio
+    container_name: ruoyi-namewta-minio
     ports:
       # api 端口
-      - "9000:9000"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:49000:9000"
       # 控制台端口
-      - "9001:9001"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:49001:9001"
     environment:
       # 时区上海
       TZ: Asia/Shanghai
       # 管理后台用户名
-      MINIO_ROOT_USER: ruoyi
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}"
       # 管理后台密码，最小8个字符
-      MINIO_ROOT_PASSWORD: ruoyi123
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
+      MINIO_API_CORS_ALLOW_ORIGIN: "${MINIO_API_CORS_ALLOW_ORIGIN:-http://localhost}"
       # https需要指定域名
       #MINIO_SERVER_URL: "https://xxx.com:9000"
       #MINIO_BROWSER_REDIRECT_URL: "https://xxx.com:9001"
@@ -89,88 +117,127 @@ services:
       MINIO_COMPRESS_MIME_TYPES: ""
     volumes:
       # 映射当前目录下的data目录至容器内/data目录
-      - /docker/minio/data:/data
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/minio/data:/data"
       # 映射配置目录
-      - /docker/minio/config:/root/.minio/
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/minio/config:/root/.minio"
     command: server --address ':9000' --console-address ':9001' /data  # 指定容器中的目录 /data
-    privileged: true
-    network_mode: "host"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   ruoyi-server1:
     image: ruoyi/ruoyi-server:6.0.0
-    container_name: ruoyi-server1
+    container_name: ruoyi-namewta-server1
+    profiles: [backend]
     environment:
       # 时区上海
       TZ: Asia/Shanghai
       SERVER_PORT: 8080
       SNAIL_JOB_PORT: 28080
       SNAIL_AI_PORT: 38080
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ry-vue}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true"
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: "${MYSQL_APP_USER:?MYSQL_APP_USER is required}"
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: "${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+    ports:
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:48080:8080"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:42080:28080"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:43080:38080"
     volumes:
       # 配置文件
-      - /docker/server1/logs/:/ruoyi/server/logs/
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/server1/logs:/ruoyi/server/logs"
       # skywalking 探针
 #      - /docker/skywalking/agent/:/ruoyi/skywalking/agent
-    privileged: true
-    network_mode: "host"
+    restart: unless-stopped
 
   ruoyi-server2:
     image: ruoyi/ruoyi-server:6.0.0
-    container_name: ruoyi-server2
+    container_name: ruoyi-namewta-server2
+    profiles: [backend]
     environment:
       # 时区上海
       TZ: Asia/Shanghai
       SERVER_PORT: 8081
       SNAIL_JOB_PORT: 28081
       SNAIL_AI_PORT: 38081
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ry-vue}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true"
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: "${MYSQL_APP_USER:?MYSQL_APP_USER is required}"
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: "${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+    ports:
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:48081:8081"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:42081:28081"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:43081:38081"
     volumes:
       # 配置文件
-      - /docker/server2/logs/:/ruoyi/server/logs/
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/server2/logs:/ruoyi/server/logs"
       # skywalking 探针
 #      - /docker/skywalking/agent/:/ruoyi/skywalking/agent
-    privileged: true
-    network_mode: "host"
+    restart: unless-stopped
 
   ruoyi-monitor-admin:
     image: ruoyi/ruoyi-monitor-admin:6.0.0
-    container_name: ruoyi-monitor-admin
-    environment:
-      # 时区上海
-      TZ: Asia/Shanghai
-    volumes:
-      # 配置文件
-      - /docker/monitor/logs/:/ruoyi/monitor/logs
-    privileged: true
-    network_mode: "host"
-
-  ruoyi-snailjob-server:
-    image: ruoyi/ruoyi-snailjob-server:6.0.0
-    container_name: ruoyi-snailjob-server
+    container_name: ruoyi-namewta-monitor-admin
+    profiles: [backend]
     environment:
       # 时区上海
       TZ: Asia/Shanghai
     ports:
-      - "8800:8800"
-      - "17888:17888"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:49090:9090"
     volumes:
-      - /docker/snailjob/logs/:/ruoyi/snailjob/logs
-    privileged: true
-    network_mode: "host"
+      # 配置文件
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/monitor/logs:/ruoyi/monitor/logs"
+    restart: unless-stopped
 
-  ruoyi-snailai-server:
-    image: ruoyi/ruoyi-snailai-server:6.0.0
-    container_name: ruoyi-snailai-server
+  ruoyi-snailjob-server:
+    image: ruoyi/ruoyi-snailjob-server:6.0.0
+    container_name: ruoyi-namewta-snailjob-server
+    profiles: [backend]
     environment:
       # 时区上海
       TZ: Asia/Shanghai
-      # Docling 与 PaddleOCR 服务需单独部署；host 网络模式下默认通过宿主机端口访问
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ry-vue}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: "${MYSQL_APP_USER:?MYSQL_APP_USER is required}"
+      SPRING_DATASOURCE_PASSWORD: "${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}"
+      SPRING_BOOT_ADMIN_CLIENT_URL: http://ruoyi-monitor-admin:9090/admin
+    ports:
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:48800:8800"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:47888:17888"
+    volumes:
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/snailjob/logs:/ruoyi/snailjob/logs"
+    restart: unless-stopped
+
+  ruoyi-snailai-server:
+    image: ruoyi/ruoyi-snailai-server:6.0.0
+    container_name: ruoyi-namewta-snailai-server
+    profiles: [backend]
+    environment:
+      # 时区上海
+      TZ: Asia/Shanghai
+      # Docling 与 PaddleOCR 服务需单独部署；地址可通过环境变量覆盖
       SNAIL_AI_RAG_DOCLING_ENABLED: ${SNAIL_AI_RAG_DOCLING_ENABLED:-true}
       SNAIL_AI_RAG_DOCLING_URL: ${SNAIL_AI_RAG_DOCLING_URL:-http://127.0.0.1:5100}
       SNAIL_AI_RAG_DOCLING_PADDLE_OCR_ENABLED: ${SNAIL_AI_RAG_DOCLING_PADDLE_OCR_ENABLED:-true}
       SNAIL_AI_RAG_DOCLING_PADDLE_OCR_URL: ${SNAIL_AI_RAG_DOCLING_PADDLE_OCR_URL:-http://127.0.0.1:8866/ocr}
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ry-vue}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: "${MYSQL_APP_USER:?MYSQL_APP_USER is required}"
+      SPRING_DATASOURCE_PASSWORD: "${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}"
+      SPRING_BOOT_ADMIN_CLIENT_URL: http://ruoyi-monitor-admin:9090/admin
     ports:
-      - "8900:8900"
-      - "18888:18888"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:48900:8900"
+      - "${NAMEWTA_BIND_HOST:-127.0.0.1}:48888:18888"
     volumes:
-      - /docker/snailai/logs/:/ruoyi/snailai/logs
-    privileged: true
-    network_mode: "host"
+      - "${NAMEWTA_DATA_ROOT:-./runtime}/snailai/logs:/ruoyi/snailai/logs"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: ruoyi-namewta-network
+    driver: bridge

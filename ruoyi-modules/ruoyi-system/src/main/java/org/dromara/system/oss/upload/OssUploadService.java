@@ -109,6 +109,11 @@ public class OssUploadService {
         if (!Objects.equals(ticket.fingerprint(), fingerprint)) {
             throw new OssUploadException(OssUploadError.FINGERPRINT_MISMATCH, "文件指纹不匹配");
         }
+        if (ticket.state() == OssUploadState.COMPLETED && ticket.ossId() != null) {
+            return new ResumeResponse(token, ticket.mode(), ticket.state(), ticket.ossId().toString(),
+                ticket.originalName(), ticket.fileSize(), ticket.contentType(), ticket.partSize(), ticket.partCount(),
+                Instant.ofEpochMilli(ticket.expiresAt()), null, List.of());
+        }
         List<UploadedPart> uploaded = List.of();
         if (ticket.mode() == OssUploadMode.MULTIPART) {
             try {
@@ -120,7 +125,7 @@ public class OssUploadService {
         }
         OssPresignedRequest presignedRequest = ticket.mode() == OssUploadMode.SINGLE
             ? objectStore.presignSingle(ticket, properties.getPresignTtl()) : null;
-        return new ResumeResponse(token, ticket.mode(), ticket.originalName(), ticket.fileSize(),
+        return new ResumeResponse(token, ticket.mode(), ticket.state(), null, ticket.originalName(), ticket.fileSize(),
             ticket.contentType(), ticket.partSize(), ticket.partCount(), Instant.ofEpochMilli(ticket.expiresAt()),
             presignedRequest, uploaded);
     }

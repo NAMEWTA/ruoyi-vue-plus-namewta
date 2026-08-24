@@ -2,21 +2,28 @@ package org.dromara.test.oss.upload;
 
 import org.dromara.common.core.domain.R;
 import org.dromara.system.controller.system.SysOssUploadController;
+import org.dromara.system.oss.upload.OssUploadContracts.CompleteRequest;
 import org.dromara.system.oss.upload.OssUploadContracts.ErrorResponse;
 import org.dromara.system.oss.upload.OssUploadContracts.SignedPart;
 import org.dromara.system.oss.upload.OssUploadError;
 import org.dromara.system.oss.upload.OssUploadException;
+import org.dromara.system.oss.upload.OssUploadService;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.*;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * 固定 REST 路径和 JSON 形状合同测试。
@@ -34,6 +41,19 @@ class OssUploadHttpContractUnitTest {
         assertEquals("/{uploadToken}/complete", path("complete", PostMapping.class));
         assertEquals("/{uploadToken}", path("abort", DeleteMapping.class));
         assertTrue(method("complete").getGenericReturnType().getTypeName().contains("R<java.lang.String>"));
+    }
+
+    @Test
+    void completeMustReturnOssIdAsResponseData() {
+        OssUploadService uploadService = mock(OssUploadService.class);
+        when(uploadService.complete(eq("token-1"), any(CompleteRequest.class))).thenReturn("9001");
+        SysOssUploadController controller = new SysOssUploadController(uploadService);
+
+        R<String> response = controller.complete("token-1", new CompleteRequest(List.of()));
+
+        assertTrue(R.isSuccess(response));
+        assertEquals("9001", response.getData());
+        assertEquals("操作成功", response.getMsg());
     }
 
     @Test

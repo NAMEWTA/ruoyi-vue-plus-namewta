@@ -1,6 +1,15 @@
 # NAMEWTA 多 APP RBAC SQL
 
-仅维护 MySQL，不同步 PostgreSQL、Oracle 或 SQL Server。不要修改上游 `script/sql/ry_vue.sql`。
+仅维护和验收 MySQL，不同步 PostgreSQL、Oracle 或 SQL Server。NAMEWTA 的 Client、RBAC、OSS 生命周期和统一通知表结构不承诺在其他方言运行；上游框架的多数据源能力不等于本产品的数据库支持矩阵。不要修改上游 `script/sql/ry_vue.sql`。
+
+## 产品支持矩阵
+
+| 数据库 | NAMEWTA schema | 自动化验证 | 产品支持 |
+|---|---|---|---|
+| MySQL 8.4 | `DDL.sql` + `DSL.sql` | fresh/upgrade integration | 是 |
+| PostgreSQL / Oracle / SQL Server | 无 | 无 | 否 |
+
+需要扩展方言时必须独立设计版本化迁移、回滚和 CI matrix；在这些条件满足前，不得将 dynamic-datasource 的连接能力描述为 NAMEWTA 产品支持。
 
 本目录只允许存在两个 SQL 文件：
 

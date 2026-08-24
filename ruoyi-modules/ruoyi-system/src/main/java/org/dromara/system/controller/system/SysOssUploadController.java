@@ -46,7 +46,7 @@ public class SysOssUploadController {
     @PostMapping("/{uploadToken}/complete")
     public R<String> complete(@PathVariable String uploadToken,
                               @Valid @RequestBody(required = false) CompleteRequest request) {
-        return R.ok(uploadService.complete(uploadToken, request));
+        return R.data(uploadService.complete(uploadToken, request));
     }
 
     @SaCheckPermission("system:oss:upload")
