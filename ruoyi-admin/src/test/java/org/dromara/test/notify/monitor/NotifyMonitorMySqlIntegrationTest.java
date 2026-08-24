@@ -7,6 +7,8 @@ import com.baomidou.mybatisplus.core.config.GlobalConfig;
 import com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -116,7 +119,7 @@ class NotifyMonitorMySqlIntegrationTest {
             originalRequestId, notifyLogId, List.of(), Instant.now());
     }
 
-    private SqlSessionFactory sqlSessionFactory(PooledDataSource dataSource) {
+    private SqlSessionFactory sqlSessionFactory(PooledDataSource dataSource) throws Exception {
         Environment environment = new Environment("notify-monitor-test", new JdbcTransactionFactory(), dataSource);
         MybatisConfiguration configuration = new MybatisConfiguration(environment);
         configuration.setMapUnderscoreToCamelCase(true);
@@ -128,7 +131,15 @@ class NotifyMonitorMySqlIntegrationTest {
         configuration.addInterceptor(interceptor);
         configuration.addMapper(SysNotifyLogMapper.class);
         configuration.addMapper(SysNotifyDeliveryLogMapper.class);
+        loadMapperXml(configuration, "mapper/system/SysNotifyLogMapper.xml");
+        loadMapperXml(configuration, "mapper/system/SysNotifyDeliveryLogMapper.xml");
         return new MybatisSqlSessionFactoryBuilder().build(configuration);
+    }
+
+    private void loadMapperXml(MybatisConfiguration configuration, String resource) throws Exception {
+        try (InputStream input = Resources.getResourceAsStream(resource)) {
+            new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+        }
     }
 
     private void prepareSchema(PooledDataSource dataSource) throws Exception {
