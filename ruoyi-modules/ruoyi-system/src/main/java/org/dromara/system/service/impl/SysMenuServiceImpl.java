@@ -15,16 +15,15 @@ import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.system.domain.SysMenu;
 import org.dromara.system.domain.SysRole;
 import org.dromara.system.domain.SysRoleMenu;
-import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.bo.SysMenuBo;
 import org.dromara.system.domain.vo.MetaVo;
 import org.dromara.system.domain.vo.RouterVo;
 import org.dromara.system.domain.vo.SysMenuVo;
 import org.dromara.system.mapper.SysMenuMapper;
-import org.dromara.system.mapper.SysClientMapper;
 import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.service.ClientSessionService;
+import org.dromara.system.service.ISysClientDefaultRoleResolverService;
 import org.dromara.system.service.ISysMenuService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,8 +43,8 @@ public class SysMenuServiceImpl implements ISysMenuService {
     private final SysMenuMapper menuMapper;
     private final SysRoleMapper roleMapper;
     private final SysRoleMenuMapper roleMenuMapper;
-    private final SysClientMapper clientMapper;
     private final ClientSessionService clientSessionService;
+    private final ISysClientDefaultRoleResolverService defaultRoleResolverService;
 
     /**
      * 根据用户查询系统菜单列表
@@ -86,7 +85,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
                 .voList();
         }
         return mergeMenuVos(menuMapper.selectMenuListByUserId(menu, userId, clientId),
-            menuMapper.selectMenuListByRoleId(menu, resolveDefaultRoleId(clientId), clientId));
+            menuMapper.selectMenuListByRoleId(menu, defaultRoleResolverService.resolveRoleId(clientId), clientId));
     }
 
     /**
@@ -98,7 +97,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
     @Override
     public Set<String> selectMenuPermsByUserId(Long userId, Long clientId) {
         Set<String> perms = new HashSet<>(menuMapper.selectMenuPermsByUserId(userId, clientId));
-        Long defaultRoleId = resolveDefaultRoleId(clientId);
+        Long defaultRoleId = defaultRoleResolverService.resolveRoleId(clientId);
         if (defaultRoleId != null) {
             perms.addAll(menuMapper.selectMenuPermsByRoleId(defaultRoleId));
         }
@@ -144,7 +143,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
         } else {
             menus = mergeMenus(
                 menuMapper.selectMenuTreeByUserId(userId, clientId),
-                menuMapper.selectMenuTreeByRoleId(resolveDefaultRoleId(clientId), clientId));
+                menuMapper.selectMenuTreeByRoleId(defaultRoleResolverService.resolveRoleId(clientId), clientId));
         }
         if (CollUtil.isEmpty(menus)) {
             return CollUtil.newArrayList();
@@ -480,31 +479,6 @@ public class SysMenuServiceImpl implements ISysMenuService {
         if (!menu.getClientId().equals(parent.getClientId())) {
             throw new ServiceException(isAdd ? "父菜单必须属于同一客户端" : "不能将菜单移动到其他客户端");
         }
-    }
-
-    /**
-     * 读取客户端默认角色ID。角色必须启用且属于当前客户端。
-     *
-     * @param clientId 客户端主键
-     * @return 默认角色ID，不存在时返回 null
-     */
-    private Long resolveDefaultRoleId(Long clientId) {
-        if (ObjectUtil.isNull(clientId)) {
-            return null;
-        }
-        SysClient client = clientMapper.selectById(clientId);
-        if (ObjectUtil.isNull(client) || !SystemConstants.NORMAL.equals(client.getStatus())) {
-            throw new ServiceException("客户端不存在或已停用");
-        }
-        if (ObjectUtil.isNull(client.getDefaultRoleId())) {
-            return null;
-        }
-        SysRole role = roleMapper.selectById(client.getDefaultRoleId());
-        if (ObjectUtil.isNull(role) || !SystemConstants.NORMAL.equals(role.getStatus())
-            || ObjectUtil.isNull(role.getClientId()) || !clientId.equals(role.getClientId())) {
-            throw new ServiceException("客户端默认角色配置无效");
-        }
-        return role.getRoleId();
     }
 
     /**

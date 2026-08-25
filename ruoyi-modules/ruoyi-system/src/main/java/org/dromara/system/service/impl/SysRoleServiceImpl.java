@@ -37,6 +37,7 @@ import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.mapper.SysUserRoleMapper;
 import org.dromara.system.mapper.SysUserTypeMapper;
 import org.dromara.system.service.ClientSessionService;
+import org.dromara.system.service.ISysClientDefaultRoleResolverService;
 import org.dromara.system.service.ISysRoleService;
 import org.dromara.system.service.ISysUserTypeRelService;
 import org.springframework.cache.annotation.CacheEvict;
@@ -63,6 +64,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     private final SysUserTypeMapper userTypeMapper;
     private final ClientSessionService clientSessionService;
     private final ISysUserTypeRelService userTypeRelService;
+    private final ISysClientDefaultRoleResolverService defaultRoleResolverService;
 
     /**
      * 分页查询角色列表
@@ -73,9 +75,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public PageResult<SysRoleVo> selectPageRoleList(SysRoleBo role, PageQuery pageQuery) {
-        requireActiveClient(role.getClientId());
+        SysClient client = requireActiveClient(role.getClientId());
         Page<SysRoleVo> page = roleMapper.selectPageRoleList(pageQuery.build(), this.buildQueryWrapper(role));
-        markClientDefault(page.getRecords(), role.getClientId());
+        markClientDefault(page.getRecords(), client);
         return PageResult.build(page.getRecords(), page.getTotal());
     }
 
@@ -87,9 +89,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public List<SysRoleVo> selectRoleList(SysRoleBo role) {
-        requireActiveClient(role.getClientId());
+        SysClient client = requireActiveClient(role.getClientId());
         List<SysRoleVo> roles = roleMapper.selectRoleList(this.buildQueryWrapper(role));
-        markClientDefault(roles, role.getClientId());
+        markClientDefault(roles, client);
         return roles;
     }
 
@@ -120,9 +122,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @Override
     public List<SysRoleVo> selectRolesByUserId(Long userId, Long clientId) {
-        requireActiveClient(clientId);
+        SysClient client = requireActiveClient(clientId);
         List<SysRoleVo> roles = new ArrayList<>(roleMapper.selectRolesByUserId(userId, clientId));
-        mergeDefaultRole(roles, clientId);
+        mergeDefaultRole(roles, client);
         return roles;
     }
 
@@ -143,7 +145,6 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
                 role.setFlag(true);
             }
         }
-        markClientDefault(roles, clientId);
         return roles;
     }
 
@@ -724,12 +725,11 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     /**
      * 在有效角色中合并客户端默认角色，不写入 sys_user_role。
      *
-     * @param roles    用户显式角色
-     * @param clientId 客户端主键
+     * @param roles  用户显式角色
+     * @param client 已校验的客户端
      */
-    private void mergeDefaultRole(List<SysRoleVo> roles, Long clientId) {
-        SysClient client = requireActiveClient(clientId);
-        SysRoleVo defaultRole = resolveConfiguredDefaultRole(client);
+    private void mergeDefaultRole(List<SysRoleVo> roles, SysClient client) {
+        SysRoleVo defaultRole = defaultRoleResolverService.resolveRole(client);
         if (ObjectUtil.isNull(defaultRole)) {
             return;
         }
@@ -746,12 +746,11 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     /**
      * 标记当前客户端的默认角色，便于管理端只读展示且不写入 sys_user_role。
      *
-     * @param roles    角色列表
-     * @param clientId 客户端主键
+     * @param roles  角色列表
+     * @param client 已校验的客户端
      */
-    private void markClientDefault(List<SysRoleVo> roles, Long clientId) {
-        SysClient client = requireActiveClient(clientId);
-        SysRoleVo defaultRole = resolveConfiguredDefaultRole(client);
+    private void markClientDefault(List<SysRoleVo> roles, SysClient client) {
+        SysRoleVo defaultRole = defaultRoleResolverService.resolveRole(client);
         if (ObjectUtil.isNull(defaultRole) || CollUtil.isEmpty(roles)) {
             return;
         }
@@ -779,23 +778,6 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             throw new ServiceException("客户端登录域不存在或已停用");
         }
         return client;
-    }
-
-    /**
-     * 解析已配置的默认角色；未配置时返回空，配置错误时拒绝继续授权。
-     */
-    private SysRoleVo resolveConfiguredDefaultRole(SysClient client) {
-        if (ObjectUtil.isNull(client.getDefaultRoleId())) {
-            return null;
-        }
-        SysRoleVo role = roleMapper.selectVoById(client.getDefaultRoleId());
-        if (ObjectUtil.isNull(role)
-            || !SystemConstants.NORMAL.equals(role.getStatus())
-            || ObjectUtil.isNull(role.getClientId())
-            || !client.getId().equals(role.getClientId())) {
-            throw new ServiceException("客户端默认角色配置无效");
-        }
-        return role;
     }
 
     /**
