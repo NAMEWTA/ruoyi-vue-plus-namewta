@@ -7,7 +7,6 @@ import org.dromara.common.json.enhance.JsonValueEnhancer;
 import org.dromara.common.web.advice.ResponseEnhancementAdvice;
 import org.dromara.common.web.config.properties.CorsProperties;
 import org.dromara.common.web.handler.GlobalExceptionHandler;
-import org.dromara.common.web.interceptor.PlusWebInvokeTimeInterceptor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -15,7 +14,6 @@ import org.springframework.format.FormatterRegistry;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.time.LocalDateTime;
@@ -29,17 +27,6 @@ import java.util.Date;
 @AutoConfiguration
 @EnableConfigurationProperties(CorsProperties.class)
 public class ResourcesConfig implements WebMvcConfigurer {
-
-    /**
-     * 注册全局拦截器。
-     *
-     * @param registry 拦截器注册表
-     */
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        // 全局访问性能拦截
-        registry.addInterceptor(new PlusWebInvokeTimeInterceptor());
-    }
 
     /**
      * 注册全局格式转换器。

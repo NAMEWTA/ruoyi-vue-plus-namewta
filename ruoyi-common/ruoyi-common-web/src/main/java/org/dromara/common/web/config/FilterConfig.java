@@ -31,7 +31,7 @@ public class FilterConfig {
     @FilterRegistration(
         name = "xssFilter",
         urlPatterns = "/*",
-        order = FilterRegistrationBean.HIGHEST_PRECEDENCE + 1,
+        order = FilterRegistrationBean.HIGHEST_PRECEDENCE + 3,
         dispatcherTypes = DispatcherType.REQUEST
     )
     public XssFilter xssFilter(XssProperties xssProperties) {
@@ -44,7 +44,12 @@ public class FilterConfig {
      * @return 请求包装过滤器实例
      */
     @Bean
-    @FilterRegistration(name = "repeatableFilter", urlPatterns = "/*")
+    @FilterRegistration(
+        name = "repeatableFilter",
+        urlPatterns = "/*",
+        order = FilterRegistrationBean.HIGHEST_PRECEDENCE + 1,
+        dispatcherTypes = DispatcherType.REQUEST
+    )
     public RepeatableFilter repeatableFilter() {
         return new RepeatableFilter();
     }

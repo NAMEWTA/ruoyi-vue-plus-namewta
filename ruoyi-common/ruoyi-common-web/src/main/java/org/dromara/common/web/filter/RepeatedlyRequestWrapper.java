@@ -13,6 +13,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
  * 构建可重复读取输入流的请求包装器，缓存请求体以支持多次读取。
@@ -113,5 +114,24 @@ public class RepeatedlyRequestWrapper extends HttpServletRequestWrapper {
 
             }
         };
+    }
+
+    /**
+     * 返回请求体的实际 UTF-8 字节数。
+     *
+     * @return 请求体字节数
+     */
+    public int getBodyLength() {
+        return body.length;
+    }
+
+    /**
+     * 复制不超过指定上限的请求体前缀，避免日志截断再复制完整大正文。
+     *
+     * @param maxLength 最大字节数
+     * @return 请求体前缀
+     */
+    public byte[] getBodyPrefix(int maxLength) {
+        return Arrays.copyOf(body, Math.min(body.length, maxLength));
     }
 }
