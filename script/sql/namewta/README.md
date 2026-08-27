@@ -1,6 +1,6 @@
-# NAMEWTA 多 APP RBAC SQL
+# NAMEWTA 增量 SQL
 
-仅维护和验收 MySQL，不同步 PostgreSQL、Oracle 或 SQL Server。NAMEWTA 的 Client、RBAC、OSS 生命周期和统一通知表结构不承诺在其他方言运行；上游框架的多数据源能力不等于本产品的数据库支持矩阵。不要修改上游 `script/sql/ry_vue.sql`。
+本目录保存 NAMEWTA 相较上游新增的 Client、RBAC、OSS 生命周期、统一通知及后续产品 schema。仅维护和验收 MySQL，不同步 PostgreSQL、Oracle 或 SQL Server；上游框架的多数据源能力不等于本产品的数据库支持矩阵。不要修改上游 `script/sql/ry_vue.sql`。
 
 ## 产品支持矩阵
 
