@@ -55,16 +55,16 @@ class OssNotifyMigrationUnitTest {
     }
 
     @Test
-    void dslDefinesIdempotentGlobalMonitorMenuAndThreePermissions() throws IOException {
-        String dsl = readSql("DSL.sql");
+    void dmlDefinesIdempotentGlobalMonitorMenuAndThreePermissions() throws IOException {
+        String dml = readSql("DML.sql");
 
-        assertTrue(dsl.contains(DSL_MARKER));
-        assertTrue(dsl.contains("monitor/notify/index"));
-        assertTrue(dsl.contains("system:notify:list"));
-        assertTrue(dsl.contains("system:notify:query"));
-        assertTrue(dsl.contains("system:notify:remove"));
-        assertTrue(dsl.contains("where not exists"));
-        assertFalse(dsl.substring(dsl.indexOf(DSL_MARKER)).contains("client_pk"));
+        assertTrue(dml.contains(DSL_MARKER));
+        assertTrue(dml.contains("monitor/notify/index"));
+        assertTrue(dml.contains("system:notify:list"));
+        assertTrue(dml.contains("system:notify:query"));
+        assertTrue(dml.contains("system:notify:remove"));
+        assertTrue(dml.contains("where not exists"));
+        assertFalse(dml.substring(dml.indexOf(DSL_MARKER)).contains("client_pk"));
     }
 
     private void assertBaseFields(String table) {

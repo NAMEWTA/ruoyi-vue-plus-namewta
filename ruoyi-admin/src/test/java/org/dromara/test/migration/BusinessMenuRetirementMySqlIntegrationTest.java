@@ -81,11 +81,11 @@ class BusinessMenuRetirementMySqlIntegrationTest {
     }
 
     private String migrationSql() throws Exception {
-        String dsl = Files.readString(repositoryRoot().resolve("script/sql/namewta/DSL.sql"));
-        int start = dsl.indexOf("delete from sys_role_menu", dsl.indexOf("NAMEWTA-BASE-DSL-003"));
-        int end = dsl.indexOf("-- NAMEWTA-BASE-DSL-003-END", start);
+        String dml = Files.readString(repositoryRoot().resolve("script/sql/namewta/DML.sql"));
+        int start = dml.indexOf("delete from sys_role_menu", dml.indexOf("NAMEWTA-BASE-DSL-003"));
+        int end = dml.indexOf("-- NAMEWTA-BASE-DSL-003-END", start);
         assertTrue(start >= 0 && end > start, "missing NAMEWTA-BASE-DSL-003");
-        return dsl.substring(start, end)
+        return dml.substring(start, end)
             .replace("sys_role_menu", ROLE_MENU_TABLE)
             .replace("sys_menu", MENU_TABLE);
     }

@@ -27,7 +27,7 @@ services:
       - ../sql/ry_workflow.sql:/docker-entrypoint-initdb.d/30-ry-workflow.sql:ro
       - ../sql/ry_ai.sql:/docker-entrypoint-initdb.d/40-ry-ai.sql:ro
       - ../sql/namewta/DDL.sql:/docker-entrypoint-initdb.d/50-namewta-ddl.sql:ro
-      - ../sql/namewta/DSL.sql:/docker-entrypoint-initdb.d/60-namewta-dsl.sql:ro
+      - ../sql/namewta/DML.sql:/docker-entrypoint-initdb.d/60-namewta-dml.sql:ro
     command:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_general_ci

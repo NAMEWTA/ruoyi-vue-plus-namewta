@@ -6,7 +6,7 @@
 
 | 数据库 | NAMEWTA schema | 自动化验证 | 产品支持 |
 |---|---|---|---|
-| MySQL 8.4 | `DDL.sql` + `DSL.sql` | fresh/upgrade integration | 是 |
+| MySQL 8.4 | `DDL.sql` + `DML.sql` | fresh/upgrade integration | 是 |
 | PostgreSQL / Oracle / SQL Server | 无 | 无 | 否 |
 
 需要扩展方言时必须独立设计版本化迁移、回滚和 CI matrix；在这些条件满足前，不得将 dynamic-datasource 的连接能力描述为 NAMEWTA 产品支持。
@@ -16,7 +16,7 @@
 | 文件 | 职责 |
 |---|---|
 | `DDL.sql` | 表、字段、索引和约束等结构变更 |
-| `DSL.sql` | 初始化、回填和补偿等数据变更；DSL 是本项目约定的文件名 |
+| `DML.sql` | 初始化、回填和补偿等数据变更 |
 
 ## 全新环境
 
@@ -24,19 +24,19 @@
 
 1. `script/sql/ry_vue.sql`，以及业务需要的 `ry_job.sql`、`ry_workflow.sql`、`ry_ai.sql`
 2. `script/sql/namewta/DDL.sql`
-3. `script/sql/namewta/DSL.sql`
+3. `script/sql/namewta/DML.sql`
 
-`DSL.sql` 末尾的 `NAMEWTA-BASE-DSL-002` 使用 `NOT EXISTS`，全新环境执行时自动无操作。
+`DML.sql` 末尾的 `NAMEWTA-BASE-DSL-002` 使用 `NOT EXISTS`，全新环境执行时自动无操作。
 
 ## 已有环境
 
-- 仅有 `ry_vue.sql` 基线：完整执行 `DDL.sql`，再完整执行 `DSL.sql`。
-- 已执行旧 `001`、`002`、`003`：不要重放两个 BASE-001 块；缺少三个用户端菜单时，只执行 `DSL.sql` 中的 `NAMEWTA-BASE-DSL-002`。
+- 仅有 `ry_vue.sql` 基线：完整执行 `DDL.sql`，再完整执行 `DML.sql`。
+- 已执行旧 `001`、`002`、`003`：不要重放两个 BASE-001 块；缺少三个用户端菜单时，只执行 `DML.sql` 中的 `NAMEWTA-BASE-DSL-002`。
 - 已执行旧 `001` 至 `004`：视为已完成当前基线，后续只执行两个文件末尾新增且尚未应用的变更块。
 
 ## 追加规则
 
-`DDL.sql` 和 `DSL.sql` 自 2026-08-21 起只允许在文件末尾追加。已经生成、提交或执行过的 SQL 禁止修改、删除、替换或重排。每个追加块必须包含以下中文注释：
+`DDL.sql` 和 `DML.sql` 自 2026-08-21 起只允许在文件末尾追加。已经生成、提交或执行过的 SQL 禁止修改、删除、替换或重排。每个追加块必须包含以下中文注释：
 
 ```sql
 -- 变更内容：<简明中文说明>

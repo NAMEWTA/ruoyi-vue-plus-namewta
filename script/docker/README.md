@@ -34,6 +34,6 @@ docker compose --env-file /path/to/namewta.env -f script/docker/docker-compose.y
 docker compose --env-file /path/to/namewta.env -f script/docker/docker-compose.yml up -d mysql redis minio
 ```
 
-MySQL 初始化客户端固定使用 `utf8mb4`，并且只在数据目录为空时自动依次执行 `ry_vue.sql`、`ry_job.sql`、`ry_workflow.sql`、`ry_ai.sql`、`namewta/DDL.sql` 和 `namewta/DSL.sql`。已有数据目录不得通过重建容器重放这些非幂等脚本。
+MySQL 初始化客户端固定使用 `utf8mb4`，并且只在数据目录为空时自动依次执行 `ry_vue.sql`、`ry_job.sql`、`ry_workflow.sql`、`ry_ai.sql`、`namewta/DDL.sql` 和 `namewta/DML.sql`。已有数据目录不得通过重建容器重放这些非幂等脚本。
 
 停止容器时不要使用 `down -v`，数据目录由 `NAMEWTA_DATA_ROOT` 指定并单独备份。
