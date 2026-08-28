@@ -549,19 +549,18 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int deleteAuthUser(SysUserRole userRole) {
         if (LoginHelper.getUserId().equals(userRole.getUserId())) {
             throw new ServiceException("不允许修改当前用户角色!");
         }
+        SysRole role = requireRoleWithClient(userRole.getRoleId());
         int rows = userRoleMapper.lambda()
             .eq(SysUserRole::getRoleId, userRole.getRoleId())
             .eq(SysUserRole::getUserId, userRole.getUserId())
             .deleteCount();
         if (rows > 0) {
-            SysRole role = roleMapper.selectById(userRole.getRoleId());
-            if (role != null) {
-                clientSessionService.kickoutUserClient(userRole.getUserId(), role.getClientId());
-            }
+            clientSessionService.kickoutUserClient(userRole.getUserId(), role.getClientId());
         }
         return rows;
     }
@@ -574,20 +573,19 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int deleteAuthUsers(Long roleId, Collection<Long> userIds) {
         if (userIds.contains(LoginHelper.getUserId())) {
             throw new ServiceException("不允许修改当前用户角色!");
         }
+        SysRole role = requireRoleWithClient(roleId);
         int rows = userRoleMapper.lambda()
             .eq(SysUserRole::getRoleId, roleId)
             .in(SysUserRole::getUserId, userIds)
             .deleteCount();
         if (rows > 0) {
-            SysRole role = roleMapper.selectById(roleId);
-            if (role != null) {
-                for (Long userId : userIds) {
-                    clientSessionService.kickoutUserClient(userId, role.getClientId());
-                }
+            for (Long userId : userIds) {
+                clientSessionService.kickoutUserClient(userId, role.getClientId());
             }
         }
         return rows;
@@ -601,13 +599,14 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int insertAuthUsers(Long roleId, Collection<Long> userIds) {
         // 新增用户与角色管理
         int rows = 1;
         if (userIds.contains(LoginHelper.getUserId())) {
             throw new ServiceException("不允许修改当前用户角色!");
         }
-        SysRole role = roleMapper.selectById(roleId);
+        SysRole role = requireRoleWithClient(roleId);
         validateUsersHaveRoleClientType(role, userIds);
         List<SysUserRole> list = StreamUtils.toList(userIds, userId -> {
             SysUserRole ur = new SysUserRole();
@@ -618,12 +617,23 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         if (CollUtil.isNotEmpty(list)) {
             rows = userRoleMapper.insertBatch(list) ? list.size() : 0;
         }
-        if (rows > 0 && role != null) {
+        if (rows > 0) {
             for (Long userId : userIds) {
                 clientSessionService.kickoutUserClient(userId, role.getClientId());
             }
         }
         return rows;
+    }
+
+    private SysRole requireRoleWithClient(Long roleId) {
+        SysRole role = roleMapper.selectById(roleId);
+        if (role == null) {
+            throw new ServiceException("角色不存在");
+        }
+        if (role.getClientId() == null) {
+            throw new ServiceException("角色未关联客户端");
+        }
+        return role;
     }
 
     /**

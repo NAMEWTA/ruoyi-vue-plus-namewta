@@ -539,10 +539,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (roleList.isEmpty()) {
             if (clear) {
                 deleteUserRoles(userId, clientId);
-                kickUserRoleClients(userId, oldRoleIds);
-                if (ObjectUtil.isNotNull(clientId)) {
-                    clientSessionService.kickoutUserClient(userId, clientId);
-                }
+                invalidateUserRoleSessions(userId, clientId, oldRoleIds);
             }
             return;
         }
@@ -585,10 +582,15 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         userRoleMapper.insertBatch(list);
         Set<Long> kickRoleIds = new HashSet<>(oldRoleIds);
         kickRoleIds.addAll(roleList);
-        kickUserRoleClients(userId, kickRoleIds);
+        invalidateUserRoleSessions(userId, clientId, kickRoleIds);
+    }
+
+    private void invalidateUserRoleSessions(Long userId, Long clientId, Collection<Long> roleIds) {
         if (ObjectUtil.isNotNull(clientId)) {
             clientSessionService.kickoutUserClient(userId, clientId);
+            return;
         }
+        kickUserRoleClients(userId, roleIds);
     }
 
     /**
