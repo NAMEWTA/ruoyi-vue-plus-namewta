@@ -429,13 +429,6 @@
                 <version>${revision}</version>
             </dependency>
 
-            <!-- 代码生成模块 -->
-            <dependency>
-                <groupId>org.dromara</groupId>
-                <artifactId>ruoyi-gen</artifactId>
-                <version>${revision}</version>
-            </dependency>
-
             <!-- demo模块 -->
             <dependency>
                 <groupId>org.dromara</groupId>

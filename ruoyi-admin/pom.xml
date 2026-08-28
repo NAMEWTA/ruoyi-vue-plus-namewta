@@ -145,12 +145,6 @@
                     <groupId>org.dromara</groupId>
                     <artifactId>ruoyi-workflow</artifactId>
                 </dependency>
-
-                <!-- 代码生成模块 -->
-                <dependency>
-                    <groupId>org.dromara</groupId>
-                    <artifactId>ruoyi-gen</artifactId>
-                </dependency>
             </dependencies>
         </profile>
 
