@@ -28,6 +28,7 @@ import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.mapper.SysUserMapper;
 import org.dromara.system.service.ClientUserTypeAccessService;
+import org.dromara.system.temporarypassword.TemporaryPasswordService;
 import org.dromara.web.domain.vo.LoginVo;
 import org.dromara.web.service.IAuthStrategy;
 import org.dromara.web.service.SysLoginService;
@@ -47,6 +48,7 @@ public class PasswordAuthStrategy implements IAuthStrategy {
     private final SysLoginService loginService;
     private final SysUserMapper userMapper;
     private final ClientUserTypeAccessService clientUserTypeAccessService;
+    private final TemporaryPasswordService temporaryPasswordService;
 
     /**
      * 执行账号密码登录，并按客户端配置生成访问令牌。
@@ -70,8 +72,7 @@ public class PasswordAuthStrategy implements IAuthStrategy {
             validateCaptcha(username, code, uuid);
         }
         SysUserVo user = loadUserByUsername(username);
-        loginService.checkLogin(LoginType.PASSWORD, username, () -> !BCrypt.checkpw(password, user.getPassword()));
-        SysUserTypeVo activeUserType = clientUserTypeAccessService.requireLoginAccess(user.getUserId(), client);
+        SysUserTypeVo activeUserType = authenticate(user, client, username, password);
         LoginUser loginUser = loginService.buildLoginUser(user, client, activeUserType);
         SaLoginParameter model = IAuthStrategy.buildLoginParameter(client);
         // 生成token
@@ -82,6 +83,26 @@ public class PasswordAuthStrategy implements IAuthStrategy {
         loginVo.setExpireIn(StpUtil.getTokenTimeout());
         loginVo.setClientId(client.getClientId());
         return loginVo;
+    }
+
+    /**
+     * 将永久密码和临时密码合并为一次 grant 判定。临时值只在 Client 准入后消费。
+     */
+    SysUserTypeVo authenticate(SysUserVo user, SysClientVo client, String username, String password) {
+        loginService.checkLoginAllowed(LoginType.PASSWORD, username);
+        boolean permanentPassword = BCrypt.checkpw(password, user.getPassword());
+        TemporaryPasswordService.VerifiedPassword temporaryPassword = null;
+        if (!permanentPassword) {
+            temporaryPassword = temporaryPasswordService.verify(user.getUserId(), password)
+                .orElseThrow(() -> loginService.loginFailed(LoginType.PASSWORD, username));
+        }
+
+        SysUserTypeVo activeUserType = clientUserTypeAccessService.requireLoginAccess(user.getUserId(), client);
+        if (!permanentPassword && !temporaryPasswordService.consume(temporaryPassword)) {
+            throw loginService.loginFailed(LoginType.PASSWORD, username);
+        }
+        loginService.loginSucceeded(username);
+        return activeUserType;
     }
 
     /**

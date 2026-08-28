@@ -215,34 +215,51 @@ public class SysLoginService {
      * @param supplier  返回 {@code true} 表示本次认证失败
      */
     public void checkLogin(LoginType loginType, String username, Supplier<Boolean> supplier) {
-        String errorKey = CacheNames.PWD_ERR_CNT_KEY + username;
-        String loginFail = Constants.LOGIN_FAIL;
+        checkLoginAllowed(loginType, username);
+        if (supplier.get()) {
+            throw loginFailed(loginType, username);
+        }
+        loginSucceeded(username);
+    }
 
-        // 获取用户登录错误次数，默认为0 (可自定义限制策略 例如: key + username + ip)
+    /**
+     * 在执行一次凭据组合判定前检查账号是否已达到锁定阈值。
+     *
+     * @param loginType 登录类型
+     * @param username  登录标识
+     */
+    public void checkLoginAllowed(LoginType loginType, String username) {
+        String errorKey = CacheNames.PWD_ERR_CNT_KEY + username;
         int errorNumber = ObjectUtil.defaultIfNull(RedisUtils.getCacheObject(errorKey), 0);
-        // 锁定时间内登录 则踢出
         if (errorNumber >= maxRetryCount) {
-            recordLoginInfo(username, loginFail, MessageUtils.message(loginType.getRetryLimitExceed(), maxRetryCount, lockTime));
+            recordLoginInfo(username, Constants.LOGIN_FAIL,
+                MessageUtils.message(loginType.getRetryLimitExceed(), maxRetryCount, lockTime));
             throw new UserException(loginType.getRetryLimitExceed(), maxRetryCount, lockTime);
         }
+    }
 
-        if (supplier.get()) {
-            // 错误次数递增
-            errorNumber++;
-            RedisUtils.setCacheObject(errorKey, errorNumber, Duration.ofMinutes(lockTime));
-            // 达到规定错误次数 则锁定登录
-            if (errorNumber >= maxRetryCount) {
-                recordLoginInfo(username, loginFail, MessageUtils.message(loginType.getRetryLimitExceed(), maxRetryCount, lockTime));
-                throw new UserException(loginType.getRetryLimitExceed(), maxRetryCount, lockTime);
-            } else {
-                // 未达到规定错误次数
-                recordLoginInfo(username, loginFail, MessageUtils.message(loginType.getRetryLimitCount(), errorNumber));
-                throw new UserException(loginType.getRetryLimitCount(), errorNumber);
-            }
+    /**
+     * 为一次失败的组合凭据判定递增一次计数并构造通用登录异常。
+     */
+    public UserException loginFailed(LoginType loginType, String username) {
+        String errorKey = CacheNames.PWD_ERR_CNT_KEY + username;
+        int errorNumber = ObjectUtil.defaultIfNull(RedisUtils.getCacheObject(errorKey), 0) + 1;
+        RedisUtils.setCacheObject(errorKey, errorNumber, Duration.ofMinutes(lockTime));
+        if (errorNumber >= maxRetryCount) {
+            recordLoginInfo(username, Constants.LOGIN_FAIL,
+                MessageUtils.message(loginType.getRetryLimitExceed(), maxRetryCount, lockTime));
+            return new UserException(loginType.getRetryLimitExceed(), maxRetryCount, lockTime);
         }
+        recordLoginInfo(username, Constants.LOGIN_FAIL,
+            MessageUtils.message(loginType.getRetryLimitCount(), errorNumber));
+        return new UserException(loginType.getRetryLimitCount(), errorNumber);
+    }
 
-        // 登录成功 清空错误次数
-        RedisUtils.deleteObject(errorKey);
+    /**
+     * 一次组合凭据判定成功后清空失败计数。
+     */
+    public void loginSucceeded(String username) {
+        RedisUtils.deleteObject(CacheNames.PWD_ERR_CNT_KEY + username);
     }
 
 }
