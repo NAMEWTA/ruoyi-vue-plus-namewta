@@ -10,19 +10,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fesod.sheet.context.AnalysisContext;
 import org.apache.fesod.sheet.event.AnalysisEventListener;
 import org.dromara.common.core.exception.ServiceException;
-import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StreamUtils;
 import org.dromara.common.core.utils.ValidatorUtils;
 import org.dromara.common.excel.core.ExcelListener;
 import org.dromara.common.excel.core.ExcelResult;
-import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.system.domain.bo.SysUserBo;
 import org.dromara.system.domain.vo.SysUserImportVo;
 import org.dromara.system.domain.vo.SysUserVo;
-import org.dromara.system.service.ISysConfigService;
+import org.dromara.system.password.PasswordPolicyService;
 import org.dromara.system.service.ISysUserService;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * 系统用户自定义导入
@@ -36,11 +35,13 @@ public class SysUserImportListener extends AnalysisEventListener<SysUserImportVo
 
     private final ISysUserService userService;
 
-    private final String password;
+    private final PasswordPolicyService passwordPolicyService;
 
     private final Boolean isUpdateSupport;
 
     private final Long operUserId;
+
+    private final Consumer<SysUserBo> validator;
 
     private int successNum = 0;
     private int failureNum = 0;
@@ -50,14 +51,32 @@ public class SysUserImportListener extends AnalysisEventListener<SysUserImportVo
     /**
      * 构造用户导入监听器。
      *
-     * @param isUpdateSupport 是否允许更新已存在用户
+     * @param userService           用户服务
+     * @param passwordPolicyService 密码策略服务
+     * @param isUpdateSupport       是否允许更新已存在用户
+     * @param operUserId            操作人用户 ID
      */
-    public SysUserImportListener(Boolean isUpdateSupport) {
-        String initPassword = SpringUtils.getBean(ISysConfigService.class).selectConfigByKey("sys.user.initPassword");
-        this.userService = SpringUtils.getBean(ISysUserService.class);
-        this.password = BCrypt.hashpw(initPassword);
+    public SysUserImportListener(ISysUserService userService, PasswordPolicyService passwordPolicyService,
+                                 Boolean isUpdateSupport, Long operUserId) {
+        this(userService, passwordPolicyService, isUpdateSupport, operUserId, ValidatorUtils::validate);
+    }
+
+    /**
+     * 构造可替换行校验器的用户导入监听器。
+     *
+     * @param userService           用户服务
+     * @param passwordPolicyService 密码策略服务
+     * @param isUpdateSupport       是否允许更新已存在用户
+     * @param operUserId            操作人用户 ID
+     * @param validator             用户行校验器
+     */
+    public SysUserImportListener(ISysUserService userService, PasswordPolicyService passwordPolicyService,
+                                 Boolean isUpdateSupport, Long operUserId, Consumer<SysUserBo> validator) {
+        this.userService = userService;
+        this.passwordPolicyService = passwordPolicyService;
         this.isUpdateSupport = isUpdateSupport;
-        this.operUserId = LoginHelper.getUserId();
+        this.operUserId = operUserId;
+        this.validator = validator;
     }
 
     /**
@@ -73,8 +92,10 @@ public class SysUserImportListener extends AnalysisEventListener<SysUserImportVo
             // 验证是否存在这个用户
             if (ObjectUtil.isNull(sysUser)) {
                 SysUserBo user = BeanUtil.toBean(userVo, SysUserBo.class);
-                ValidatorUtils.validate(user);
-                user.setPassword(password);
+                validator.accept(user);
+                String password = passwordPolicyService.generateDefaultPassword();
+                passwordPolicyService.validateOrThrow(password);
+                user.setPassword(BCrypt.hashpw(password));
                 user.setCreateBy(operUserId);
                 userService.insertUser(user);
                 successNum++;
@@ -83,7 +104,7 @@ public class SysUserImportListener extends AnalysisEventListener<SysUserImportVo
                 Long userId = sysUser.getUserId();
                 SysUserBo user = BeanUtil.toBean(userVo, SysUserBo.class);
                 user.setUserId(userId);
-                ValidatorUtils.validate(user);
+                validator.accept(user);
                 userService.checkUserAllowed(user.getUserId());
                 userService.checkUserDataScope(user.getUserId());
                 user.setUpdateBy(operUserId);

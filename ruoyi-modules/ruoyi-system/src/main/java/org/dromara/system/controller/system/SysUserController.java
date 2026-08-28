@@ -30,12 +30,15 @@ import org.dromara.system.domain.bo.SysDeptBo;
 import org.dromara.system.domain.bo.SysPostBo;
 import org.dromara.system.domain.bo.SysRoleBo;
 import org.dromara.system.domain.bo.SysUserBo;
+import org.dromara.system.domain.vo.password.ResetPasswordCandidateVo;
 import org.dromara.system.domain.vo.*;
 import org.dromara.system.listener.SysUserImportListener;
+import org.dromara.system.password.PasswordPolicyService;
 import org.dromara.system.service.ISysDeptService;
 import org.dromara.system.service.ISysPostService;
 import org.dromara.system.service.ISysRoleService;
 import org.dromara.system.service.ISysUserService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -59,6 +62,7 @@ public class SysUserController extends BaseController {
     private final ISysRoleService roleService;
     private final ISysPostService postService;
     private final ISysDeptService deptService;
+    private final PasswordPolicyService passwordPolicyService;
 
     /**
      * 分页查询用户列表。
@@ -98,7 +102,8 @@ public class SysUserController extends BaseController {
     @PostMapping(value = "/importData", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public R<Void> importData(@RequestPart("file") MultipartFile file, boolean updateSupport) throws Exception {
         ExcelResult<SysUserImportVo> result = ExcelBuilder.read(file.getInputStream(), SysUserImportVo.class)
-            .listener(new SysUserImportListener(updateSupport))
+            .listener(new SysUserImportListener(userService, passwordPolicyService, updateSupport,
+                LoginHelper.getUserId()))
             .doRead();
         return R.ok(result.getAnalysis());
     }
@@ -142,8 +147,9 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:query")
     @GetMapping(value = {"/", "/{userId}"})
     public R<SysUserInfoVo> getInfo(@PathVariable(value = "userId", required = false) Long userId,
-                                    @RequestParam(required = false) Long clientId) {
-        SysUserInfoVo userInfoVo = new SysUserInfoVo();
+                                    @RequestParam(required = false) Long clientId,
+                                    HttpServletResponse response) {
+        ResetPasswordCandidateVo userInfoVo = new ResetPasswordCandidateVo();
         userInfoVo.setRoleIds(List.of());
         if (ObjectUtil.isNotNull(userId)) {
             userService.checkUserDataScope(userId);
@@ -159,6 +165,9 @@ public class SysUserController extends BaseController {
                 userInfoVo.setPosts(postService.selectPostList(postBo));
                 userInfoVo.setPostIds(postService.selectPostListByUserId(userId));
             }
+        } else {
+            response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+            userInfoVo.setPassword(passwordPolicyService.generateDefaultPassword());
         }
         List<SysRoleVo> roles = List.of();
         if (ObjectUtil.isNotNull(clientId)) {
@@ -182,7 +191,7 @@ public class SysUserController extends BaseController {
      * @return 操作结果
      */
     @SaCheckPermission("system:user:add")
-    @Log(title = "用户管理", businessType = BusinessType.INSERT)
+    @Log(title = "用户管理", businessType = BusinessType.INSERT, excludeParamNames = "password")
     @RepeatSubmit()
     @PostMapping
     public R<Void> add(@Validated @RequestBody SysUserBo user) {
@@ -194,7 +203,9 @@ public class SysUserController extends BaseController {
         } else if (StringUtils.isNotEmpty(user.getEmail()) && !userService.checkEmailUnique(user)) {
             return R.fail("新增用户'" + user.getUserName() + "'失败，邮箱账号已存在");
         }
-        user.setPassword(BCrypt.hashpw(user.getPassword()));
+        String password = user.getPassword();
+        passwordPolicyService.validateOrThrow(password);
+        user.setPassword(BCrypt.hashpw(password));
         return toAjax(userService.insertUser(user));
     }
 
@@ -205,7 +216,7 @@ public class SysUserController extends BaseController {
      * @return 操作结果
      */
     @SaCheckPermission("system:user:edit")
-    @Log(title = "用户管理", businessType = BusinessType.UPDATE)
+    @Log(title = "用户管理", businessType = BusinessType.UPDATE, excludeParamNames = "password")
     @RepeatSubmit()
     @PutMapping
     public R<Void> edit(@Validated @RequestBody SysUserBo user) {
@@ -260,13 +271,15 @@ public class SysUserController extends BaseController {
      */
     @ApiEncrypt
     @SaCheckPermission("system:user:resetPwd")
-    @Log(title = "用户管理", businessType = BusinessType.UPDATE)
+    @Log(title = "用户管理", businessType = BusinessType.UPDATE, excludeParamNames = "password")
     @RepeatSubmit()
     @PutMapping("/resetPwd")
     public R<Void> resetPwd(@RequestBody SysUserBo user) {
         userService.checkUserAllowed(user.getUserId());
         userService.checkUserDataScope(user.getUserId());
-        user.setPassword(BCrypt.hashpw(user.getPassword()));
+        String password = user.getPassword();
+        passwordPolicyService.validateOrThrow(password);
+        user.setPassword(BCrypt.hashpw(password));
         return toAjax(userService.resetUserPwd(user.getUserId(), user.getPassword()));
     }
 
