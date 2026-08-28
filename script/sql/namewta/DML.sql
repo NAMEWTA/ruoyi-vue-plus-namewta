@@ -195,3 +195,95 @@ set visible = '1',
 where menu_id in (1761400000000002001, 1761400000000002002, 1761400000000002003);
 
 -- NAMEWTA-BASE-DSL-003-END
+
+-- NAMEWTA-PASSWORD-DSL-001
+-- ============================================================================
+-- 变更内容：启用统一密码策略、随机化退役初始密码并新增临时密码独立权限
+-- 变更标识：2026-08-28_18:21:43
+-- 执行前置：已按 ry_vue.sql -> NAMEWTA DDL.sql -> NAMEWTA DML.sql 顺序建立当前基线；发布前暂停旧密码写入口
+-- 适用范围：fresh 与尚未执行本块的 upgrade 环境；只支持 MySQL 8.4
+-- 重复执行：是；策略或菜单已按本块 ID 存在时保留当前配置，旧键仅首次随机化
+-- 回滚方式：按下方回滚步骤使用迁移前备份恢复旧键，删除本块 config/menu；绝不修改 sys_user.password
+-- ============================================================================
+
+-- 前置不符时利用 CHECK 约束立即停止，避免在 key、ID 或父菜单冲突时部分写入。
+drop temporary table if exists namewta_password_dsl_001_preflight;
+create temporary table namewta_password_dsl_001_preflight (
+    preflight_ok tinyint not null,
+    constraint chk_namewta_password_dsl_001_preflight check (preflight_ok = 1)
+);
+
+insert into namewta_password_dsl_001_preflight (preflight_ok)
+select if(
+    (select count(*) from sys_config where config_key = 'sys.user.initPassword') = 1
+    and (select count(*) from sys_config where config_key = 'sys.user.passwordPolicy') <= 1
+    and not exists (
+        select 1 from sys_config
+        where config_id = 2093282875312267265 and not (config_key <=> 'sys.user.passwordPolicy')
+    )
+    and not exists (
+        select 1 from sys_config
+        where config_key = 'sys.user.passwordPolicy' and config_id <> 2093282875312267265
+    )
+    and exists (
+        select 1 from sys_menu
+        where menu_id = 1761400000000000100 and menu_type = 'C' and perms = 'system:user:list'
+    )
+    and (select count(*) from sys_menu where perms = 'system:user:temporaryPassword') <= 1
+    and not exists (
+        select 1 from sys_menu
+        where menu_id = 2093282875312267266 and not (perms <=> 'system:user:temporaryPassword')
+    )
+    and not exists (
+        select 1 from sys_menu
+        where perms = 'system:user:temporaryPassword' and menu_id <> 2093282875312267266
+    )
+    and not exists (
+        select 1 from sys_menu
+        where menu_id = 2093282875312267266
+          and not (client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000100
+              and menu_type <=> 'F')
+    ),
+    1,
+    0
+);
+
+drop temporary table namewta_password_dsl_001_preflight;
+
+-- 旧 backend 在滚动窗口仍读取此键。首次执行时生成每环境独立、满足 v1 四类规则的兼容值；不输出生成结果。
+update sys_config
+set config_value = concat(char(65), char(97), char(49), char(33), upper(hex(random_bytes(8)))),
+    update_by = 1761100000000000001,
+    update_time = sysdate(),
+    remark = concat_ws('；', nullif(remark, ''), 'NAMEWTA-PASSWORD-DSL-001：旧键已随机化并退役')
+where config_key = 'sys.user.initPassword'
+  and remark not like '%NAMEWTA-PASSWORD-DSL-001%';
+
+insert into sys_config (config_id, config_name, config_key, config_value, config_type,
+                        create_dept, create_by, create_time, update_by, update_time, remark)
+select 2093282875312267265, '统一密码策略', 'sys.user.passwordPolicy',
+       '{"version":1,"minimumLength":8,"maximumLength":30,"requireUppercase":true,"requireLowercase":true,"requireDigit":true,"requireSpecial":true,"allowedSpecialCharacters":"@$!%*?&","generator":{"length":12,"uppercaseCharacters":"ABCDEFGHJKLMNPQRSTUVWXYZ","lowercaseCharacters":"abcdefghijkmnopqrstuvwxyz","digitCharacters":"23456789","specialCharacters":"@$!%*?&"},"defaultPassword":{"mode":"RANDOM"}}',
+       'Y', 1761000000000000103, 1761100000000000001, sysdate(), null, null,
+       '统一密码策略 v1；保存后必须刷新 sys_config 集群缓存'
+from dual
+where not exists (select 1 from sys_config where config_id = 2093282875312267265);
+
+-- 临时密码签发不继承永久重置权限；只定义功能权限，不自动授予普通角色。
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2093282875312267266, 1762000000000000001, '签发临时密码', 1761400000000000100, 8, '', '', '',
+       'N', 'Y', 'F', '0', '0', 'system:user:temporaryPassword', '#', '', '',
+       1761000000000000103, 1761100000000000001, sysdate(), '60 秒、用户级、单次消费的临时密码签发权限'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2093282875312267266);
+
+-- 回滚步骤（仅在 backend 回滚前执行）：
+-- 1. 先回滚 frontend，并撤销各普通角色对 menu_id 2093282875312267266 的显式授权。
+-- 2. 从迁移前加密备份恢复 sys.user.initPassword 的 config_value、remark 和审计字段；禁止恢复公开弱默认值。
+-- 3. 删除 menu_id 2093282875312267266 及其 sys_role_menu 关系，再删除 config_id 2093282875312267265。
+-- 4. 刷新 sys_config、菜单和权限的 Redis/JVM 缓存，确认旧 backend 健康后才恢复写入口。
+-- 前向补偿：若 backend 已全部切换，不回退用户密码；修正冲突数据后重放本块，并刷新配置/权限缓存。
+
+-- NAMEWTA-PASSWORD-DSL-001-END
