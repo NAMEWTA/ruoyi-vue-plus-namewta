@@ -460,6 +460,15 @@
         </dependencies>
     </dependencyManagement>
 
+    <dependencies>
+        <!-- Surefire tag filters run in every module, including modules without test sources. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <modules>
         <!-- web服务入口 -->
         <module>ruoyi-admin</module>
