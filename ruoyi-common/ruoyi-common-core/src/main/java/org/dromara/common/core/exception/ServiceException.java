@@ -38,6 +38,11 @@ public final class ServiceException extends RuntimeException {
     private String detailMessage;
 
     /**
+     * 可选的公开业务错误数据。
+     */
+    private Object data;
+
+    /**
      * 使用错误消息构造业务异常。
      *
      * @param message 错误消息
@@ -107,6 +112,17 @@ public final class ServiceException extends RuntimeException {
      */
     public ServiceException setDetailMessage(String detailMessage) {
         this.detailMessage = detailMessage;
+        return this;
+    }
+
+    /**
+     * 设置可公开的结构化错误数据。
+     *
+     * @param data 错误数据
+     * @return 当前异常对象
+     */
+    public ServiceException setData(Object data) {
+        this.data = data;
         return this;
     }
 }

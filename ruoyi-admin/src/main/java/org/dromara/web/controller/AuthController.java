@@ -29,6 +29,7 @@ import org.dromara.system.api.domain.PushPayloadDTO;
 import org.dromara.system.api.model.RegisterBody;
 import org.dromara.system.api.model.SocialLoginBody;
 import org.dromara.system.domain.vo.SysClientVo;
+import org.dromara.system.password.PasswordPolicyService;
 import org.dromara.system.service.ISysClientService;
 import org.dromara.system.service.ISysSocialService;
 import org.dromara.web.domain.vo.AuthClientContextVo;
@@ -63,6 +64,7 @@ public class AuthController {
     private final ISysClientService clientService;
     private final ScheduledExecutorService scheduledExecutorService;
     private final MessageService messageService;
+    private final PasswordPolicyService passwordPolicyService;
 
 
     /**
@@ -196,6 +198,9 @@ public class AuthController {
         boolean clientEnabled = SystemConstants.NORMAL.equals(client.getStatus());
         vo.setClientEnabled(clientEnabled);
         vo.setRegisterEnabled(clientEnabled && Boolean.TRUE.equals(client.getRegisterEnabled()));
+        if (clientEnabled) {
+            vo.setPasswordPolicy(passwordPolicyService.publicProjection());
+        }
         return R.ok(vo);
     }
 

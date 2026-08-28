@@ -22,6 +22,8 @@ import org.dromara.system.domain.SysConfig;
 import org.dromara.system.domain.bo.SysConfigBo;
 import org.dromara.system.domain.vo.SysConfigVo;
 import org.dromara.system.mapper.SysConfigMapper;
+import org.dromara.system.password.PasswordPolicy;
+import org.dromara.system.password.PasswordPolicyConfigParser;
 import org.dromara.system.service.ISysConfigService;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -41,6 +43,7 @@ import java.util.Map;
 public class SysConfigServiceImpl implements ISysConfigService, ConfigService {
 
     private final SysConfigMapper configMapper;
+    private final PasswordPolicyConfigParser passwordPolicyConfigParser;
 
     /**
      * 分页查询参数配置列表
@@ -118,6 +121,7 @@ public class SysConfigServiceImpl implements ISysConfigService, ConfigService {
     @CachePut(cacheNames = CacheNames.SYS_CONFIG, key = "#bo.configKey")
     @Override
     public String insertConfig(SysConfigBo bo) {
+        validatePasswordPolicy(bo);
         SysConfig config = MapstructUtils.convert(bo, SysConfig.class);
         int row = configMapper.insert(config);
         if (row > 0) {
@@ -135,6 +139,7 @@ public class SysConfigServiceImpl implements ISysConfigService, ConfigService {
     @CachePut(cacheNames = CacheNames.SYS_CONFIG, key = "#bo.configKey")
     @Override
     public String updateConfig(SysConfigBo bo) {
+        validatePasswordPolicy(bo);
         int row;
         SysConfig config = MapstructUtils.convert(bo, SysConfig.class);
         if (config.getConfigId() != null) {
@@ -254,6 +259,12 @@ public class SysConfigServiceImpl implements ISysConfigService, ConfigService {
     public <T> List<T> getConfigArray(String configKey, Class<T> clazz) {
         String configValue = getConfigValue(configKey);
         return JsonUtils.parseArray(configValue, clazz);
+    }
+
+    private void validatePasswordPolicy(SysConfigBo bo) {
+        if (StringUtils.equals(PasswordPolicy.CONFIG_KEY, bo.getConfigKey())) {
+            passwordPolicyConfigParser.parse(bo.getConfigValue());
+        }
     }
 
 }

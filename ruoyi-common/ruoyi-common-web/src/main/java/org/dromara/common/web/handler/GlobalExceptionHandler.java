@@ -58,10 +58,12 @@ public class GlobalExceptionHandler {
      * 业务异常
      */
     @ExceptionHandler(ServiceException.class)
-    public R<Void> handleServiceException(ServiceException e, HttpServletRequest request) {
+    public R<?> handleServiceException(ServiceException e, HttpServletRequest request) {
         log.error(e.getMessage());
         Integer code = e.getCode();
-        return ObjectUtil.isNotNull(code) ? R.fail(code, e.getMessage()) : R.fail(e.getMessage());
+        R<Object> response = ObjectUtil.isNotNull(code) ? R.fail(code, e.getMessage()) : R.fail(e.getMessage());
+        response.setData(e.getData());
+        return response;
     }
 
     /**

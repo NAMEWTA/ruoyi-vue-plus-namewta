@@ -1,6 +1,7 @@
 package org.dromara.web.domain.vo;
 
 import lombok.Data;
+import org.dromara.system.password.PasswordPolicyProjection;
 
 /**
  * 客户端公开认证上下文，仅返回前端展示注册入口所需字段。
@@ -19,5 +20,10 @@ public class AuthClientContextVo {
      * 是否开放公开注册
      */
     private Boolean registerEnabled;
+
+    /**
+     * 当前可用客户端的非敏感密码规则。
+     */
+    private PasswordPolicyProjection passwordPolicy;
 
 }
