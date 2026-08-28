@@ -223,3 +223,15 @@ alter table sys_notify_log
 alter table sys_notify_delivery_log
     modify column target_value varchar(1000) not null
         comment '物理目标（敏感审计策略下脱敏）';
+
+-- ============================================================================
+-- 变更标识：NAMEWTA-RUNTIME-GEN-RETIRE-DDL-001
+-- 变更内容：永久删除运行时代码生成器元数据表
+-- 执行前置：冻结基线已创建 gen_table_column 与 gen_table
+-- 适用范围：全新或当前 NAMEWTA 基座初始化
+-- 重复执行：否
+-- 恢复方式：无；不备份、不归档、不重建兼容表
+-- ============================================================================
+
+drop table gen_table_column;
+drop table gen_table;

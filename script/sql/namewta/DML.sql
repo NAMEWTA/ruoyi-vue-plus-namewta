@@ -287,3 +287,159 @@ where not exists (select 1 from sys_menu where menu_id = 2093282875312267266);
 -- 前向补偿：若 backend 已全部切换，不回退用户密码；修正冲突数据后重放本块，并刷新配置/权限缓存。
 
 -- NAMEWTA-PASSWORD-DSL-001-END
+
+-- ============================================================================
+-- 变更标识：NAMEWTA-RUNTIME-GEN-RETIRE-DML-001
+-- 变更内容：永久删除运行时代码生成器菜单及全部角色授权关系
+-- 执行前置：九个固定菜单必须完整匹配冻结基线，或已被本块完整删除；
+--           系统工具、代码生成、修改生成配置均不得存在非目标子菜单
+-- 适用范围：全新或当前 NAMEWTA 基座初始化
+-- 重复执行：是
+-- 恢复方式：无；不备份、不归档、不恢复生成器权限
+-- ============================================================================
+
+create temporary table namewta_runtime_gen_retire_dml_001_preflight (
+    preflight_passed tinyint not null,
+    constraint chk_runtime_gen_retire_dml_001 check (preflight_passed = 1)
+);
+
+insert into namewta_runtime_gen_retire_dml_001_preflight (preflight_passed)
+select if(
+    (
+        (select count(*) from sys_menu
+         where menu_id in (
+             1761400000000000003,
+             1761400000000000115, 1761400000000000116,
+             1761400000000001055, 1761400000000001056, 1761400000000001057,
+             1761400000000001058, 1761400000000001059, 1761400000000001060
+         )) = 0
+        and not exists (
+            select 1 from sys_menu
+            where parent_id in (1761400000000000003, 1761400000000000115, 1761400000000000116)
+        )
+    )
+    or
+    (
+        (select count(*) from sys_menu
+         where menu_id in (
+             1761400000000000003,
+             1761400000000000115, 1761400000000000116,
+             1761400000000001055, 1761400000000001056, 1761400000000001057,
+             1761400000000001058, 1761400000000001059, 1761400000000001060
+         )) = 9
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000000003
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 0
+              and menu_type <=> 'M'
+        )
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000000115
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000003
+              and menu_type <=> 'C'
+              and component <=> 'tool/gen/index'
+              and perms <=> 'tool:gen:list'
+        )
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000000116
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000003
+              and menu_type <=> 'C'
+              and component <=> 'tool/gen/editTable'
+              and perms <=> 'tool:gen:edit'
+              and active_menu <=> '/tool/gen'
+        )
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000001055
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000115
+              and menu_type <=> 'F'
+              and perms <=> 'tool:gen:query'
+        )
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000001056
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000115
+              and menu_type <=> 'F'
+              and perms <=> 'tool:gen:edit'
+        )
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000001057
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000115
+              and menu_type <=> 'F'
+              and perms <=> 'tool:gen:remove'
+        )
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000001058
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000115
+              and menu_type <=> 'F'
+              and perms <=> 'tool:gen:import'
+        )
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000001059
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000115
+              and menu_type <=> 'F'
+              and perms <=> 'tool:gen:preview'
+        )
+        and exists (
+            select 1 from sys_menu
+            where menu_id = 1761400000000001060
+              and client_id <=> 1762000000000000001
+              and parent_id <=> 1761400000000000115
+              and menu_type <=> 'F'
+              and perms <=> 'tool:gen:code'
+        )
+        and not exists (
+            select 1 from sys_menu
+            where parent_id = 1761400000000000003
+              and menu_id not in (1761400000000000115, 1761400000000000116)
+        )
+        and not exists (
+            select 1 from sys_menu
+            where parent_id = 1761400000000000115
+              and menu_id not in (
+                  1761400000000001055, 1761400000000001056, 1761400000000001057,
+                  1761400000000001058, 1761400000000001059, 1761400000000001060
+              )
+        )
+        and not exists (
+            select 1 from sys_menu where parent_id = 1761400000000000116
+        )
+    ),
+    1,
+    0
+);
+
+delete from sys_role_menu
+where menu_id in (
+    1761400000000000003,
+    1761400000000000115, 1761400000000000116,
+    1761400000000001055, 1761400000000001056, 1761400000000001057,
+    1761400000000001058, 1761400000000001059, 1761400000000001060
+);
+
+delete from sys_menu
+where menu_id in (
+    1761400000000001055, 1761400000000001056, 1761400000000001057,
+    1761400000000001058, 1761400000000001059, 1761400000000001060
+);
+
+delete from sys_menu
+where menu_id in (1761400000000000115, 1761400000000000116);
+
+delete from sys_menu
+where menu_id = 1761400000000000003;
+
+drop temporary table namewta_runtime_gen_retire_dml_001_preflight;
