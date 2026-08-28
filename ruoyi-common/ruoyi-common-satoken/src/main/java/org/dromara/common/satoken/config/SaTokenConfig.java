@@ -5,6 +5,7 @@ import cn.dev33.satoken.jwt.StpLogicJwtForSimple;
 import cn.dev33.satoken.stp.StpInterface;
 import cn.dev33.satoken.stp.StpLogic;
 import org.dromara.common.core.factory.YmlPropertySourceFactory;
+import org.dromara.common.redis.cache.ClusterCacheInvalidationCoordinator;
 import org.dromara.common.satoken.core.dao.PlusSaTokenDao;
 import org.dromara.common.satoken.core.service.SaPermissionImpl;
 import org.dromara.common.satoken.handler.SaTokenExceptionHandler;
@@ -44,8 +45,8 @@ public class SaTokenConfig {
      * 自定义dao层存储
      */
     @Bean
-    public SaTokenDao saTokenDao() {
-        return new PlusSaTokenDao();
+    public SaTokenDao saTokenDao(ClusterCacheInvalidationCoordinator invalidationCoordinator) {
+        return new PlusSaTokenDao(invalidationCoordinator);
     }
 
     /**

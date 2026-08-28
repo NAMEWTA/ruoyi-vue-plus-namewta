@@ -1,6 +1,8 @@
 package org.dromara.common.redis.manager;
 
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.redis.cache.CacheInvalidationHandler;
+import org.dromara.common.redis.cache.ClusterCacheInvalidationCoordinator;
 import org.springframework.cache.Cache;
 
 import java.util.concurrent.Callable;
@@ -15,6 +17,8 @@ public class CaffeineCacheDecorator implements Cache {
     private final String name;
     private final Cache cache;
     private final com.github.benmanes.caffeine.cache.Cache<Object, Object> caffeine;
+    private final ClusterCacheInvalidationCoordinator invalidationCoordinator;
+    private final String invalidationNamespace;
 
     /**
      * 创建带 Caffeine 一级缓存的缓存装饰器。
@@ -24,9 +28,38 @@ public class CaffeineCacheDecorator implements Cache {
      * @param caffeine 本地一级缓存实例
      */
     public CaffeineCacheDecorator(String name, Cache cache, com.github.benmanes.caffeine.cache.Cache<Object, Object> caffeine) {
+        this(name, cache, caffeine, null);
+    }
+
+    /**
+     * Creates a local cache decorator participating in cluster invalidation.
+     *
+     * @param name                    cache name
+     * @param cache                   distributed cache
+     * @param caffeine                local cache
+     * @param invalidationCoordinator cluster invalidation coordinator
+     */
+    public CaffeineCacheDecorator(String name, Cache cache,
+                                  com.github.benmanes.caffeine.cache.Cache<Object, Object> caffeine,
+                                  ClusterCacheInvalidationCoordinator invalidationCoordinator) {
         this.name = name;
         this.cache = cache;
         this.caffeine = caffeine;
+        this.invalidationCoordinator = invalidationCoordinator;
+        this.invalidationNamespace = "spring-cache:" + ClusterCacheInvalidationCoordinator.fingerprint(name);
+        if (invalidationCoordinator != null) {
+            invalidationCoordinator.register(invalidationNamespace, new CacheInvalidationHandler() {
+                @Override
+                public void invalidate(String keyFingerprint) {
+                    invalidateLocalKey(keyFingerprint);
+                }
+
+                @Override
+                public void clear() {
+                    clearLocalCache();
+                }
+            });
+        }
     }
 
     /**
@@ -93,8 +126,8 @@ public class CaffeineCacheDecorator implements Cache {
      */
     @Override
     public void put(Object key, Object value) {
-        caffeine.invalidate(getUniqueKey(key));
         cache.put(key, value);
+        invalidateClusterKey(key);
     }
 
     /**
@@ -106,8 +139,11 @@ public class CaffeineCacheDecorator implements Cache {
      */
     @Override
     public ValueWrapper putIfAbsent(Object key, Object value) {
-        caffeine.invalidate(getUniqueKey(key));
-        return cache.putIfAbsent(key, value);
+        ValueWrapper existing = cache.putIfAbsent(key, value);
+        if (existing == null) {
+            invalidateClusterKey(key);
+        }
+        return existing;
     }
 
     /**
@@ -129,9 +165,7 @@ public class CaffeineCacheDecorator implements Cache {
     @Override
     public boolean evictIfPresent(Object key) {
         boolean b = cache.evictIfPresent(key);
-        if (b) {
-            caffeine.invalidate(getUniqueKey(key));
-        }
+        invalidateClusterKey(key);
         return b;
     }
 
@@ -140,8 +174,8 @@ public class CaffeineCacheDecorator implements Cache {
      */
     @Override
     public void clear() {
-        clearLocalCache();
         cache.clear();
+        invalidateClusterNamespace();
     }
 
     /**
@@ -152,9 +186,7 @@ public class CaffeineCacheDecorator implements Cache {
     @Override
     public boolean invalidate() {
         boolean invalidated = cache.invalidate();
-        if (invalidated) {
-            clearLocalCache();
-        }
+        invalidateClusterNamespace();
         return invalidated;
     }
 
@@ -178,6 +210,30 @@ public class CaffeineCacheDecorator implements Cache {
     private void clearLocalCache() {
         String prefix = name + StringUtils.COLON;
         caffeine.asMap().keySet().removeIf(key -> key instanceof String cacheKey && cacheKey.startsWith(prefix));
+    }
+
+    private void invalidateLocalKey(String keyFingerprint) {
+        String prefix = name + StringUtils.COLON;
+        caffeine.asMap().keySet().removeIf(key -> key instanceof String cacheKey
+            && cacheKey.startsWith(prefix)
+            && ClusterCacheInvalidationCoordinator.fingerprint(cacheKey.substring(prefix.length()))
+            .equals(keyFingerprint));
+    }
+
+    private void invalidateClusterKey(Object key) {
+        if (invalidationCoordinator == null) {
+            caffeine.invalidate(getUniqueKey(key));
+            return;
+        }
+        invalidationCoordinator.invalidate(invalidationNamespace, key);
+    }
+
+    private void invalidateClusterNamespace() {
+        if (invalidationCoordinator == null) {
+            clearLocalCache();
+            return;
+        }
+        invalidationCoordinator.clear(invalidationNamespace);
     }
 
 }

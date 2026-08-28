@@ -5,6 +5,8 @@ import cn.dev33.satoken.util.SaFoxUtil;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.redis.cache.CacheInvalidationHandler;
+import org.dromara.common.redis.cache.ClusterCacheInvalidationCoordinator;
 import org.dromara.common.redis.utils.RedisUtils;
 
 import java.time.Duration;
@@ -24,7 +26,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class PlusSaTokenDao implements SaTokenDaoBySessionFollowObject {
 
-    private static final Cache<String, Object> CAFFEINE = Caffeine.newBuilder()
+    private static final String INVALIDATION_NAMESPACE = "sa-token";
+
+    private final Cache<String, Object> caffeine = Caffeine.newBuilder()
         // 设置最后一次写入或访问后经过固定时间过期
         .expireAfterWrite(5, TimeUnit.SECONDS)
         // 初始的缓存空间大小
@@ -32,6 +36,24 @@ public class PlusSaTokenDao implements SaTokenDaoBySessionFollowObject {
         // 缓存的最大条数
         .maximumSize(1000)
         .build();
+
+    private final ClusterCacheInvalidationCoordinator invalidationCoordinator;
+
+    public PlusSaTokenDao(ClusterCacheInvalidationCoordinator invalidationCoordinator) {
+        this.invalidationCoordinator = invalidationCoordinator;
+        invalidationCoordinator.register(INVALIDATION_NAMESPACE, new CacheInvalidationHandler() {
+            @Override
+            public void invalidate(String keyFingerprint) {
+                caffeine.asMap().keySet().removeIf(key ->
+                    ClusterCacheInvalidationCoordinator.fingerprint(key).equals(keyFingerprint));
+            }
+
+            @Override
+            public void clear() {
+                caffeine.invalidateAll();
+            }
+        });
+    }
 
     /**
      * 获取Value，如无返空
@@ -65,9 +87,8 @@ public class PlusSaTokenDao implements SaTokenDaoBySessionFollowObject {
      */
     @Override
     public void delete(String key) {
-        if (RedisUtils.deleteObject(key)) {
-            invalidate(key);
-        }
+        RedisUtils.deleteObject(key);
+        invalidate(key);
     }
 
     /**
@@ -130,9 +151,8 @@ public class PlusSaTokenDao implements SaTokenDaoBySessionFollowObject {
      */
     @Override
     public void deleteObject(String key) {
-        if (RedisUtils.deleteObject(key)) {
-            invalidate(key);
-        }
+        RedisUtils.deleteObject(key);
+        invalidate(key);
     }
 
     /**
@@ -159,7 +179,7 @@ public class PlusSaTokenDao implements SaTokenDaoBySessionFollowObject {
     public List<String> searchData(String prefix, String keyword, int start, int size, boolean sortType) {
         String pattern = prefix + "*" + keyword + "*";
         String cacheKey = pattern + start + StringUtils.COLON + size + StringUtils.COLON + sortType;
-        return (List<String>) CAFFEINE.get(cacheKey, k -> {
+        return (List<String>) caffeine.get(cacheKey, k -> {
             Collection<String> keys = RedisUtils.keys(pattern);
             List<String> list = new ArrayList<>(keys);
             return SaFoxUtil.searchList(list, start, size, sortType);
@@ -174,7 +194,7 @@ public class PlusSaTokenDao implements SaTokenDaoBySessionFollowObject {
      */
     @SuppressWarnings("unchecked")
     private <T> T getCacheValue(String key) {
-        return (T) CAFFEINE.get(key, RedisUtils::getCacheObject);
+        return (T) caffeine.get(key, RedisUtils::getCacheObject);
     }
 
     /**
@@ -202,7 +222,7 @@ public class PlusSaTokenDao implements SaTokenDaoBySessionFollowObject {
      * @param key 缓存键
      */
     private void invalidate(String key) {
-        CAFFEINE.invalidate(key);
+        invalidationCoordinator.invalidate(INVALIDATION_NAMESPACE, key);
     }
 
     /**

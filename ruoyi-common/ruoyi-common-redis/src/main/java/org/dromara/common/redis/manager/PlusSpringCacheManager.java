@@ -15,6 +15,7 @@
  */
 package org.dromara.common.redis.manager;
 
+import org.dromara.common.redis.cache.ClusterCacheInvalidationCoordinator;
 import org.dromara.common.redis.utils.RedisUtils;
 import org.redisson.api.RMap;
 import org.redisson.api.RMapCache;
@@ -56,12 +57,13 @@ public class PlusSpringCacheManager implements CacheManager {
     ConcurrentMap<String, Cache> instanceMap = new ConcurrentHashMap<>();
 
     private final com.github.benmanes.caffeine.cache.Cache<Object, Object> caffeine;
+    private final ClusterCacheInvalidationCoordinator invalidationCoordinator;
 
     /**
      * 创建基于 Redisson 的缓存管理器。
      */
     public PlusSpringCacheManager() {
-        this(null);
+        this(null, null);
     }
 
     /**
@@ -70,7 +72,19 @@ public class PlusSpringCacheManager implements CacheManager {
      * @param caffeine 本地一级缓存实例
      */
     public PlusSpringCacheManager(com.github.benmanes.caffeine.cache.Cache<Object, Object> caffeine) {
+        this(caffeine, null);
+    }
+
+    /**
+     * Creates a Redisson cache manager with acknowledged local invalidation.
+     *
+     * @param caffeine                process-local cache
+     * @param invalidationCoordinator cluster invalidation coordinator
+     */
+    public PlusSpringCacheManager(com.github.benmanes.caffeine.cache.Cache<Object, Object> caffeine,
+                                  ClusterCacheInvalidationCoordinator invalidationCoordinator) {
         this.caffeine = caffeine;
+        this.invalidationCoordinator = invalidationCoordinator;
     }
 
 
@@ -249,7 +263,7 @@ public class PlusSpringCacheManager implements CacheManager {
 
         Cache cache = new RedissonCache(map, allowNullValues);
         if (local == 1 && caffeine != null) {
-            cache = new CaffeineCacheDecorator(cacheName, cache, caffeine);
+            cache = new CaffeineCacheDecorator(cacheName, cache, caffeine, invalidationCoordinator);
         }
         if (transactionAware) {
             cache = new TransactionAwareCacheDecorator(cache);
@@ -274,7 +288,7 @@ public class PlusSpringCacheManager implements CacheManager {
 
         Cache cache = new RedissonCache(map, config, allowNullValues);
         if (local == 1 && caffeine != null) {
-            cache = new CaffeineCacheDecorator(cacheName, cache, caffeine);
+            cache = new CaffeineCacheDecorator(cacheName, cache, caffeine, invalidationCoordinator);
         }
         if (transactionAware) {
             cache = new TransactionAwareCacheDecorator(cache);
