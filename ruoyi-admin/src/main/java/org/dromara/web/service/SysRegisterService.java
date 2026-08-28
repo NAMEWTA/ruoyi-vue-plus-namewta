@@ -24,6 +24,7 @@ import org.dromara.system.domain.bo.SysUserBo;
 import org.dromara.system.domain.constant.UserTypeGrantSource;
 import org.dromara.system.domain.vo.SysClientVo;
 import org.dromara.system.domain.vo.SysUserTypeVo;
+import org.dromara.system.password.PasswordPolicyService;
 import org.dromara.system.service.ISysClientService;
 import org.dromara.system.service.ISysUserService;
 import org.dromara.system.service.ISysUserTypeRelService;
@@ -45,6 +46,7 @@ public class SysRegisterService {
     private final ISysClientService clientService;
     private final ISysUserTypeService userTypeService;
     private final ISysUserTypeRelService userTypeRelService;
+    private final PasswordPolicyService passwordPolicyService;
 
     /**
      * 按客户端策略注册用户，并在同一事务内写入登录域关系。
@@ -93,6 +95,7 @@ public class SysRegisterService {
         if (StringUtils.isNotBlank(sysUser.getEmail()) && !userService.checkEmailUnique(sysUser)) {
             throw new ServiceException("该邮箱已存在，请登录");
         }
+        passwordPolicyService.validateOrThrow(password);
         sysUser.setPassword(BCrypt.hashpw(password));
         boolean regFlag = userService.registerUser(sysUser);
         if (!regFlag) {

@@ -17,6 +17,7 @@ import org.dromara.system.domain.bo.SysUserBo;
 import org.dromara.system.domain.bo.SysUserProfileBo;
 import org.dromara.system.domain.vo.ProfileUserVo;
 import org.dromara.system.domain.vo.SysUserVo;
+import org.dromara.system.password.PasswordPolicyService;
 import org.dromara.system.service.ISysUserService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.*;
 public class SysProfileController extends BaseController {
 
     private final ISysUserService userService;
+    private final PasswordPolicyService passwordPolicyService;
 
     /**
      * 获取当前登录用户的个人中心信息。
@@ -84,7 +86,8 @@ public class SysProfileController extends BaseController {
      */
     @RepeatSubmit
     @ApiEncrypt
-    @Log(title = "个人信息", businessType = BusinessType.UPDATE)
+    @Log(title = "个人信息", businessType = BusinessType.UPDATE,
+        isSaveRequestData = false, isSaveResponseData = false)
     @PutMapping("/updatePwd")
     public R<Void> updatePwd(@Validated @RequestBody SysUserPasswordBo bo) {
         SysUserVo user = userService.selectUserById(LoginHelper.getUserId());
@@ -95,6 +98,7 @@ public class SysProfileController extends BaseController {
         if (BCrypt.checkpw(bo.newPassword(), password)) {
             return R.fail("新密码不能与旧密码相同");
         }
+        passwordPolicyService.validateOrThrow(bo.newPassword());
         int rows = DataPermissionHelper.ignore(() -> userService.resetUserPwd(user.getUserId(), BCrypt.hashpw(bo.newPassword())));
         if (rows > 0) {
             return R.ok();
