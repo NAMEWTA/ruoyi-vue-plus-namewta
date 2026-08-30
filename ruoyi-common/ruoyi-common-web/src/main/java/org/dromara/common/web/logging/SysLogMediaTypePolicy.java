@@ -57,6 +57,15 @@ public final class SysLogMediaTypePolicy {
         return isTextual(mediaType) ? BodyDecision.allow() : BodyDecision.omit("NON_TEXT_CONTENT_TYPE");
     }
 
+    static boolean isJson(String contentType) {
+        MediaType mediaType = parse(contentType);
+        if (mediaType == null) {
+            return false;
+        }
+        String subtype = mediaType.getSubtype().toLowerCase(Locale.ROOT);
+        return MediaType.APPLICATION_JSON.isCompatibleWith(mediaType) || subtype.endsWith("+json");
+    }
+
     private static MediaType parse(String contentType) {
         if (contentType == null || contentType.isBlank()) {
             return null;

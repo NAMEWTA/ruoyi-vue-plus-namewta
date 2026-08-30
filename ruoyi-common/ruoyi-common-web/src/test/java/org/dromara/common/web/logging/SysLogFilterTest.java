@@ -40,7 +40,10 @@ class SysLogFilterTest {
         MockHttpServletRequest request = jsonRequest("{\"password\":\"plain\",\"token\":\"raw\"}");
         request.setQueryString("page=1&page=2");
         request.addParameter("page", "1", "2");
+        request.addParameter("password", "plain-parameter");
         request.addHeader("Authorization", "Bearer raw-token");
+        request.addHeader("Cookie", "session=raw-cookie");
+        request.addHeader("X-Api-Key", "raw-api-key");
         request.addHeader(SysLogFilter.REQUEST_ID_HEADER, "client-request-id");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -51,7 +54,7 @@ class SysLogFilterTest {
             httpResponse.setStatus(201);
             httpResponse.setContentType("application/json");
             httpResponse.addHeader("Set-Cookie", "refresh=raw-cookie");
-            httpResponse.getWriter().write("{\"accessToken\":\"response-raw\"}");
+            httpResponse.getWriter().write("{\"code\":200,\"data\":{\"accessToken\":\"response-raw\"}}");
         });
 
         assertThat(events).hasSize(2);
@@ -66,21 +69,44 @@ class SysLogFilterTest {
             .containsEntry("event", "HTTP_REQUEST")
             .containsEntry("upstreamRequestId", "client-request-id")
             .containsEntry("bodyLogged", true)
-            .containsEntry("body", "{\"password\":\"plain\",\"token\":\"raw\"}");
+            .containsEntry("body", "{\"password\":\"[REDACTED]\",\"token\":\"[REDACTED]\"}");
         assertThat(((Map<?, ?>) requestEvent.get("requestHeaders")).get("Authorization"))
-            .isEqualTo(List.of("Bearer raw-token"));
+            .isEqualTo(List.of("[REDACTED]"));
+        assertThat(((Map<?, ?>) requestEvent.get("requestHeaders")).get("Cookie"))
+            .isEqualTo(List.of("[REDACTED]"));
+        assertThat(((Map<?, ?>) requestEvent.get("requestHeaders")).get("X-Api-Key"))
+            .isEqualTo(List.of("[REDACTED]"));
         assertThat(((Map<?, ?>) requestEvent.get("parameters")).get("page"))
             .isEqualTo(List.of("1", "2"));
+        assertThat(((Map<?, ?>) requestEvent.get("parameters")).get("password"))
+            .isEqualTo(List.of("[REDACTED]"));
         assertThat(responseEvent)
             .containsEntry("event", "HTTP_RESPONSE")
             .containsEntry("status", 201)
             .containsEntry("completed", true)
             .containsEntry("bodyLogged", true)
-            .containsEntry("body", "{\"accessToken\":\"response-raw\"}");
+            .containsEntry("body", "{\"code\":200,\"data\":{\"accessToken\":\"[REDACTED]\"}}");
         assertThat(((Map<?, ?>) responseEvent.get("responseHeaders")).get("Set-Cookie"))
-            .isEqualTo(List.of("refresh=raw-cookie"));
-        assertThat(response.getContentAsString()).isEqualTo("{\"accessToken\":\"response-raw\"}");
+            .isEqualTo(List.of("[REDACTED]"));
+        assertThat(response.getContentAsString())
+            .isEqualTo("{\"code\":200,\"data\":{\"accessToken\":\"response-raw\"}}");
         assertThat(MDC.get(SysLogFilter.MDC_REQUEST_ID)).isNull();
+    }
+
+    @Test
+    void concealsTruncatedJsonInsteadOfFallingBackToSensitivePlaintext() throws Exception {
+        List<Map<String, Object>> events = new ArrayList<>();
+        SysLogFilter filter = new SysLogFilter(20, events::add);
+        MockHttpServletRequest request = jsonRequest("{\"password\":\"plain\",\"visible\":true}");
+
+        filter.doFilter(request, new MockHttpServletResponse(), (servletRequest, servletResponse) ->
+            assertThat(new String(servletRequest.getInputStream().readAllBytes(), StandardCharsets.UTF_8))
+                .contains("plain", "visible"));
+
+        assertThat(events.getFirst())
+            .containsEntry("bodyLogged", true)
+            .containsEntry("body", "[REDACTED]")
+            .containsEntry("truncated", true);
     }
 
     @Test
@@ -259,11 +285,13 @@ class SysLogFilterTest {
                 var httpResponse = (jakarta.servlet.http.HttpServletResponse) servletResponse;
                 httpResponse.setContentType("application/json");
                 httpResponse.getWriter().write(responseBody);
-            });
+        });
 
         assertThat(events).hasSize(2);
-        assertThat(events.getFirst()).containsEntry("body", requestBody);
-        assertThat(events.getLast()).containsEntry("body", responseBody);
+        assertThat(events.getFirst()).containsEntry("body", "{\"password\":\"[REDACTED]\"}");
+        assertThat(events.getLast()).containsEntry("body", "{\"token\":\"[REDACTED]\"}");
+        assertThat(((Map<?, ?>) events.getFirst().get("requestHeaders")).get(headerName))
+            .isEqualTo(List.of("[REDACTED]"));
 
         String encryptedResponse = encryptingResponse.getEncryptContent(
             response, keys.get(EncryptUtils.PUBLIC_KEY), headerName);

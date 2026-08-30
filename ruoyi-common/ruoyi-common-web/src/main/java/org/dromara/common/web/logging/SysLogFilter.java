@@ -22,7 +22,9 @@ import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -35,6 +37,18 @@ public class SysLogFilter implements Filter {
     public static final String MDC_REQUEST_ID = "requestId";
 
     private static final String STATE_ATTRIBUTE = SysLogFilter.class.getName() + ".exchange";
+    private static final String REDACTED_HEADER_VALUE = "[REDACTED]";
+    private static final Set<String> SENSITIVE_HEADER_NAMES = Set.of(
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "set-cookie",
+        "x-api-key",
+        "api-key",
+        "x-auth-token",
+        "x-csrf-token",
+        "encrypt-key"
+    );
     private static final Logger FAILURE_LOG = LoggerFactory.getLogger(SysLogFilter.class);
 
     private final int maxBodyBytes;
@@ -149,7 +163,9 @@ public class SysLogFilter implements Filter {
             }
             while (names.hasMoreElements()) {
                 String name = names.nextElement();
-                headers.put(name, enumerationValues(request.getHeaders(name)));
+                headers.put(name, isSensitiveHeader(name)
+                    ? List.of(REDACTED_HEADER_VALUE)
+                    : enumerationValues(request.getHeaders(name)));
             }
         } catch (RuntimeException exception) {
             reportFailure("请求头采集", null, exception);
@@ -161,7 +177,9 @@ public class SysLogFilter implements Filter {
         Map<String, List<String>> parameters = new LinkedHashMap<>();
         try {
             request.getParameterMap().forEach((name, values) ->
-                parameters.put(name, values == null ? List.of() : Arrays.asList(values.clone())));
+                parameters.put(name, SysLogBodySanitizer.isSensitiveName(name)
+                    ? List.of(REDACTED_HEADER_VALUE)
+                    : values == null ? List.of() : Arrays.asList(values.clone())));
         } catch (RuntimeException exception) {
             reportFailure("请求参数采集", null, exception);
         }
@@ -172,12 +190,18 @@ public class SysLogFilter implements Filter {
         Map<String, List<String>> headers = new LinkedHashMap<>();
         try {
             for (String name : response.getHeaderNames()) {
-                headers.put(name, new ArrayList<>(response.getHeaders(name)));
+                headers.put(name, isSensitiveHeader(name)
+                    ? List.of(REDACTED_HEADER_VALUE)
+                    : new ArrayList<>(response.getHeaders(name)));
             }
         } catch (RuntimeException exception) {
             reportFailure("响应头采集", null, exception);
         }
         return headers;
+    }
+
+    private boolean isSensitiveHeader(String name) {
+        return name != null && SENSITIVE_HEADER_NAMES.contains(name.toLowerCase(Locale.ROOT));
     }
 
     private List<String> enumerationValues(Enumeration<String> values) {
@@ -220,7 +244,8 @@ public class SysLogFilter implements Filter {
         }
     }
 
-    private void putBody(Map<String, Object> event, SysLogBody body) {
+    private void putBody(Map<String, Object> event, SysLogBody body, String contentType) {
+        body = SysLogBodySanitizer.sanitize(body, contentType);
         event.put("bodyLogged", body.logged());
         event.put("bodyLength", body.length());
         event.put("truncated", body.truncated());
@@ -279,7 +304,7 @@ public class SysLogFilter implements Filter {
             if (upstreamRequestId != null) {
                 event.put("upstreamRequestId", upstreamRequestId);
             }
-            putBody(event, requestBody(request, bodyLimit));
+            putBody(event, requestBody(request, bodyLimit), request.getContentType());
             return event;
         }
 
@@ -331,7 +356,7 @@ public class SysLogFilter implements Filter {
                 event.put("contentLength", responseContentLength(response));
                 event.put("durationMs", Math.max(0, (System.nanoTime() - startNanos) / 1_000_000));
                 event.put("completed", completed);
-                putBody(event, responseCapture.snapshot(response));
+                putBody(event, responseCapture.snapshot(response), response.getContentType());
                 emit(event);
             } finally {
                 restoreMdc(previousRequestId);
