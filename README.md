@@ -84,11 +84,11 @@ script/            Docker、NAMEWTA SQL 与运维脚本
 
 ## 开发导航
 
-- Codex Skill：[ruoyi-backend-development](.codex/skills/ruoyi-backend-development/SKILL.md)
-- Claude Agent：[ruoyi-backend-development](.claude/agents/ruoyi-backend-development.md)
+- 父工作区工程规范：`../.agents/skills/engineering-standards/SKILL.md`
+- 父工作区后端导航：`../.agents/skills/ruoyi-backend-development/SKILL.md`
 - 上游边界：[docs/upstream/README.md](docs/upstream/README.md)
 
-在父工作区中，长期工程规范以 `ruoyi-vue-plus-docs/.agents/skills/engineering-standards/` 为准；独立克隆本仓库时使用上述本地导航，并以当前源码、POM 和测试为最终证据。
+项目开发 Skill 只在 `ruoyi-vue-plus-docs/.agents/skills/` 集中维护，本仓库不保留 `.claude` 或 `.codex` 副本。独立克隆本仓库时以本 README、模块源码、POM、测试和上游边界文档为证据。
 
 ## 许可证
 
