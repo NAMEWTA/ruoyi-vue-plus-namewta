@@ -12,6 +12,7 @@ import org.dromara.system.domain.SysOssConfig;
 import org.dromara.system.mapper.SysOssConfigMapper;
 import org.dromara.system.mapper.SysOssMapper;
 import org.dromara.system.oss.upload.OssUploadProperties;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -37,6 +38,8 @@ public class OssStorageReadinessService {
     private final OssReadinessClientProvider clientProvider;
     private final List<OssRequiredConfigContributor> contributors;
 
+    @Scheduled(initialDelayString = "${oss.readiness.refresh-interval:PT1M}",
+        fixedDelayString = "${oss.readiness.refresh-interval:PT1M}")
     public synchronized void refresh() {
         try {
             List<SysOssConfig> configs = configMapper.selectList();

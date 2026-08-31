@@ -21,6 +21,7 @@ public class OssStorageReadinessProperties implements InitializingBean {
     private static final Pattern CONFIG_KEY = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9._-]{1,19}");
 
     private Duration diagnosticTimeout = Duration.ofSeconds(3);
+    private Duration refreshInterval = Duration.ofMinutes(1);
     private Duration maxSnapshotAge = Duration.ofMinutes(5);
     private boolean allowEndpointDomainFallback;
     private Map<String, String> diagnosticObjects = new LinkedHashMap<>();
@@ -32,6 +33,10 @@ public class OssStorageReadinessProperties implements InitializingBean {
         }
         if (!within(maxSnapshotAge, diagnosticTimeout, Duration.ofHours(1))) {
             throw new IllegalStateException("OSS readiness maxSnapshotAge 超出安全范围");
+        }
+        if (!within(refreshInterval, Duration.ofMillis(100), Duration.ofHours(1))
+            || refreshInterval.compareTo(maxSnapshotAge) >= 0) {
+            throw new IllegalStateException("OSS readiness refreshInterval 必须小于 maxSnapshotAge");
         }
         if (diagnosticObjects == null) {
             throw new IllegalStateException("OSS readiness diagnosticObjects 不能为空");

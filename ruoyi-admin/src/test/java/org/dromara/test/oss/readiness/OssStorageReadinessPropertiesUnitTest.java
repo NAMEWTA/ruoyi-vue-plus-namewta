@@ -20,6 +20,7 @@ class OssStorageReadinessPropertiesUnitTest {
 
         assertThat(properties.isAllowEndpointDomainFallback()).isFalse();
         assertThat(properties.getDiagnosticTimeout()).isEqualTo(Duration.ofSeconds(3));
+        assertThat(properties.getRefreshInterval()).isEqualTo(Duration.ofMinutes(1));
         assertThat(properties.getMaxSnapshotAge()).isEqualTo(Duration.ofMinutes(5));
     }
 
@@ -34,5 +35,17 @@ class OssStorageReadinessPropertiesUnitTest {
         assertThatThrownBy(object::afterPropertiesSet)
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("诊断对象配置无效");
+
+        OssStorageReadinessProperties staleBeforeRefresh = new OssStorageReadinessProperties();
+        staleBeforeRefresh.setRefreshInterval(Duration.ofMinutes(5));
+        assertThatThrownBy(staleBeforeRefresh::afterPropertiesSet)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("refreshInterval");
+
+        OssStorageReadinessProperties busyLoop = new OssStorageReadinessProperties();
+        busyLoop.setRefreshInterval(Duration.ofMillis(50));
+        assertThatThrownBy(busyLoop::afterPropertiesSet)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("refreshInterval");
     }
 }
