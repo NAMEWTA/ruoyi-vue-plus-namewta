@@ -1,5 +1,6 @@
 package org.dromara.system.oss.upload;
 
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.model.OssCompletedPart;
 import org.dromara.common.oss.model.OssMultipartPart;
 import org.dromara.common.oss.model.OssObjectStat;
@@ -14,8 +15,9 @@ import java.util.Optional;
  */
 public interface OssUploadObjectStore {
 
-    PreparedUpload prepare(String objectPrefix, String fileName, String contentType, String fingerprintDigest,
-                           OssUploadMode mode, Duration presignTtl);
+    PreparedUpload prepare(String storageConfigKey, AccessPolicy expectedAccessPolicy, String objectPrefix,
+                           String fileName, String contentType, String fingerprintDigest, OssUploadMode mode,
+                           Duration presignTtl);
 
     List<OssUploadContracts.SignedPart> signParts(OssUploadTicket ticket, List<Integer> partNumbers, Duration ttl);
 

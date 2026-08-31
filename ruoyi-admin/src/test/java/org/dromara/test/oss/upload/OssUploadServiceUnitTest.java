@@ -1,6 +1,10 @@
 package org.dromara.test.oss.upload;
 
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.model.*;
+import org.dromara.system.oss.readiness.OssStorageReadinessEntry;
+import org.dromara.system.oss.readiness.OssStorageReadinessProperties;
+import org.dromara.system.oss.readiness.OssStorageReadinessRegistry;
 import org.dromara.system.oss.upload.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -27,6 +31,7 @@ class OssUploadServiceUnitTest {
     private MemoryTicketStore tickets;
     private FakeObjectStore objects;
     private MemoryMetadataStore metadata;
+    private OssStorageReadinessRegistry readiness;
     private OssUploadService service;
 
     @BeforeEach
@@ -37,7 +42,62 @@ class OssUploadServiceUnitTest {
         tickets = new MemoryTicketStore();
         objects = new FakeObjectStore();
         metadata = new MemoryMetadataStore();
-        service = new OssUploadService(properties, identity, tickets, objects, metadata);
+        readiness = new OssStorageReadinessRegistry(new OssStorageReadinessProperties());
+        replaceReadiness("minio", AccessPolicy.PRIVATE, OssStorageReadinessEntry.Status.SERVING);
+        service = new OssUploadService(properties, identity, tickets, objects, metadata, readiness);
+    }
+
+    @Test
+    void shouldRouteInitUsingServerPolicyStorageBinding() {
+        service.init(new InitRequest("general", "private.bin", 8,
+            "application/octet-stream", "fp-private-route"));
+        assertEquals("minio", objects.preparedStorageConfigKey);
+        assertEquals(AccessPolicy.PRIVATE, objects.preparedExpectedAccessPolicy);
+
+        properties.requirePolicy("general").setStorageConfigKey("portal");
+        properties.requirePolicy("general").setExpectedAccessPolicy(AccessPolicy.PUBLIC_READ);
+        replaceReadiness("portal", AccessPolicy.PUBLIC_READ, OssStorageReadinessEntry.Status.SERVING);
+        service.init(new InitRequest("general", "public.bin", 8,
+            "application/octet-stream", "fp-public-route"));
+
+        assertEquals("portal", objects.preparedStorageConfigKey);
+        assertEquals(AccessPolicy.PUBLIC_READ, objects.preparedExpectedAccessPolicy);
+        assertEquals(2, objects.prepareCalls.get());
+    }
+
+    @Test
+    void shouldRejectUnreadyOrMismatchedStorageBeforeProviderAndTicketSideEffects() {
+        replaceReadiness("minio", AccessPolicy.PRIVATE, OssStorageReadinessEntry.Status.NOT_SERVING);
+        OssUploadException unavailable = assertThrows(OssUploadException.class,
+            () -> service.init(new InitRequest("general", "file.bin", 8,
+                "application/octet-stream", "fp-unready")));
+        assertEquals(OssUploadError.STORAGE_NOT_SERVING, unavailable.error());
+        assertEquals(0, objects.prepareCalls.get());
+        assertTrue(tickets.tickets.isEmpty());
+
+        replaceReadiness("minio", AccessPolicy.PUBLIC_READ, OssStorageReadinessEntry.Status.SERVING);
+        OssUploadException mismatch = assertThrows(OssUploadException.class,
+            () -> service.init(new InitRequest("general", "file.bin", 8,
+                "application/octet-stream", "fp-mismatch")));
+        assertEquals(OssUploadError.STORAGE_ACCESS_POLICY_MISMATCH, mismatch.error());
+        assertEquals(0, objects.prepareCalls.get());
+        assertTrue(tickets.tickets.isEmpty());
+    }
+
+    @Test
+    void shouldKeepTicketStorageRouteFrozenAfterPolicyAndReadinessChange() {
+        InitResponse init = service.init(new InitRequest("general", "file.bin", 8,
+            "application/octet-stream", "fp-frozen"));
+        assertEquals("minio", tickets.get(init.uploadToken()).service());
+
+        properties.requirePolicy("general").setStorageConfigKey("portal");
+        properties.requirePolicy("general").setExpectedAccessPolicy(AccessPolicy.PUBLIC_READ);
+        replaceReadiness("portal", AccessPolicy.PUBLIC_READ, OssStorageReadinessEntry.Status.SERVING);
+        service.resume(init.uploadToken(), "fp-frozen");
+        service.abort(init.uploadToken());
+
+        assertEquals("minio", objects.lastTicketService);
+        assertEquals("minio", objects.lastCleanupService);
     }
 
     @Test
@@ -217,6 +277,16 @@ class OssUploadServiceUnitTest {
         return new OssMultipartPart(number, etag, size, Instant.now(), Map.of());
     }
 
+    private void replaceReadiness(String configKey, AccessPolicy policy,
+                                  OssStorageReadinessEntry.Status status) {
+        Instant now = Instant.now();
+        readiness.replace(Map.of(configKey, new OssStorageReadinessEntry(configKey, policy, true,
+            Set.of("UPLOAD_POLICY:general"), status,
+            status == OssStorageReadinessEntry.Status.SERVING
+                ? OssStorageReadinessEntry.Reason.READY
+                : OssStorageReadinessEntry.Reason.DIAGNOSTIC_UNVERIFIED, now)), Set.of(configKey), true);
+    }
+
     private static final class MutableIdentity implements OssUploadIdentityResolver {
         private Long userId;
         private Long clientPk;
@@ -300,6 +370,11 @@ class OssUploadServiceUnitTest {
         private final AtomicInteger completeCalls = new AtomicInteger();
         private final AtomicInteger deleteCalls = new AtomicInteger();
         private final AtomicInteger presignSingleCalls = new AtomicInteger();
+        private final AtomicInteger prepareCalls = new AtomicInteger();
+        private String preparedStorageConfigKey;
+        private AccessPolicy preparedExpectedAccessPolicy;
+        private String lastTicketService;
+        private String lastCleanupService;
         private boolean objectPresent;
         private long objectSize;
         private String contentType;
@@ -308,14 +383,18 @@ class OssUploadServiceUnitTest {
         private List<OssMultipartPart> parts = List.of();
 
         @Override
-        public PreparedUpload prepare(String objectPrefix, String fileName, String contentType,
+        public PreparedUpload prepare(String storageConfigKey, AccessPolicy expectedAccessPolicy,
+                                      String objectPrefix, String fileName, String contentType,
                                       String fingerprintDigest, OssUploadMode mode, Duration presignTtl) {
+            prepareCalls.incrementAndGet();
+            preparedStorageConfigKey = storageConfigKey;
+            preparedExpectedAccessPolicy = expectedAccessPolicy;
             this.contentType = contentType;
             this.fingerprintDigest = fingerprintDigest;
             OssPresignedRequest request = mode == OssUploadMode.SINGLE
                 ? new OssPresignedRequest("PUT", "https://oss.example/object",
                     Map.of("x-amz-meta-upload-fingerprint", fingerprintDigest), Instant.now().plus(presignTtl)) : null;
-            return new PreparedUpload("service-a", "bucket-a", objectPrefix + "/key.bin",
+            return new PreparedUpload(storageConfigKey, storageConfigKey + "-bucket", objectPrefix + "/key.bin",
                 mode == OssUploadMode.MULTIPART ? "upload-1" : null, request);
         }
 
@@ -328,6 +407,7 @@ class OssUploadServiceUnitTest {
         @Override
         public OssPresignedRequest presignSingle(OssUploadTicket ticket, Duration ttl) {
             presignSingleCalls.incrementAndGet();
+            lastTicketService = ticket.service();
             return new OssPresignedRequest("PUT", "https://oss.example/object",
                 Map.of("x-amz-meta-upload-fingerprint", ticket.fingerprintDigest()), Instant.now().plus(ttl));
         }
@@ -357,6 +437,7 @@ class OssUploadServiceUnitTest {
 
         @Override
         public void abort(OssUploadCleanupRecord cleanup) {
+            lastCleanupService = cleanup.service();
         }
 
         @Override

@@ -5,6 +5,8 @@ package org.dromara.system.oss.upload;
  */
 public enum OssUploadError {
     INVALID_POLICY,
+    STORAGE_NOT_SERVING,
+    STORAGE_ACCESS_POLICY_MISMATCH,
     INVALID_FILE,
     ACCESS_DENIED,
     SESSION_NOT_FOUND,

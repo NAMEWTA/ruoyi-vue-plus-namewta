@@ -5,6 +5,8 @@ import org.dromara.common.oss.model.OssCompletedPart;
 import org.dromara.common.oss.model.OssMultipartPart;
 import org.dromara.common.oss.model.OssObjectStat;
 import org.dromara.common.oss.model.OssPresignedRequest;
+import org.dromara.system.oss.readiness.OssStorageReadinessEntry;
+import org.dromara.system.oss.readiness.OssStorageReadinessRegistry;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -39,6 +41,7 @@ public class OssUploadService {
     private final OssUploadTicketStore ticketStore;
     private final OssUploadObjectStore objectStore;
     private final OssUploadMetadataStore metadataStore;
+    private final OssStorageReadinessRegistry readinessRegistry;
 
     public InitResponse init(InitRequest request) {
         validateInitRequest(request);
@@ -49,6 +52,7 @@ public class OssUploadService {
         if (request.fileSize() > policy.getMaxSize() || !policy.allowsContentType(contentType)) {
             throw new OssUploadException(OssUploadError.INVALID_FILE, "文件大小或 Content-Type 不符合上传策略");
         }
+        requireStorageRoute(policy);
         OssUploadMode mode = policy.resolveMode(request.fileSize());
         long partSize = mode == OssUploadMode.MULTIPART ? policy.getPartSize() : 0;
         int partCount = mode == OssUploadMode.MULTIPART
@@ -57,8 +61,11 @@ public class OssUploadService {
         String fingerprintDigest = sha256(request.fingerprint());
         OssUploadObjectStore.PreparedUpload prepared;
         try {
-            prepared = objectStore.prepare(policy.getObjectPrefix(), request.fileName(), contentType,
-                fingerprintDigest, mode, properties.getPresignTtl());
+            prepared = objectStore.prepare(policy.getStorageConfigKey(), policy.getExpectedAccessPolicy(),
+                policy.getObjectPrefix(), request.fileName(), contentType, fingerprintDigest, mode,
+                properties.getPresignTtl());
+        } catch (OssUploadException e) {
+            throw e;
         } catch (RuntimeException e) {
             throw providerFailure("初始化 OSS 上传失败", e);
         }
@@ -78,6 +85,18 @@ public class OssUploadService {
         return new InitResponse(token, mode, Instant.ofEpochMilli(expiresAt), prepared.presignedRequest(),
             mode == OssUploadMode.MULTIPART ? partSize : null,
             mode == OssUploadMode.MULTIPART ? partCount : null);
+    }
+
+    private void requireStorageRoute(OssUploadProperties.Policy policy) {
+        String storageConfigKey = policy.getStorageConfigKey();
+        OssStorageReadinessEntry entry = readinessRegistry.snapshot().get(storageConfigKey);
+        if (entry == null || entry.status() != OssStorageReadinessEntry.Status.SERVING) {
+            throw new OssUploadException(OssUploadError.STORAGE_NOT_SERVING, "OSS 上传目标当前不可服务");
+        }
+        if (entry.accessPolicy() != policy.getExpectedAccessPolicy()) {
+            throw new OssUploadException(OssUploadError.STORAGE_ACCESS_POLICY_MISMATCH,
+                "OSS 上传目标访问策略与服务端策略不一致");
+        }
     }
 
     public SignPartsResponse signParts(String token, SignPartsRequest request) {

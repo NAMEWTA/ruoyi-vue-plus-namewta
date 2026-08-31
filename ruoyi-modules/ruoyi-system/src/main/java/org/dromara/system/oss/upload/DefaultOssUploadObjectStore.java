@@ -1,6 +1,7 @@
 package org.dromara.system.oss.upload;
 
 import org.dromara.common.oss.client.OssClient;
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.exception.OssErrorCode;
 import org.dromara.common.oss.exception.S3StorageException;
 import org.dromara.common.oss.factory.OssFactory;
@@ -21,9 +22,15 @@ import java.util.Optional;
 public class DefaultOssUploadObjectStore implements OssUploadObjectStore {
 
     @Override
-    public PreparedUpload prepare(String objectPrefix, String fileName, String contentType,
-                                  String fingerprintDigest, OssUploadMode mode, Duration presignTtl) {
-        OssClient client = OssFactory.instance();
+    public PreparedUpload prepare(String storageConfigKey, AccessPolicy expectedAccessPolicy, String objectPrefix,
+                                  String fileName, String contentType, String fingerprintDigest,
+                                  OssUploadMode mode, Duration presignTtl) {
+        OssClient client = OssFactory.instance(storageConfigKey);
+        AccessPolicy actualAccessPolicy = client.config().accessControlPolicyConfig().accessPolicy();
+        if (actualAccessPolicy != expectedAccessPolicy) {
+            throw new OssUploadException(OssUploadError.STORAGE_ACCESS_POLICY_MISMATCH,
+                "OSS 上传目标访问策略与服务端策略不一致");
+        }
         if (mode == OssUploadMode.MULTIPART && !client.capabilities().multipartUpload()) {
             throw new OssUploadException(OssUploadError.INVALID_POLICY, "当前 OSS Provider 不支持 Multipart");
         }
