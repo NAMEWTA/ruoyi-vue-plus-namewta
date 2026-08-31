@@ -1,6 +1,7 @@
 package org.dromara.system.api;
 
 import org.dromara.system.api.domain.OssDTO;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -80,6 +81,6 @@ public interface OssService {
     record OssDownloadUrl(String url, Instant expiresAt, String fileName) {
     }
 
-    record OssAccessUrl(String accessType, String url, Instant expiresAt, String fileName) {
+    record OssAccessUrl(String accessType, String url, @Nullable Instant expiresAt, String fileName) {
     }
 }
