@@ -23,6 +23,7 @@ import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.security.config.properties.SecurityProperties;
 import org.dromara.common.security.handler.AllUrlHandler;
+import org.dromara.system.api.model.LoginUser;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -45,6 +46,8 @@ import java.util.List;
 @EnableConfigurationProperties(SecurityProperties.class)
 @RequiredArgsConstructor
 public class SecurityConfig implements WebMvcConfigurer {
+
+    private static final String VERIFIED_OPEN_API_REQUEST_ATTRIBUTE = "org.dromara.openapi.verifiedRequest";
 
     private static final String CLIENT_RULE_SEPARATOR_REGEX = "[,;\\r\\n]+";
 
@@ -94,17 +97,22 @@ public class SecurityConfig implements WebMvcConfigurer {
                         // 检查是否登录 是否有token
                         StpUtil.checkLogin();
 
-                        // 检查 header 与 param 里的 clientid 与 token 里的是否一致
-                        String headerCid = request.getHeader(LoginHelper.CLIENT_KEY);
-                        String paramCid = ServletUtils.getParameter(LoginHelper.CLIENT_KEY);
-                        String clientId = StpUtil.getExtra(LoginHelper.CLIENT_KEY).toString();
-                        if (!StringUtils.equalsAny(clientId, headerCid, paramCid)) {
-                            // token 无效
-                            throw NotLoginException.newInstance(StpUtil.getLoginType(),
-                                "-100", "客户端ID与Token不匹配",
-                                StpUtil.getTokenValue());
+                        LoginUser loginUser = LoginHelper.getLoginUser();
+                        // The signed gateway owns this server-only attribute. Machine identities are global and
+                        // intentionally have no browser Client, while every ordinary login still takes this branch.
+                        if (!isVerifiedOpenApiRequest(request, loginUser)) {
+                            // 检查 header 与 param 里的 clientid 与 token 里的是否一致
+                            String headerCid = request.getHeader(LoginHelper.CLIENT_KEY);
+                            String paramCid = ServletUtils.getParameter(LoginHelper.CLIENT_KEY);
+                            String clientId = StpUtil.getExtra(LoginHelper.CLIENT_KEY).toString();
+                            if (!StringUtils.equalsAny(clientId, headerCid, paramCid)) {
+                                // token 无效
+                                throw NotLoginException.newInstance(StpUtil.getLoginType(),
+                                    "-100", "客户端ID与Token不匹配",
+                                    StpUtil.getTokenValue());
+                            }
+                            validateClientAccessRules(request);
                         }
-                        validateClientAccessRules(request);
 
                         // 有效率影响 用于临时测试
                         // if (log.isDebugEnabled()) {
@@ -116,6 +124,14 @@ public class SecurityConfig implements WebMvcConfigurer {
             })).addPathPatterns("/**")
             // 排除不需要拦截的路径
             .excludePathPatterns(securityProperties.getExcludes());
+    }
+
+    private static boolean isVerifiedOpenApiRequest(HttpServletRequest request, LoginUser loginUser) {
+        return Boolean.TRUE.equals(request.getAttribute(VERIFIED_OPEN_API_REQUEST_ATTRIBUTE))
+            && loginUser != null
+            && "openapi".equals(loginUser.getUserType())
+            && loginUser.getClientPk() == null
+            && loginUser.getClientKey() == null;
     }
 
     /**
