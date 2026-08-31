@@ -1,15 +1,18 @@
 package org.dromara.test.oss.lifecycle;
 
+import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.model.OssPresignedRequest;
 import org.dromara.system.api.OssService;
 import org.dromara.system.domain.SysOss;
 import org.dromara.system.mapper.SysOssMapper;
 import org.dromara.system.oss.config.OssLifecycleProperties;
+import org.dromara.system.oss.domain.SysOssRef;
 import org.dromara.system.oss.exception.OssLifecycleError;
 import org.dromara.system.oss.exception.OssLifecycleException;
-import org.dromara.system.oss.domain.SysOssRef;
 import org.dromara.system.oss.mapper.SysOssRefMapper;
 import org.dromara.system.oss.provider.OssObjectStore;
+import org.dromara.system.oss.readiness.OssStorageReadinessRegistry;
 import org.dromara.system.oss.service.OssLifecycleManager;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -231,6 +234,7 @@ class OssLifecycleManagerUnitTest {
         Fixture fixture = fixture();
         SysOss oss = oss(10L, "N", null);
         when(fixture.ossMapper.selectById(10L)).thenReturn(oss);
+        when(fixture.objectStore.accessPolicy(oss)).thenReturn(AccessPolicy.PRIVATE);
         Instant expiresAt = Instant.now().plusSeconds(120);
         when(fixture.objectStore.presign(eq(oss), eq(Duration.ofMinutes(2))))
             .thenReturn(new OssPresignedRequest("GET", "https://oss.example/signed", java.util.Map.of(), expiresAt));
@@ -240,6 +244,90 @@ class OssLifecycleManagerUnitTest {
         assertEquals("https://oss.example/signed", result.url());
         assertEquals(expiresAt, result.expiresAt());
         assertEquals("document.pdf", result.fileName());
+    }
+
+    @Test
+    void shouldResolvePublicStableUrlWithoutExpiryOrSigning() {
+        Fixture fixture = fixture();
+        SysOss oss = oss(10L, "N", null);
+        when(fixture.ossMapper.selectById(10L)).thenReturn(oss);
+        when(fixture.objectStore.accessPolicy(oss)).thenReturn(AccessPolicy.PUBLIC_READ);
+        when(fixture.objectStore.publicUrl(oss)).thenReturn("https://cdn.example.test/objects/document.pdf");
+
+        OssService.OssAccessUrl result = fixture.manager.resolveAccessUrl(10L);
+
+        assertEquals("PUBLIC", result.accessType());
+        assertEquals("https://cdn.example.test/objects/document.pdf", result.url());
+        assertNull(result.expiresAt());
+        verify(fixture.objectStore, never()).presign(any(), any());
+    }
+
+    @Test
+    void shouldResolvePrivateUrlWithActualProviderExpiry() {
+        Fixture fixture = fixture();
+        SysOss oss = oss(10L, "N", null);
+        Instant expiresAt = Instant.now().plusSeconds(120);
+        when(fixture.ossMapper.selectById(10L)).thenReturn(oss);
+        when(fixture.objectStore.accessPolicy(oss)).thenReturn(AccessPolicy.PRIVATE);
+        when(fixture.objectStore.presign(oss, Duration.ofMinutes(2)))
+            .thenReturn(new OssPresignedRequest("GET", "https://oss.example/signed", java.util.Map.of(), expiresAt));
+
+        OssService.OssAccessUrl result = fixture.manager.resolveAccessUrl(10L);
+
+        assertEquals("PRIVATE", result.accessType());
+        assertEquals(expiresAt, result.expiresAt());
+        assertEquals("document.pdf", result.fileName());
+    }
+
+    @Test
+    void shouldRejectPublicPrivatePresignAndUnknownNamedPolicy() {
+        Fixture fixture = fixture();
+        SysOss oss = oss(10L, "N", null);
+        when(fixture.ossMapper.selectById(10L)).thenReturn(oss);
+        when(fixture.objectStore.accessPolicy(oss)).thenReturn(AccessPolicy.PUBLIC_READ);
+
+        OssLifecycleException publicError = assertThrows(OssLifecycleException.class,
+            () -> fixture.manager.presignDownload(10L));
+        assertEquals(OssLifecycleError.PUBLIC_PRESIGN_FORBIDDEN, publicError.error());
+        verify(fixture.objectStore, never()).presign(any(), any());
+
+        when(fixture.objectStore.accessPolicy(oss)).thenReturn(AccessPolicy.PRIVATE);
+        OssLifecycleException policyError = assertThrows(OssLifecycleException.class,
+            () -> fixture.manager.presignDownload(10L, "missing"));
+        assertEquals(OssLifecycleError.DOWNLOAD_POLICY_INVALID, policyError.error());
+    }
+
+    @Test
+    void shouldApplyEnabledServerNamedDownloadPolicy() {
+        Fixture fixture = fixture();
+        SysOss oss = oss(10L, "N", null);
+        OssLifecycleProperties.DownloadPolicy policy = new OssLifecycleProperties.DownloadPolicy();
+        policy.setTtl(Duration.ofMinutes(5));
+        fixture.properties.setDownloadPolicies(java.util.Map.of("preview", policy));
+        Instant expiresAt = Instant.now().plusSeconds(300);
+        when(fixture.ossMapper.selectById(10L)).thenReturn(oss);
+        when(fixture.objectStore.accessPolicy(oss)).thenReturn(AccessPolicy.PRIVATE);
+        when(fixture.objectStore.presign(oss, Duration.ofMinutes(5)))
+            .thenReturn(new OssPresignedRequest("GET", "https://oss.example/preview", java.util.Map.of(), expiresAt));
+
+        OssService.OssDownloadUrl result = fixture.manager.presignDownload(10L, "preview");
+
+        assertEquals(expiresAt, result.expiresAt());
+        verify(fixture.objectStore).presign(oss, Duration.ofMinutes(5));
+    }
+
+    @Test
+    void shouldFailClosedWhenStorageIsNotServing() {
+        Fixture fixture = fixture();
+        SysOss oss = oss(10L, "N", null);
+        when(fixture.ossMapper.selectById(10L)).thenReturn(oss);
+        doThrow(new ServiceException("not serving")).when(fixture.readinessRegistry).requireServing("minio");
+
+        OssLifecycleException exception = assertThrows(OssLifecycleException.class,
+            () -> fixture.manager.resolveAccessUrl(10L));
+
+        assertEquals(OssLifecycleError.STORAGE_NOT_SERVING, exception.error());
+        verifyNoInteractions(fixture.objectStore);
     }
 
     @Test
@@ -271,8 +359,9 @@ class OssLifecycleManagerUnitTest {
         SysOssRefMapper refMapper = mock(SysOssRefMapper.class);
         OssObjectStore objectStore = mock(OssObjectStore.class);
         OssLifecycleProperties properties = new OssLifecycleProperties();
-        return new Fixture(ossMapper, refMapper, objectStore,
-            new OssLifecycleManager(ossMapper, refMapper, objectStore, properties));
+        OssStorageReadinessRegistry readinessRegistry = mock(OssStorageReadinessRegistry.class);
+        return new Fixture(ossMapper, refMapper, objectStore, properties, readinessRegistry,
+            new OssLifecycleManager(ossMapper, refMapper, objectStore, properties, readinessRegistry));
     }
 
     private SysOss oss(Long id, String temporary, LocalDateTime expireTime) {
@@ -291,6 +380,8 @@ class OssLifecycleManagerUnitTest {
         SysOssMapper ossMapper,
         SysOssRefMapper refMapper,
         OssObjectStore objectStore,
+        OssLifecycleProperties properties,
+        OssStorageReadinessRegistry readinessRegistry,
         OssLifecycleManager manager
     ) {
     }

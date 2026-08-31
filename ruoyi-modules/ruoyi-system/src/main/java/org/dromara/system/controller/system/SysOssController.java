@@ -67,8 +67,8 @@ public class SysOssController extends BaseController {
      */
     @SaCheckPermission("system:oss:download")
     @GetMapping("/{ossId}/download-url")
-    public R<OssService.OssDownloadUrl> downloadUrl(@PathVariable Long ossId) {
-        return R.ok(publicOssService.presignDownload(ossId));
+    public R<OssService.OssAccessUrl> downloadUrl(@PathVariable Long ossId) {
+        return R.ok(publicOssService.resolveAccessUrl(ossId));
     }
 
     /**

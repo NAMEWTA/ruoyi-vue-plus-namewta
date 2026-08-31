@@ -1,7 +1,7 @@
 package org.dromara.system.oss.service;
 
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
-import lombok.RequiredArgsConstructor;
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.model.OssPresignedRequest;
 import org.dromara.system.api.OssService;
 import org.dromara.system.domain.SysOss;
@@ -12,8 +12,12 @@ import org.dromara.system.oss.exception.OssLifecycleError;
 import org.dromara.system.oss.exception.OssLifecycleException;
 import org.dromara.system.oss.mapper.SysOssRefMapper;
 import org.dromara.system.oss.provider.OssObjectStore;
+import org.dromara.system.oss.readiness.OssStorageReadinessRegistry;
+import org.dromara.system.oss.readiness.OssStorageReadinessProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,7 +31,6 @@ import java.util.regex.Pattern;
  * 通过 sys_oss 行锁协调引用变更、删除和临时对象清理。
  */
 @Service
-@RequiredArgsConstructor
 public class OssLifecycleManager {
 
     private static final String DELETE_PENDING = "PENDING";
@@ -38,6 +41,27 @@ public class OssLifecycleManager {
     private final SysOssRefMapper refMapper;
     private final OssObjectStore objectStore;
     private final OssLifecycleProperties properties;
+    private final OssStorageReadinessRegistry readinessRegistry;
+
+    @Autowired
+    public OssLifecycleManager(SysOssMapper ossMapper, SysOssRefMapper refMapper, OssObjectStore objectStore,
+                               OssLifecycleProperties properties,
+                               OssStorageReadinessRegistry readinessRegistry) {
+        this.ossMapper = ossMapper;
+        this.refMapper = refMapper;
+        this.objectStore = objectStore;
+        this.properties = properties;
+        this.readinessRegistry = readinessRegistry;
+    }
+
+    /**
+     * 保留既有构造签名，供不涉及访问 URL 的嵌入式调用与测试平滑升级。
+     */
+    public OssLifecycleManager(SysOssMapper ossMapper, SysOssRefMapper refMapper, OssObjectStore objectStore,
+                               OssLifecycleProperties properties) {
+        this(ossMapper, refMapper, objectStore, properties,
+            new OssStorageReadinessRegistry(new OssStorageReadinessProperties()));
+    }
 
     @DSTransactional
     public OssService.OssReferenceState bind(Long ossId, String refType, String refId) {
@@ -106,14 +130,44 @@ public class OssLifecycleManager {
             oss.getExpireTime(), references);
     }
 
-    public OssService.OssDownloadUrl presignDownload(Long ossId) {
-        SysOss oss = require(ossId);
-        if (DELETE_PENDING.equals(oss.getDeleteState())) {
-            throw new OssLifecycleException(OssLifecycleError.OBJECT_DELETE_PENDING,
-                "OSS 对象正在删除: " + ossId);
+    public OssService.OssAccessUrl resolveAccessUrl(Long ossId) {
+        SysOss oss = requireDownloadable(ossId);
+        AccessPolicy policy = accessPolicy(oss);
+        if (policy == AccessPolicy.PUBLIC_READ) {
+            try {
+                String url = objectStore.publicUrl(oss);
+                if (url == null || url.isBlank()) {
+                    throw new IllegalStateException("empty public URL");
+                }
+                return new OssService.OssAccessUrl("PUBLIC", url, null, oss.getOriginalName());
+            } catch (RuntimeException ex) {
+                throw accessFailure(ossId, ex);
+            }
         }
-        OssPresignedRequest request = objectStore.presign(oss, properties.getDownloadTtl());
-        return new OssService.OssDownloadUrl(request.url(), request.expiresAt(), oss.getOriginalName());
+        OssService.OssDownloadUrl signed = privateDownload(oss, resolveDownloadTtl(null));
+        return new OssService.OssAccessUrl("PRIVATE", signed.url(), signed.expiresAt(), signed.fileName());
+    }
+
+    public OssService.OssDownloadUrl presignDownload(Long ossId) {
+        return presignDownload(ossId, null);
+    }
+
+    public OssService.OssDownloadUrl presignDownload(Long ossId, String policyName) {
+        SysOss oss = requireDownloadable(ossId);
+        if (accessPolicy(oss) != AccessPolicy.PRIVATE) {
+            throw new OssLifecycleException(OssLifecycleError.PUBLIC_PRESIGN_FORBIDDEN,
+                "公共 OSS 对象不能生成私有签名: " + ossId);
+        }
+        return privateDownload(oss, resolveDownloadTtl(policyName));
+    }
+
+    private Duration resolveDownloadTtl(String policyName) {
+        try {
+            return properties.resolveDownloadTtl(policyName);
+        } catch (RuntimeException ex) {
+            throw new OssLifecycleException(OssLifecycleError.DOWNLOAD_POLICY_INVALID,
+                "OSS 下载策略无效", ex);
+        }
     }
 
     @DSTransactional
@@ -180,6 +234,54 @@ public class OssLifecycleManager {
             throw new OssLifecycleException(OssLifecycleError.OBJECT_NOT_FOUND, "OSS 对象不存在: " + ossId);
         }
         return oss;
+    }
+
+    private SysOss requireDownloadable(Long ossId) {
+        SysOss oss = require(ossId);
+        if (DELETE_PENDING.equals(oss.getDeleteState())) {
+            throw new OssLifecycleException(OssLifecycleError.OBJECT_DELETE_PENDING,
+                "OSS 对象正在删除: " + ossId);
+        }
+        try {
+            readinessRegistry.requireServing(oss.getService());
+        } catch (RuntimeException ex) {
+            throw new OssLifecycleException(OssLifecycleError.STORAGE_NOT_SERVING,
+                "OSS 存储配置当前不可服务: " + oss.getService(), ex);
+        }
+        return oss;
+    }
+
+    private AccessPolicy accessPolicy(SysOss oss) {
+        try {
+            AccessPolicy policy = objectStore.accessPolicy(oss);
+            if (policy == null) {
+                throw new IllegalStateException("missing access policy");
+            }
+            return policy;
+        } catch (RuntimeException ex) {
+            throw new OssLifecycleException(OssLifecycleError.ACCESS_POLICY_INVALID,
+                "OSS 访问类型不可用: " + oss.getOssId(), ex);
+        }
+    }
+
+    private OssService.OssDownloadUrl privateDownload(SysOss oss, Duration ttl) {
+        try {
+            OssPresignedRequest request = objectStore.presign(oss, ttl);
+            if (request == null || request.url() == null || request.url().isBlank() || request.expiresAt() == null) {
+                throw new IllegalStateException("incomplete presigned response");
+            }
+            return new OssService.OssDownloadUrl(request.url(), request.expiresAt(), oss.getOriginalName());
+        } catch (RuntimeException ex) {
+            throw accessFailure(oss.getOssId(), ex);
+        }
+    }
+
+    private OssLifecycleException accessFailure(Long ossId, RuntimeException cause) {
+        if (cause instanceof OssLifecycleException lifecycleException) {
+            return lifecycleException;
+        }
+        return new OssLifecycleException(OssLifecycleError.PROVIDER_ACCESS_FAILED,
+            "OSS Provider 访问授权失败: " + ossId, cause);
     }
 
     private void validateReference(String refType, String refId) {

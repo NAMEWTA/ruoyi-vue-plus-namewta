@@ -50,9 +50,19 @@ public interface OssService {
     OssLifecycleSnapshot snapshot(Long ossId);
 
     /**
-     * 在调用方完成业务权限校验后生成短时下载授权。
+     * 在调用方完成业务权限校验后解析对象访问地址。
+     */
+    OssAccessUrl resolveAccessUrl(Long ossId);
+
+    /**
+     * 在调用方完成业务权限校验后为私有对象生成默认短时下载授权。
      */
     OssDownloadUrl presignDownload(Long ossId);
+
+    /**
+     * 在调用方完成业务权限校验后按服务端命名策略为私有对象生成下载授权。
+     */
+    OssDownloadUrl presignDownload(Long ossId, String policyName);
 
     record OssReferenceState(Long ossId, boolean temporary, LocalDateTime expireTime, long referenceCount) {
     }
@@ -68,5 +78,8 @@ public interface OssService {
     }
 
     record OssDownloadUrl(String url, Instant expiresAt, String fileName) {
+    }
+
+    record OssAccessUrl(String accessType, String url, Instant expiresAt, String fileName) {
     }
 }

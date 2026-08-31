@@ -1,5 +1,6 @@
 package org.dromara.system.oss.provider;
 
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.model.OssPresignedRequest;
 import org.dromara.system.domain.SysOss;
 
@@ -11,6 +12,10 @@ import java.time.Duration;
 public interface OssObjectStore {
 
     OssPresignedRequest presign(SysOss oss, Duration ttl);
+
+    AccessPolicy accessPolicy(SysOss oss);
+
+    String publicUrl(SysOss oss);
 
     void delete(SysOss oss);
 }

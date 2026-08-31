@@ -16,7 +16,6 @@ import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.query.QueryBuilder;
 import org.dromara.common.oss.client.OssClient;
-import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.factory.OssFactory;
 import org.dromara.common.oss.model.Options;
 import org.dromara.common.oss.model.PutObjectResult;
@@ -34,7 +33,6 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -102,7 +100,7 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
     public String selectUrlByIds(String ossIds) {
         List<Long> ids = StringUtils.splitTo(ossIds, Convert::toLong);
         List<Supplier<String>> suppliers = ids.stream()
-            .map(id -> (Supplier<String>) () -> lifecycleManager.presignDownload(id).url())
+            .map(id -> (Supplier<String>) () -> lifecycleManager.resolveAccessUrl(id).url())
             .toList();
         List<String> list = ThreadUtils.virtualSubmitAll(suppliers);
         list.removeAll(Collections.singleton(null));
@@ -123,7 +121,7 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
             SysOssVo vo = ossService.getById(id);
             if (ObjectUtil.isNotNull(vo)) {
                 OssDTO dto = BeanUtil.toBean(vo, OssDTO.class);
-                dto.setUrl(lifecycleManager.presignDownload(id).url());
+                dto.setUrl(lifecycleManager.resolveAccessUrl(id).url());
                 return dto;
             }
             return null;
@@ -210,7 +208,8 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
         oss.setExt1(JsonUtils.toJsonString(ext1));
         ossMapper.insert(oss);
         SysOssVo sysOssVo = MapstructUtils.convert(oss, SysOssVo.class);
-        return this.matchingUrl(sysOssVo);
+        sysOssVo.setUrl(lifecycleManager.resolveAccessUrl(oss.getOssId()).url());
+        return sysOssVo;
     }
 
     /**
@@ -244,6 +243,16 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
         return lifecycleManager.presignDownload(ossId);
     }
 
+    @Override
+    public OssDownloadUrl presignDownload(Long ossId, String policyName) {
+        return lifecycleManager.presignDownload(ossId, policyName);
+    }
+
+    @Override
+    public OssAccessUrl resolveAccessUrl(Long ossId) {
+        return lifecycleManager.resolveAccessUrl(ossId);
+    }
+
     /**
      * 管理查询不返回可直接使用的 URL；下载必须经过专用权限入口。
      */
@@ -256,18 +265,4 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
         return view;
     }
 
-    /**
-     * 桶类型为 private 的URL 修改为临时URL时长为120s
-     *
-     * @param oss OSS对象
-     * @return oss 匹配Url的OSS对象
-     */
-    private SysOssVo matchingUrl(SysOssVo oss) {
-        OssClient instance = OssFactory.instance(oss.getService());
-        // 仅修改桶类型为 private 的URL，临时URL时长为120s
-        if (instance.verifyConfig(config -> AccessPolicy.PRIVATE.equals(config.accessControlPolicyConfig().accessPolicy()))) {
-            oss.setUrl(instance.presignGetUrl(oss.getFileName(), Duration.ofSeconds(120)));
-        }
-        return oss;
-    }
 }

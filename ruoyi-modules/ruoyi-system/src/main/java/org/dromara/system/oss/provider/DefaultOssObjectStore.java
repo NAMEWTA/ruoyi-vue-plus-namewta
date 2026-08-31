@@ -1,13 +1,17 @@
 package org.dromara.system.oss.provider;
 
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.oss.client.OssClient;
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.factory.OssFactory;
 import org.dromara.common.oss.model.OssPresignedRequest;
 import org.dromara.system.domain.SysOss;
 import org.dromara.system.oss.exception.OssLifecycleError;
 import org.dromara.system.oss.exception.OssLifecycleException;
 import org.springframework.stereotype.Component;
+import software.amazon.awssdk.utils.http.SdkHttpUtils;
 
+import java.net.URI;
 import java.time.Duration;
 
 /**
@@ -19,6 +23,25 @@ public class DefaultOssObjectStore implements OssObjectStore {
     @Override
     public OssPresignedRequest presign(SysOss oss, Duration ttl) {
         return client(oss).presignGet(oss.getFileName(), ttl);
+    }
+
+    @Override
+    public AccessPolicy accessPolicy(SysOss oss) {
+        return client(oss).config().accessControlPolicyConfig().accessPolicy();
+    }
+
+    @Override
+    public String publicUrl(SysOss oss) {
+        var config = client(oss).config();
+        String base = config.domain().filter(StringUtils::isNotBlank)
+            .map(ignored -> config.getDomainUrl())
+            .orElseGet(config::getBucketUrl);
+        URI baseUri = URI.create(base);
+        if (baseUri.getUserInfo() != null || baseUri.getRawQuery() != null || baseUri.getRawFragment() != null) {
+            throw new IllegalStateException("公共 OSS 域名不能包含凭据、查询串或片段");
+        }
+        String normalized = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+        return normalized + "/" + SdkHttpUtils.urlEncodeIgnoreSlashes(oss.getFileName());
     }
 
     @Override
