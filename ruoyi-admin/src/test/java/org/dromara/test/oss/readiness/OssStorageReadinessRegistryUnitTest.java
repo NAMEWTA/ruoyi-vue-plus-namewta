@@ -7,6 +7,7 @@ import org.dromara.system.oss.readiness.OssStorageReadinessProperties;
 import org.dromara.system.oss.readiness.OssStorageReadinessRegistry;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -20,6 +21,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Tag("dev")
 class OssStorageReadinessRegistryUnitTest {
+
+    @Test
+    void springSelectsTheProductionConstructor() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(OssStorageReadinessProperties.class);
+            context.register(OssStorageReadinessRegistry.class);
+            context.refresh();
+
+            assertThat(context.getBean(OssStorageReadinessRegistry.class)).isNotNull();
+        }
+    }
 
     @Test
     void onlyRequiredFailuresLowerOverallReadiness() {

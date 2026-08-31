@@ -1,6 +1,7 @@
 package org.dromara.system.oss.readiness;
 
 import org.dromara.common.core.exception.ServiceException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -20,6 +21,7 @@ public class OssStorageReadinessRegistry {
     private final Clock clock;
     private final AtomicReference<Snapshot> current = new AtomicReference<>(Snapshot.empty());
 
+    @Autowired
     public OssStorageReadinessRegistry(OssStorageReadinessProperties properties) {
         this(properties, Clock.systemUTC());
     }
