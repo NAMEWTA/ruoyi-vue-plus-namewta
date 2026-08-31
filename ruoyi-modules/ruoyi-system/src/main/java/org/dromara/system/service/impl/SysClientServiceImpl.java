@@ -5,6 +5,7 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.CacheNames;
@@ -15,22 +16,29 @@ import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.query.QueryBuilder;
+import org.dromara.common.openapi.session.OpenApiMachineSessionInvalidator;
 import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.SysRole;
+import org.dromara.system.domain.SysUserTypeRel;
 import org.dromara.system.domain.bo.SysClientBo;
 import org.dromara.system.domain.vo.SysClientVo;
 import org.dromara.system.domain.vo.SysUserTypeVo;
 import org.dromara.system.mapper.SysClientMapper;
 import org.dromara.system.mapper.SysRoleMapper;
+import org.dromara.system.mapper.SysUserTypeRelMapper;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysClientService;
 import org.dromara.system.service.ISysUserTypeService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 
 /**
@@ -50,6 +58,13 @@ public class SysClientServiceImpl implements ISysClientService {
     private final SysRoleMapper roleMapper;
     private final ISysUserTypeService userTypeService;
     private final ClientSessionService clientSessionService;
+    private final SysUserTypeRelMapper userTypeRelMapper;
+    private OpenApiMachineSessionInvalidator openApiSessionInvalidator = ignored -> 0;
+
+    @Autowired(required = false)
+    void setOpenApiSessionInvalidator(OpenApiMachineSessionInvalidator openApiSessionInvalidator) {
+        this.openApiSessionInvalidator = Objects.requireNonNull(openApiSessionInvalidator);
+    }
 
     /**
      * 查询客户端管理
@@ -131,6 +146,7 @@ public class SysClientServiceImpl implements ISysClientService {
      * @return 新增成功返回 {@code true}
      */
     @Override
+    @DSTransactional
     public Boolean insertByBo(SysClientBo bo) {
         SysClient add = MapstructUtils.convert(bo, SysClient.class);
         validClientPolicy(add, true);
@@ -147,6 +163,7 @@ public class SysClientServiceImpl implements ISysClientService {
         boolean flag = clientMapper.insert(add) > 0;
         if (flag) {
             bo.setId(add.getId());
+            invalidateUsersForUserTypes(List.of(add.getUserTypeId()));
         }
         return flag;
     }
@@ -159,6 +176,7 @@ public class SysClientServiceImpl implements ISysClientService {
      */
     @CacheEvict(cacheNames = CacheNames.SYS_CLIENT, key = "#bo.clientId")
     @Override
+    @DSTransactional
     public Boolean updateByBo(SysClientBo bo) {
         SysClient db = clientMapper.selectById(bo.getId());
         SysClient update = MapstructUtils.convert(bo, SysClient.class);
@@ -173,6 +191,9 @@ public class SysClientServiceImpl implements ISysClientService {
         if (flag && shouldKickClientSessions(db, update)) {
             clientSessionService.kickoutClient(db.getId());
         }
+        if (flag && shouldInvalidateOpenApiSessions(db, update)) {
+            invalidateUsersForUserTypes(List.of(db.getUserTypeId(), update.getUserTypeId()));
+        }
         return flag;
     }
 
@@ -185,6 +206,7 @@ public class SysClientServiceImpl implements ISysClientService {
      */
     @CacheEvict(cacheNames = CacheNames.SYS_CLIENT, key = "#clientId")
     @Override
+    @DSTransactional
     public int updateClientStatus(String clientId, String status) {
         SysClientVo client = clientMapper.lambda().eq(SysClient::getClientId, clientId).voOne();
         int rows = clientMapper.lambda()
@@ -193,6 +215,9 @@ public class SysClientServiceImpl implements ISysClientService {
             .updateCount();
         if (rows > 0 && SystemConstants.DISABLE.equals(status) && ObjectUtil.isNotNull(client)) {
             clientSessionService.kickoutClient(client.getId());
+        }
+        if (rows > 0 && ObjectUtil.isNotNull(client) && !ObjectUtil.equal(client.getStatus(), status)) {
+            invalidateUsersForUserTypes(List.of(client.getUserTypeId()));
         }
         return rows;
     }
@@ -206,8 +231,14 @@ public class SysClientServiceImpl implements ISysClientService {
      */
     @CacheEvict(cacheNames = CacheNames.SYS_CLIENT, allEntries = true)
     @Override
+    @DSTransactional
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
-        return clientMapper.deleteByIds(ids) > 0;
+        List<SysClient> clients = clientMapper.selectByIds(ids);
+        boolean deleted = clientMapper.deleteByIds(ids) > 0;
+        if (deleted) {
+            invalidateUsersForUserTypes(clients.stream().map(SysClient::getUserTypeId).toList());
+        }
+        return deleted;
     }
 
     /**
@@ -364,6 +395,33 @@ public class SysClientServiceImpl implements ISysClientService {
         }
         return SystemConstants.DISABLE.equals(update.getStatus())
             && !SystemConstants.DISABLE.equals(db.getStatus());
+    }
+
+    private boolean shouldInvalidateOpenApiSessions(SysClient db, SysClient update) {
+        if (ObjectUtil.isNull(db)) {
+            throw new ServiceException("客户端变更前状态不可用");
+        }
+        return !ObjectUtil.equal(db.getUserTypeId(), update.getUserTypeId())
+            || !ObjectUtil.equal(db.getDefaultRoleId(), update.getDefaultRoleId())
+            || !ObjectUtil.equal(db.getStatus(), update.getStatus());
+    }
+
+    private void invalidateUsersForUserTypes(Collection<Long> userTypeIds) {
+        Set<Long> ids = new LinkedHashSet<>();
+        userTypeIds.stream().filter(Objects::nonNull).forEach(ids::add);
+        if (ids.isEmpty()) {
+            return;
+        }
+        Set<Long> userIds = new LinkedHashSet<>();
+        userTypeRelMapper.lambda()
+            .in(SysUserTypeRel::getUserTypeId, ids)
+            .eq(SysUserTypeRel::getStatus, SystemConstants.NORMAL)
+            .list()
+            .stream()
+            .map(SysUserTypeRel::getUserId)
+            .filter(Objects::nonNull)
+            .forEach(userIds::add);
+        userIds.forEach(openApiSessionInvalidator::invalidateByUserId);
     }
 
 }

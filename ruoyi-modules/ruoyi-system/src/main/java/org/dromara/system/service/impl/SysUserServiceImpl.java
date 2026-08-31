@@ -18,6 +18,7 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.*;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.query.QueryBuilder;
+import org.dromara.common.openapi.session.OpenApiMachineSessionInvalidator;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.system.api.UserService;
 import org.dromara.system.api.OssService;
@@ -40,10 +41,10 @@ import org.dromara.system.mapper.*;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysUserService;
 import org.dromara.system.service.ISysUserTypeRelService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -70,6 +71,12 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     private final ClientSessionService clientSessionService;
     private final ISysUserTypeRelService userTypeRelService;
     private final OssService ossService;
+    private OpenApiMachineSessionInvalidator openApiSessionInvalidator = ignored -> 0;
+
+    @Autowired(required = false)
+    void setOpenApiSessionInvalidator(OpenApiMachineSessionInvalidator openApiSessionInvalidator) {
+        this.openApiSessionInvalidator = Objects.requireNonNull(openApiSessionInvalidator);
+    }
 
     /**
      * 分页查询用户列表。
@@ -388,6 +395,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (user.getAvatar() != null) {
             reconcileAvatarReferences(user.getUserId(), previousAvatar, user.getAvatar());
         }
+        openApiSessionInvalidator.invalidateByUserId(user.getUserId());
         return flag;
     }
 
@@ -399,7 +407,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @param clientId 客户端主键
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public void insertUserAuth(Long userId, Long[] roleIds, Long clientId) {
         if (ObjectUtil.isNull(clientId)) {
             throw new ServiceException("请选择客户端");
@@ -415,6 +423,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
      * @return 结果
      */
     @Override
+    @DSTransactional
     public int updateUserStatus(Long userId, String status) {
         List<SysUserTypeRelVo> userTypes = SystemConstants.DISABLE.equals(status)
             ? userTypeRelService.selectByUserId(userId) : List.of();
@@ -424,6 +433,9 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             .updateCount();
         if (rows > 0 && SystemConstants.DISABLE.equals(status)) {
             kickoutUserTypes(userId, userTypes);
+        }
+        if (rows > 0) {
+            openApiSessionInvalidator.invalidateByUserId(userId);
         }
         return rows;
     }
@@ -588,9 +600,11 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     private void invalidateUserRoleSessions(Long userId, Long clientId, Collection<Long> roleIds) {
         if (ObjectUtil.isNotNull(clientId)) {
             clientSessionService.kickoutUserClient(userId, clientId);
+            openApiSessionInvalidator.invalidateByUserId(userId);
             return;
         }
         kickUserRoleClients(userId, roleIds);
+        openApiSessionInvalidator.invalidateByUserId(userId);
     }
 
     /**
@@ -660,6 +674,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (flag < 1) {
             throw new ServiceException("删除用户失败!");
         }
+        openApiSessionInvalidator.invalidateByUserId(userId);
         if (existing != null) {
             reconcileAvatarReferences(userId, existing.getAvatar(), null);
         }
@@ -696,6 +711,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         if (flag < 1) {
             throw new ServiceException("删除用户失败!");
         }
+        ids.forEach(openApiSessionInvalidator::invalidateByUserId);
         for (SysUser existing : existingUsers) {
             reconcileAvatarReferences(existing.getUserId(), existing.getAvatar(), null);
         }

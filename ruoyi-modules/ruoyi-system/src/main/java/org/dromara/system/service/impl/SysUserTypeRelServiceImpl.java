@@ -2,10 +2,12 @@ package org.dromara.system.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.constant.SystemConstants;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.StreamUtils;
+import org.dromara.common.openapi.session.OpenApiMachineSessionInvalidator;
 import org.dromara.system.domain.SysUserType;
 import org.dromara.system.domain.SysUserTypeRel;
 import org.dromara.system.domain.vo.SysUserTypeRelVo;
@@ -14,13 +16,14 @@ import org.dromara.system.mapper.SysUserTypeMapper;
 import org.dromara.system.mapper.SysUserTypeRelMapper;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysUserTypeRelService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -35,6 +38,12 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
     private final SysUserTypeRelMapper userTypeRelMapper;
     private final SysUserTypeMapper userTypeMapper;
     private final ClientSessionService clientSessionService;
+    private OpenApiMachineSessionInvalidator openApiSessionInvalidator = ignored -> 0;
+
+    @Autowired(required = false)
+    void setOpenApiSessionInvalidator(OpenApiMachineSessionInvalidator openApiSessionInvalidator) {
+        this.openApiSessionInvalidator = Objects.requireNonNull(openApiSessionInvalidator);
+    }
 
     /**
      * 查询用户拥有的登录域关系
@@ -111,7 +120,7 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
      * @param grantSource 新增关系的授权来源
      * @return 被移除的登录域编码列表
      */
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     @Override
     public List<String> coverUserTypes(Long userId, Collection<Long> userTypeIds, String grantSource) {
         if (ObjectUtil.isNull(userId)) {
@@ -126,20 +135,25 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
             }
         }
         List<String> removedCodes = new ArrayList<>();
+        boolean changed = false;
         for (SysUserTypeRelVo rel : current) {
             if (!targetIds.contains(rel.getUserTypeId())) {
                 userTypeRelMapper.deleteById(rel.getRelId());
                 removedCodes.add(rel.getUserTypeCode());
+                changed = true;
             }
         }
         Set<Long> currentIds = StreamUtils.toSet(current, SysUserTypeRelVo::getUserTypeId);
         for (Long userTypeId : targetIds) {
             if (!currentIds.contains(userTypeId)) {
-                grantUserType(userId, userTypeId, grantSource);
+                changed = insertUserTypeGrant(userId, userTypeId, grantSource) || changed;
             }
         }
         for (String removedCode : removedCodes) {
             clientSessionService.kickoutUserType(userId, removedCode);
+        }
+        if (changed) {
+            openApiSessionInvalidator.invalidateByUserId(userId);
         }
         return removedCodes;
     }
@@ -153,7 +167,16 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
      * @return 是否新增
      */
     @Override
+    @DSTransactional
     public boolean grantUserType(Long userId, Long userTypeId, String grantSource) {
+        boolean inserted = insertUserTypeGrant(userId, userTypeId, grantSource);
+        if (inserted) {
+            openApiSessionInvalidator.invalidateByUserId(userId);
+        }
+        return inserted;
+    }
+
+    private boolean insertUserTypeGrant(Long userId, Long userTypeId, String grantSource) {
         boolean exist = userTypeRelMapper.lambda()
             .eq(SysUserTypeRel::getUserId, userId)
             .eq(SysUserTypeRel::getUserTypeId, userTypeId)
@@ -175,11 +198,16 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
      * @param userIds 用户ID集合
      */
     @Override
+    @DSTransactional
     public void deleteByUserIds(Collection<Long> userIds) {
         if (CollUtil.isEmpty(userIds)) {
             return;
         }
-        userTypeRelMapper.lambda().in(SysUserTypeRel::getUserId, userIds).delete();
+        boolean deleted = userTypeRelMapper.lambda().in(SysUserTypeRel::getUserId, userIds).delete();
+        if (deleted) {
+            userIds.stream().filter(ObjectUtil::isNotNull).distinct()
+                .forEach(openApiSessionInvalidator::invalidateByUserId);
+        }
     }
 
 }

@@ -3,6 +3,7 @@ package org.dromara.system.service.impl;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.constant.CacheNames;
 import org.dromara.common.core.constant.SystemConstants;
@@ -11,6 +12,7 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.query.QueryBuilder;
+import org.dromara.common.openapi.session.OpenApiMachineSessionInvalidator;
 import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.SysUserType;
 import org.dromara.system.domain.SysUserTypeRel;
@@ -21,13 +23,17 @@ import org.dromara.system.mapper.SysUserTypeMapper;
 import org.dromara.system.mapper.SysUserTypeRelMapper;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysUserTypeService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * 登录域Service业务层处理
@@ -42,6 +48,12 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
     private final SysUserTypeRelMapper userTypeRelMapper;
     private final SysClientMapper clientMapper;
     private final ClientSessionService clientSessionService;
+    private OpenApiMachineSessionInvalidator openApiSessionInvalidator = ignored -> 0;
+
+    @Autowired(required = false)
+    void setOpenApiSessionInvalidator(OpenApiMachineSessionInvalidator openApiSessionInvalidator) {
+        this.openApiSessionInvalidator = Objects.requireNonNull(openApiSessionInvalidator);
+    }
 
     /**
      * 查询登录域
@@ -145,6 +157,7 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
         @CacheEvict(cacheNames = CacheNames.SYS_USER_TYPE, allEntries = true)
     })
     @Override
+    @DSTransactional
     public Boolean updateByBo(SysUserTypeBo bo) {
         SysUserType update = MapstructUtils.convert(bo, SysUserType.class);
         update.setUserTypeCode(null);
@@ -154,6 +167,10 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
             && SystemConstants.DISABLE.equals(update.getStatus())
             && !SystemConstants.DISABLE.equals(db.getStatus())) {
             clientSessionService.kickoutUserType(null, db.getUserTypeCode());
+        }
+        if (flag && ObjectUtil.isNotNull(update.getStatus())
+            && (ObjectUtil.isNull(db) || !ObjectUtil.equal(db.getStatus(), update.getStatus()))) {
+            invalidateUsersForUserType(bo.getUserTypeId());
         }
         return flag;
     }
@@ -167,6 +184,7 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
      */
     @CacheEvict(cacheNames = CacheNames.SYS_USER_TYPE, allEntries = true)
     @Override
+    @DSTransactional
     public int updateStatus(Long userTypeId, String status) {
         if (ObjectUtil.isNull(userTypeId)) {
             throw new ServiceException("登录域ID不能为空");
@@ -178,6 +196,9 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
             .updateCount();
         if (rows > 0 && SystemConstants.DISABLE.equals(status) && ObjectUtil.isNotNull(userType)) {
             clientSessionService.kickoutUserType(null, userType.getUserTypeCode());
+        }
+        if (rows > 0 && (ObjectUtil.isNull(userType) || !ObjectUtil.equal(userType.getStatus(), status))) {
+            invalidateUsersForUserType(userTypeId);
         }
         return rows;
     }
@@ -222,6 +243,19 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
             .neIfPresent(SysUserType::getUserTypeId, bo.getUserTypeId())
             .exists();
         return !exist;
+    }
+
+    private void invalidateUsersForUserType(Long userTypeId) {
+        Set<Long> userIds = new LinkedHashSet<>();
+        userTypeRelMapper.lambda()
+            .eq(SysUserTypeRel::getUserTypeId, userTypeId)
+            .eq(SysUserTypeRel::getStatus, SystemConstants.NORMAL)
+            .list()
+            .stream()
+            .map(SysUserTypeRel::getUserId)
+            .filter(Objects::nonNull)
+            .forEach(userIds::add);
+        userIds.forEach(openApiSessionInvalidator::invalidateByUserId);
     }
 
 }
