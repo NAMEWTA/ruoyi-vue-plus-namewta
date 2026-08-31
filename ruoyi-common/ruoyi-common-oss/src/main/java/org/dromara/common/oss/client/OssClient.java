@@ -6,6 +6,7 @@ import org.dromara.common.oss.io.OutputStreamDownloadSubscriber;
 import org.dromara.common.oss.model.GetObjectResult;
 import org.dromara.common.oss.model.HandleAsyncResult;
 import org.dromara.common.oss.model.Options;
+import org.dromara.common.oss.model.OssAccessDiagnostic;
 import org.dromara.common.oss.model.OssClientCapabilities;
 import org.dromara.common.oss.model.OssBucketConfiguration;
 import org.dromara.common.oss.model.OssCompletedPart;
@@ -17,6 +18,7 @@ import org.dromara.common.oss.model.OssObjectOptions;
 import org.dromara.common.oss.model.OssObjectStat;
 import org.dromara.common.oss.model.OssPresignedRequest;
 import org.dromara.common.oss.model.PutObjectResult;
+import org.dromara.common.oss.enums.AccessPolicy;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -388,6 +390,16 @@ public interface OssClient extends AutoCloseable {
      * @return 能力快照
      */
     OssClientCapabilities capabilities();
+
+    /**
+     * 使用部署方预置的诊断对象，只读验证默认 Bucket 的匿名访问边界。
+     *
+     * @param diagnosticObjectKey 诊断对象键
+     * @param expectedPolicy      声明访问类型
+     * @param timeout             单次诊断超时
+     * @return 不包含 Policy、凭据或完整 URL 的诊断结果
+     */
+    OssAccessDiagnostic diagnoseAccess(String diagnosticObjectKey, AccessPolicy expectedPolicy, Duration timeout);
 
     /**
      * 只读检查默认 Bucket 的浏览器直传前置配置。

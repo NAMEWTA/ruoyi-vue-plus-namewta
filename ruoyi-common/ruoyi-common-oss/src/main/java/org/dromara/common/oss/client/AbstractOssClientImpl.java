@@ -5,12 +5,14 @@ import cn.hutool.core.util.IdUtil;
 import org.dromara.common.core.utils.DateUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.oss.config.OssClientConfig;
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.common.oss.exception.S3StorageException;
 import org.dromara.common.oss.exception.OssErrorCode;
 import org.dromara.common.oss.io.OutputStreamDownloadSubscriber;
 import org.dromara.common.oss.model.GetObjectResult;
 import org.dromara.common.oss.model.HandleAsyncResult;
 import org.dromara.common.oss.model.Options;
+import org.dromara.common.oss.model.OssAccessDiagnostic;
 import org.dromara.common.oss.model.OssChecksumAlgorithm;
 import org.dromara.common.oss.model.OssClientCapabilities;
 import org.dromara.common.oss.model.OssBucketConfiguration;
@@ -49,6 +51,7 @@ import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListPartsRequest;
 import software.amazon.awssdk.services.s3.model.Part;
+import software.amazon.awssdk.services.s3.model.Permission;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -72,10 +75,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.*;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -990,6 +998,218 @@ public abstract class AbstractOssClientImpl implements OssClient {
     @Override
     public OssClientCapabilities capabilities() {
         return OssClientCapabilities.s3CompatibleBaseline();
+    }
+
+    @Override
+    public OssAccessDiagnostic diagnoseAccess(String diagnosticObjectKey, AccessPolicy expectedPolicy,
+                                               Duration timeout) {
+        Instant checkedAt = Instant.now();
+        if (!capabilities().readOnlyAccessDiagnostic()) {
+            return diagnostic(OssAccessDiagnostic.Verification.UNVERIFIED,
+                OssAccessDiagnostic.Reason.UNSUPPORTED, expectedPolicy, false, false, false, checkedAt);
+        }
+        if (StringUtils.isBlank(diagnosticObjectKey) || expectedPolicy == null || timeout == null
+            || timeout.isZero() || timeout.isNegative()) {
+            return diagnostic(OssAccessDiagnostic.Verification.UNVERIFIED,
+                OssAccessDiagnostic.Reason.INVALID_REQUEST, expectedPolicy, false, false, false, checkedAt);
+        }
+        String bucket;
+        try {
+            bucket = config.bucket().filter(StringUtils::isNotBlank).orElseThrow();
+            await(s3AsyncClient.headObject(builder -> builder.bucket(bucket).key(diagnosticObjectKey)), timeout);
+        } catch (RuntimeException ex) {
+            return diagnostic(OssAccessDiagnostic.Verification.UNVERIFIED,
+                diagnosticFailure(ex, OssAccessDiagnostic.Reason.DIAGNOSTIC_OBJECT_MISSING), expectedPolicy,
+                false, false, false, checkedAt);
+        }
+
+        PublicAccess publicAccess;
+        try {
+            String policy = readBucketPolicy(bucket, timeout);
+            var acl = await(s3AsyncClient.getBucketAcl(builder -> builder.bucket(bucket)), timeout);
+            publicAccess = PublicAccess.from(policy, acl.grants());
+        } catch (RuntimeException ex) {
+            return diagnostic(OssAccessDiagnostic.Verification.UNVERIFIED,
+                diagnosticFailure(ex, OssAccessDiagnostic.Reason.POLICY_UNREADABLE), expectedPolicy,
+                false, false, false, checkedAt);
+        }
+
+        AnonymousRead anonymousRead;
+        try {
+            anonymousRead = anonymousRead(bucket, diagnosticObjectKey, timeout);
+        } catch (RuntimeException ex) {
+            return diagnostic(OssAccessDiagnostic.Verification.UNVERIFIED,
+                diagnosticFailure(ex, OssAccessDiagnostic.Reason.PROVIDER_ERROR), expectedPolicy,
+                false, false, !publicAccess.writeAllowed(), checkedAt);
+        }
+
+        if (publicAccess.writeAllowed()) {
+            return diagnostic(OssAccessDiagnostic.Verification.MISMATCH,
+                OssAccessDiagnostic.Reason.ANONYMOUS_WRITE_ALLOWED, expectedPolicy,
+                anonymousRead.headAllowed(), anonymousRead.getAllowed(), false, checkedAt);
+        }
+        boolean publicReadDeclared = publicAccess.readAllowed();
+        boolean expectedRead = expectedPolicy == AccessPolicy.PUBLIC_READ;
+        if (publicReadDeclared != expectedRead) {
+            return diagnostic(OssAccessDiagnostic.Verification.MISMATCH,
+                OssAccessDiagnostic.Reason.POLICY_MISMATCH, expectedPolicy,
+                anonymousRead.headAllowed(), anonymousRead.getAllowed(), true, checkedAt);
+        }
+        boolean observedRead = anonymousRead.headAllowed() && anonymousRead.getAllowed();
+        boolean observedDenied = anonymousRead.headDenied() && anonymousRead.getDenied();
+        if (expectedRead ? !observedRead : !observedDenied) {
+            return diagnostic(OssAccessDiagnostic.Verification.MISMATCH,
+                OssAccessDiagnostic.Reason.ANONYMOUS_READ_MISMATCH, expectedPolicy,
+                anonymousRead.headAllowed(), anonymousRead.getAllowed(), true, checkedAt);
+        }
+        return diagnostic(OssAccessDiagnostic.Verification.VERIFIED, OssAccessDiagnostic.Reason.READY,
+            expectedPolicy, anonymousRead.headAllowed(), anonymousRead.getAllowed(), true, checkedAt);
+    }
+
+    private String readBucketPolicy(String bucket, Duration timeout) {
+        try {
+            return await(s3AsyncClient.getBucketPolicy(builder -> builder.bucket(bucket)), timeout).policy();
+        } catch (RuntimeException ex) {
+            Throwable cause = unwrapAsyncException(ex);
+            if (cause instanceof S3Exception s3Exception
+                && (s3Exception.statusCode() == 404 || (s3Exception.awsErrorDetails() != null
+                && "NoSuchBucketPolicy".equals(s3Exception.awsErrorDetails().errorCode())))) {
+                return "";
+            }
+            throw ex;
+        }
+    }
+
+    private AnonymousRead anonymousRead(String bucket, String key, Duration timeout) {
+        String encodedKey = SdkHttpUtils.urlEncodeIgnoreSlashes(key);
+        URI objectUri = URI.create(config.getBucketUrl(bucket) + StringUtils.SLASH + encodedKey);
+        HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
+        HttpRequest head = HttpRequest.newBuilder(objectUri).timeout(timeout)
+            .method("HEAD", HttpRequest.BodyPublishers.noBody()).build();
+        HttpRequest get = HttpRequest.newBuilder(objectUri).timeout(timeout).header("Range", "bytes=0-0").GET().build();
+        try {
+            int headStatus = client.send(head, HttpResponse.BodyHandlers.discarding()).statusCode();
+            int getStatus = client.send(get, HttpResponse.BodyHandlers.discarding()).statusCode();
+            return new AnonymousRead(isReadSuccess(headStatus), isReadSuccess(getStatus),
+                isReadDenied(headStatus), isReadDenied(getStatus));
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new CompletionException(ex);
+        } catch (IOException ex) {
+            throw new CompletionException(ex);
+        }
+    }
+
+    private boolean isReadSuccess(int status) {
+        return status >= 200 && status < 300;
+    }
+
+    private boolean isReadDenied(int status) {
+        return status == 401 || status == 403 || status == 404;
+    }
+
+    private <T> T await(java.util.concurrent.CompletableFuture<T> future, Duration timeout) {
+        try {
+            return future.orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS).join();
+        } catch (CompletionException ex) {
+            throw ex;
+        }
+    }
+
+    private OssAccessDiagnostic.Reason diagnosticFailure(RuntimeException ex,
+                                                          OssAccessDiagnostic.Reason fallback) {
+        Throwable cause = unwrapAsyncException(ex);
+        if (cause instanceof TimeoutException || cause instanceof java.net.http.HttpTimeoutException) {
+            return OssAccessDiagnostic.Reason.TIMEOUT;
+        }
+        if (fallback == OssAccessDiagnostic.Reason.DIAGNOSTIC_OBJECT_MISSING
+            && cause instanceof S3Exception s3Exception && s3Exception.statusCode() == 404) {
+            return fallback;
+        }
+        return fallback == OssAccessDiagnostic.Reason.DIAGNOSTIC_OBJECT_MISSING
+            ? OssAccessDiagnostic.Reason.PROVIDER_ERROR : fallback;
+    }
+
+    private OssAccessDiagnostic diagnostic(OssAccessDiagnostic.Verification verification,
+                                           OssAccessDiagnostic.Reason reason, AccessPolicy policy,
+                                           boolean head, boolean get, boolean writeDenied, Instant checkedAt) {
+        return new OssAccessDiagnostic(verification, reason, policy, head, get, writeDenied, checkedAt);
+    }
+
+    private record AnonymousRead(boolean headAllowed, boolean getAllowed, boolean headDenied, boolean getDenied) {
+    }
+
+    private record PublicAccess(boolean readAllowed, boolean writeAllowed) {
+
+        private static final Set<String> READ_ACTIONS = Set.of("*", "s3:*", "s3:getobject");
+        private static final Set<String> WRITE_ACTIONS = Set.of("*", "s3:*", "s3:putobject", "s3:deleteobject",
+            "s3:abortmultipartupload", "s3:createmultipartupload", "s3:uploadpart");
+
+        static PublicAccess from(String policy, List<software.amazon.awssdk.services.s3.model.Grant> grants) {
+            boolean aclRead = grants.stream().anyMatch(grant -> isAllUsers(grant)
+                && (grant.permission() == Permission.READ || grant.permission() == Permission.FULL_CONTROL));
+            boolean aclWrite = grants.stream().anyMatch(grant -> isAllUsers(grant)
+                && (grant.permission() == Permission.WRITE || grant.permission() == Permission.FULL_CONTROL));
+            if (StringUtils.isBlank(policy)) {
+                return new PublicAccess(aclRead, aclWrite);
+            }
+            try {
+                tools.jackson.databind.JsonNode root = tools.jackson.databind.json.JsonMapper.builder().build()
+                    .readTree(policy);
+                boolean policyRead = false;
+                boolean policyWrite = false;
+                tools.jackson.databind.JsonNode statements = root.path("Statement");
+                Iterable<tools.jackson.databind.JsonNode> statementNodes = statements.isArray()
+                    ? statements : List.of(statements);
+                for (tools.jackson.databind.JsonNode statement : statementNodes) {
+                    if (!"Allow".equalsIgnoreCase(statement.path("Effect").asText())
+                        || !containsWildcard(statement.get("Principal"))) {
+                        continue;
+                    }
+                    policyRead |= containsAction(statement.get("Action"), READ_ACTIONS);
+                    policyWrite |= containsAction(statement.get("Action"), WRITE_ACTIONS);
+                }
+                return new PublicAccess(aclRead || policyRead, aclWrite || policyWrite);
+            } catch (RuntimeException ex) {
+                throw new IllegalArgumentException("Bucket policy is not valid JSON", ex);
+            }
+        }
+
+        private static boolean isAllUsers(software.amazon.awssdk.services.s3.model.Grant grant) {
+            String uri = grant.grantee() == null ? null : grant.grantee().uri();
+            return uri != null && uri.endsWith("/AllUsers");
+        }
+
+        private static boolean containsWildcard(tools.jackson.databind.JsonNode node) {
+            if (node == null || node.isNull()) {
+                return false;
+            }
+            if (node.isTextual()) {
+                return "*".equals(node.asText());
+            }
+            for (tools.jackson.databind.JsonNode child : node) {
+                if (containsWildcard(child)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static boolean containsAction(tools.jackson.databind.JsonNode node, Set<String> actions) {
+            if (node == null || node.isNull()) {
+                return false;
+            }
+            if (node.isTextual()) {
+                return actions.contains(node.asText().toLowerCase(Locale.ROOT));
+            }
+            for (tools.jackson.databind.JsonNode child : node) {
+                if (containsAction(child, actions)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     @Override

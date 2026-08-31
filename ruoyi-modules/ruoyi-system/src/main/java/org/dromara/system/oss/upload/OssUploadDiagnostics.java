@@ -1,7 +1,9 @@
 package org.dromara.system.oss.upload;
 
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.common.oss.factory.OssFactory;
+import lombok.RequiredArgsConstructor;
+import org.dromara.system.oss.readiness.OssReadinessClientProvider;
+import org.dromara.system.oss.readiness.OssStorageReadinessRegistry;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -13,7 +15,12 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class OssUploadDiagnostics {
+
+    private final OssStorageReadinessRegistry readinessRegistry;
+    private final OssUploadProperties uploadProperties;
+    private final OssReadinessClientProvider clientProvider;
 
     public List<String> requirements() {
         return List.of(
@@ -25,27 +32,27 @@ public class OssUploadDiagnostics {
 
     @EventListener(ApplicationReadyEvent.class)
     public void report() {
+        readinessRegistry.snapshot().forEach((configKey, entry) -> {
+            if (entry.status() == org.dromara.system.oss.readiness.OssStorageReadinessEntry.Status.SERVING) {
+                log.info("OSS存储配置 [{}] readiness 通过", configKey);
+            } else {
+                log.warn("OSS存储配置 [{}] readiness 未通过: {}", configKey, entry.reason());
+            }
+        });
+        uploadProperties.getPolicies().values().stream().filter(OssUploadProperties.Policy::isEnabled)
+            .map(OssUploadProperties.Policy::getStorageConfigKey).distinct().forEach(this::reportUploadPrerequisites);
+    }
+
+    private void reportUploadPrerequisites(String configKey) {
         try {
-            var result = OssFactory.instance().bucketConfiguration();
+            var result = clientProvider.client(configKey).bucketConfiguration();
             if (result.compliant()) {
-                log.info("OSS Direct Upload Bucket [{}] 前置配置检查通过", result.bucket());
-                return;
+                log.info("OSS Direct Upload配置 [{}] CORS/Lifecycle 辅助检查通过", configKey);
+            } else {
+                log.warn("OSS Direct Upload配置 [{}] CORS/Lifecycle 辅助检查未通过", configKey);
             }
-            if (!result.explicitCorsOrigins()) {
-                log.warn("OSS Direct Upload Bucket [{}] CORS 未配置明确 Origin", result.bucket());
-            }
-            if (!result.corsAllowsPut()) {
-                log.warn("OSS Direct Upload Bucket [{}] CORS 未允许 PUT", result.bucket());
-            }
-            if (!result.corsExposesEtag()) {
-                log.warn("OSS Direct Upload Bucket [{}] CORS 未暴露 ETag", result.bucket());
-            }
-            if (!result.abortIncompleteMultipartUpload()) {
-                log.warn("OSS Direct Upload Bucket [{}] 未配置 AbortIncompleteMultipartUpload", result.bucket());
-            }
-            result.issues().forEach(issue -> log.warn("OSS Direct Upload Bucket [{}]: {}", result.bucket(), issue));
         } catch (RuntimeException ex) {
-            log.error("OSS Direct Upload 默认 Bucket 前置配置检查失败: {}", ex.getMessage());
+            log.warn("OSS Direct Upload配置 [{}] CORS/Lifecycle 辅助检查不可用", configKey);
         }
     }
 }
