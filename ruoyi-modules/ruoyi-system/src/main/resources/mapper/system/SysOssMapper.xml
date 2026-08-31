@@ -38,6 +38,15 @@
         where oss_id = #{ossId}
     </update>
 
+    <update id="compareAndSetService">
+        update sys_oss
+        set service = #{targetService},
+            update_time = now()
+        where oss_id = #{ossId}
+          and service = #{expectedService}
+          and delete_state = 'ACTIVE'
+    </update>
+
     <select id="selectExpiredTempIds" resultType="java.lang.Long">
         select oss_id
         from sys_oss
