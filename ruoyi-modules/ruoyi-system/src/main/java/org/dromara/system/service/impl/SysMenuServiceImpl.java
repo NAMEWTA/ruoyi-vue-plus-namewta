@@ -3,6 +3,7 @@ package org.dromara.system.service.impl;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.tree.Tree;
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.Constants;
@@ -11,22 +12,29 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.core.utils.TreeBuildUtils;
+import org.dromara.common.openapi.session.OpenApiMachineSessionInvalidator;
 import org.dromara.common.satoken.utils.LoginHelper;
+import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.SysMenu;
 import org.dromara.system.domain.SysRole;
 import org.dromara.system.domain.SysRoleMenu;
+import org.dromara.system.domain.SysUserRole;
+import org.dromara.system.domain.SysUserTypeRel;
 import org.dromara.system.domain.bo.SysMenuBo;
 import org.dromara.system.domain.vo.MetaVo;
 import org.dromara.system.domain.vo.RouterVo;
 import org.dromara.system.domain.vo.SysMenuVo;
+import org.dromara.system.mapper.SysClientMapper;
 import org.dromara.system.mapper.SysMenuMapper;
 import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.mapper.SysRoleMenuMapper;
+import org.dromara.system.mapper.SysUserRoleMapper;
+import org.dromara.system.mapper.SysUserTypeRelMapper;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysClientDefaultRoleResolverService;
 import org.dromara.system.service.ISysMenuService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -45,6 +53,15 @@ public class SysMenuServiceImpl implements ISysMenuService {
     private final SysRoleMenuMapper roleMenuMapper;
     private final ClientSessionService clientSessionService;
     private final ISysClientDefaultRoleResolverService defaultRoleResolverService;
+    private final SysUserRoleMapper userRoleMapper;
+    private final SysClientMapper clientMapper;
+    private final SysUserTypeRelMapper userTypeRelMapper;
+    private OpenApiMachineSessionInvalidator openApiSessionInvalidator = ignored -> 0;
+
+    @Autowired(required = false)
+    void setOpenApiSessionInvalidator(OpenApiMachineSessionInvalidator openApiSessionInvalidator) {
+        this.openApiSessionInvalidator = Objects.requireNonNull(openApiSessionInvalidator);
+    }
 
     /**
      * 根据用户查询系统菜单列表
@@ -328,6 +345,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
      * @return 结果
      */
     @Override
+    @DSTransactional
     public int updateMenu(SysMenuBo bo) {
         SysMenu menu = MapstructUtils.convert(bo, SysMenu.class);
         SysMenu dbMenu = menuMapper.selectById(menu.getMenuId());
@@ -335,9 +353,12 @@ public class SysMenuServiceImpl implements ISysMenuService {
             menu.setClientId(dbMenu.getClientId());
         }
         validateMenuClient(menu, false);
+        Set<Long> affectedUserIds = hasAuthorizationChange(dbMenu, menu)
+            ? findAffectedUserIdsByMenuIds(Set.of(menu.getMenuId())) : Set.of();
         int rows = menuMapper.updateById(menu);
         if (rows > 0) {
             clientSessionService.kickoutClient(menu.getClientId());
+            invalidateUsers(affectedUserIds);
         }
         return rows;
     }
@@ -349,11 +370,14 @@ public class SysMenuServiceImpl implements ISysMenuService {
      * @return 结果
      */
     @Override
+    @DSTransactional
     public int deleteMenuById(Long menuId) {
         SysMenu menu = menuMapper.selectById(menuId);
+        Set<Long> affectedUserIds = findAffectedUserIdsByMenuIds(Set.of(menuId));
         int rows = menuMapper.deleteById(menuId);
         if (rows > 0 && ObjectUtil.isNotNull(menu)) {
             clientSessionService.kickoutClient(menu.getClientId());
+            invalidateUsers(affectedUserIds);
         }
         return rows;
     }
@@ -364,11 +388,12 @@ public class SysMenuServiceImpl implements ISysMenuService {
      * @param menuIds 菜单ID串
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public void deleteMenuById(Collection<Long> menuIds) {
         if (CollUtil.isEmpty(menuIds)) {
             return;
         }
+        Set<Long> affectedUserIds = findAffectedUserIdsByMenuIds(menuIds);
         List<SysMenu> menus = menuMapper.selectByIds(menuIds);
         Set<Long> clientIds = new HashSet<>();
         for (SysMenu menu : menus) {
@@ -381,6 +406,70 @@ public class SysMenuServiceImpl implements ISysMenuService {
         for (Long clientId : clientIds) {
             clientSessionService.kickoutClient(clientId);
         }
+        invalidateUsers(affectedUserIds);
+    }
+
+    private boolean hasAuthorizationChange(SysMenu current, SysMenu update) {
+        if (ObjectUtil.isNull(current)) {
+            return false;
+        }
+        return changed(current.getStatus(), update.getStatus())
+            || changed(current.getPerms(), update.getPerms())
+            || changed(current.getClientId(), update.getClientId());
+    }
+
+    private boolean changed(Object current, Object update) {
+        return ObjectUtil.isNotNull(update) && !ObjectUtil.equal(current, update);
+    }
+
+    private Set<Long> findAffectedUserIdsByMenuIds(Collection<Long> menuIds) {
+        Set<Long> ids = new LinkedHashSet<>();
+        menuIds.stream().filter(Objects::nonNull).forEach(ids::add);
+        if (ids.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> roleIds = new LinkedHashSet<>();
+        roleMenuMapper.lambda().in(SysRoleMenu::getMenuId, ids).list().stream()
+            .map(SysRoleMenu::getRoleId)
+            .filter(Objects::nonNull)
+            .forEach(roleIds::add);
+        return findAffectedUserIdsByRoleIds(roleIds);
+    }
+
+    private Set<Long> findAffectedUserIdsByRoleIds(Collection<Long> roleIds) {
+        if (roleIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> userIds = new LinkedHashSet<>();
+        userRoleMapper.lambda().in(SysUserRole::getRoleId, roleIds).list().stream()
+            .map(SysUserRole::getUserId)
+            .filter(Objects::nonNull)
+            .forEach(userIds::add);
+        Set<Long> userTypeIds = new LinkedHashSet<>();
+        clientMapper.lambda()
+            .in(SysClient::getDefaultRoleId, roleIds)
+            .eq(SysClient::getStatus, SystemConstants.NORMAL)
+            .list()
+            .stream()
+            .map(SysClient::getUserTypeId)
+            .filter(Objects::nonNull)
+            .forEach(userTypeIds::add);
+        if (!userTypeIds.isEmpty()) {
+            userTypeRelMapper.lambda()
+                .in(SysUserTypeRel::getUserTypeId, userTypeIds)
+                .eq(SysUserTypeRel::getStatus, SystemConstants.NORMAL)
+                .list()
+                .stream()
+                .map(SysUserTypeRel::getUserId)
+                .filter(Objects::nonNull)
+                .forEach(userIds::add);
+        }
+        return userIds;
+    }
+
+    private void invalidateUsers(Collection<Long> userIds) {
+        userIds.stream().filter(Objects::nonNull).distinct()
+            .forEach(openApiSessionInvalidator::invalidateByUserId);
     }
 
     /**

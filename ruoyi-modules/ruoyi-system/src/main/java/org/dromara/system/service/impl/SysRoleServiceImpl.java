@@ -7,6 +7,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.constant.CacheNames;
 import org.dromara.common.core.constant.SystemConstants;
@@ -17,16 +18,18 @@ import org.dromara.common.core.utils.StreamUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.query.QueryBuilder;
+import org.dromara.common.openapi.session.OpenApiMachineSessionInvalidator;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.system.api.RoleService;
 import org.dromara.system.api.model.LoginUser;
+import org.dromara.system.domain.SysClient;
+import org.dromara.system.domain.SysMenu;
 import org.dromara.system.domain.SysRole;
 import org.dromara.system.domain.SysRoleDept;
 import org.dromara.system.domain.SysRoleMenu;
 import org.dromara.system.domain.SysUserRole;
-import org.dromara.system.domain.SysMenu;
-import org.dromara.system.domain.SysClient;
 import org.dromara.system.domain.SysUserType;
+import org.dromara.system.domain.SysUserTypeRel;
 import org.dromara.system.domain.bo.SysRoleBo;
 import org.dromara.system.domain.vo.SysRoleVo;
 import org.dromara.system.mapper.SysClientMapper;
@@ -35,14 +38,15 @@ import org.dromara.system.mapper.SysRoleDeptMapper;
 import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.mapper.SysUserRoleMapper;
+import org.dromara.system.mapper.SysUserTypeRelMapper;
 import org.dromara.system.mapper.SysUserTypeMapper;
 import org.dromara.system.service.ClientSessionService;
 import org.dromara.system.service.ISysClientDefaultRoleResolverService;
 import org.dromara.system.service.ISysRoleService;
 import org.dromara.system.service.ISysUserTypeRelService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -65,6 +69,13 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
     private final ClientSessionService clientSessionService;
     private final ISysUserTypeRelService userTypeRelService;
     private final ISysClientDefaultRoleResolverService defaultRoleResolverService;
+    private final SysUserTypeRelMapper userTypeRelMapper;
+    private OpenApiMachineSessionInvalidator openApiSessionInvalidator = ignored -> 0;
+
+    @Autowired(required = false)
+    void setOpenApiSessionInvalidator(OpenApiMachineSessionInvalidator openApiSessionInvalidator) {
+        this.openApiSessionInvalidator = Objects.requireNonNull(openApiSessionInvalidator);
+    }
 
     /**
      * 分页查询角色列表
@@ -360,7 +371,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int insertRole(SysRoleBo bo) {
         SysRole role = MapstructUtils.convert(bo, SysRole.class);
         if (ObjectUtil.isNull(role.getClientId())) {
@@ -379,7 +390,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int updateRoleBaseInfo(SysRoleBo bo) {
         SysRole role = MapstructUtils.convert(bo, SysRole.class);
         SysRole dbRole = roleMapper.selectById(role.getRoleId());
@@ -393,8 +404,14 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         if (SystemConstants.DISABLE.equals(role.getStatus()) && this.countUserRoleByRoleId(role.getRoleId()) > 0) {
             throw new ServiceException("角色已分配，不能禁用!");
         }
+        Set<Long> affectedUserIds = hasAuthorizationChange(dbRole, role)
+            ? findAffectedUserIdsByRoleIds(Set.of(role.getRoleId())) : Set.of();
         // 仅更新角色基础字段，避免影响权限分配。
-        return roleMapper.updateById(role);
+        int rows = roleMapper.updateById(role);
+        if (rows > 0) {
+            invalidateUsers(affectedUserIds);
+        }
+        return rows;
     }
 
     /**
@@ -405,13 +422,14 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @CacheEvict(cacheNames = CacheNames.SYS_ROLE_CUSTOM, key = "#bo.roleId")
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int updateRolePermission(SysRoleBo bo) {
         SysRole role = MapstructUtils.convert(bo, SysRole.class);
         SysRole dbRole = roleMapper.selectById(role.getRoleId());
         if (ObjectUtil.isNotNull(dbRole)) {
             role.setClientId(dbRole.getClientId());
         }
+        Set<Long> affectedUserIds = findAffectedUserIdsByRoleIds(Set.of(role.getRoleId()));
         // 更新权限相关配置字段（数据范围、树联动）。
         roleMapper.updateById(role);
         // 先清理旧菜单权限，再重建。
@@ -419,7 +437,9 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         insertRoleMenu(bo);
         // 先清理旧数据权限，再按当前配置重建。
         roleDeptMapper.lambda().eq(SysRoleDept::getRoleId, role.getRoleId()).delete();
-        return insertRoleDept(bo);
+        int rows = insertRoleDept(bo);
+        invalidateUsers(affectedUserIds);
+        return rows;
     }
 
     /**
@@ -430,6 +450,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
+    @DSTransactional
     public int updateRoleStatus(Long roleId, String status) {
         if (SystemConstants.DISABLE.equals(status)) {
             checkNotClientDefaultRole(roleId, "禁用");
@@ -437,10 +458,17 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
         if (SystemConstants.DISABLE.equals(status) && this.countUserRoleByRoleId(roleId) > 0) {
             throw new ServiceException("角色已分配，不能禁用!");
         }
-        return roleMapper.lambda()
+        SysRole current = roleMapper.selectById(roleId);
+        Set<Long> affectedUserIds = ObjectUtil.isNotNull(current) && !ObjectUtil.equal(current.getStatus(), status)
+            ? findAffectedUserIdsByRoleIds(Set.of(roleId)) : Set.of();
+        int rows = roleMapper.lambda()
             .set(SysRole::getStatus, status)
             .eq(SysRole::getRoleId, roleId)
             .updateCount();
+        if (rows > 0) {
+            invalidateUsers(affectedUserIds);
+        }
+        return rows;
     }
 
 
@@ -506,14 +534,19 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @CacheEvict(cacheNames = CacheNames.SYS_ROLE_CUSTOM, key = "#roleId")
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteRoleById(Long roleId) {
         checkNotClientDefaultRole(roleId, "删除");
+        Set<Long> affectedUserIds = findAffectedUserIdsByRoleIds(Set.of(roleId));
         // 删除角色与菜单关联
         roleMenuMapper.lambda().eq(SysRoleMenu::getRoleId, roleId).delete();
         // 删除角色与部门关联
         roleDeptMapper.lambda().eq(SysRoleDept::getRoleId, roleId).delete();
-        return roleMapper.deleteById(roleId);
+        int rows = roleMapper.deleteById(roleId);
+        if (rows > 0) {
+            invalidateUsers(affectedUserIds);
+        }
+        return rows;
     }
 
     /**
@@ -524,7 +557,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      */
     @CacheEvict(cacheNames = CacheNames.SYS_ROLE_CUSTOM, allEntries = true)
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteRoleByIds(Collection<Long> roleIds) {
         this.checkRoleDataScope(roleIds);
         List<SysRole> roles = roleMapper.selectByIds(roleIds);
@@ -535,11 +568,16 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
                 throw new ServiceException(String.format("%1$s已分配，不能删除!", role.getRoleName()));
             }
         }
+        Set<Long> affectedUserIds = findAffectedUserIdsByRoleIds(roleIds);
         // 删除角色与菜单关联
         roleMenuMapper.lambda().in(SysRoleMenu::getRoleId, roleIds).delete();
         // 删除角色与部门关联
         roleDeptMapper.lambda().in(SysRoleDept::getRoleId, roleIds).delete();
-        return roleMapper.deleteByIds(roleIds);
+        int rows = roleMapper.deleteByIds(roleIds);
+        if (rows > 0) {
+            invalidateUsers(affectedUserIds);
+        }
+        return rows;
     }
 
     /**
@@ -549,7 +587,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteAuthUser(SysUserRole userRole) {
         if (LoginHelper.getUserId().equals(userRole.getUserId())) {
             throw new ServiceException("不允许修改当前用户角色!");
@@ -561,6 +599,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             .deleteCount();
         if (rows > 0) {
             clientSessionService.kickoutUserClient(userRole.getUserId(), role.getClientId());
+            openApiSessionInvalidator.invalidateByUserId(userRole.getUserId());
         }
         return rows;
     }
@@ -573,7 +612,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteAuthUsers(Long roleId, Collection<Long> userIds) {
         if (userIds.contains(LoginHelper.getUserId())) {
             throw new ServiceException("不允许修改当前用户角色!");
@@ -587,6 +626,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             for (Long userId : userIds) {
                 clientSessionService.kickoutUserClient(userId, role.getClientId());
             }
+            invalidateUsers(userIds);
         }
         return rows;
     }
@@ -599,7 +639,7 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
      * @return 结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int insertAuthUsers(Long roleId, Collection<Long> userIds) {
         // 新增用户与角色管理
         int rows = 1;
@@ -621,8 +661,63 @@ public class SysRoleServiceImpl implements ISysRoleService, RoleService {
             for (Long userId : userIds) {
                 clientSessionService.kickoutUserClient(userId, role.getClientId());
             }
+            invalidateUsers(userIds);
         }
         return rows;
+    }
+
+    private boolean hasAuthorizationChange(SysRole current, SysRole update) {
+        if (ObjectUtil.isNull(current)) {
+            return false;
+        }
+        return changed(current.getRoleKey(), update.getRoleKey())
+            || changed(current.getStatus(), update.getStatus())
+            || changed(current.getDataScope(), update.getDataScope())
+            || changed(current.getMenuCheckStrictly(), update.getMenuCheckStrictly())
+            || changed(current.getDeptCheckStrictly(), update.getDeptCheckStrictly())
+            || changed(current.getClientId(), update.getClientId());
+    }
+
+    private boolean changed(Object current, Object update) {
+        return ObjectUtil.isNotNull(update) && !ObjectUtil.equal(current, update);
+    }
+
+    private Set<Long> findAffectedUserIdsByRoleIds(Collection<Long> roleIds) {
+        Set<Long> ids = new LinkedHashSet<>();
+        roleIds.stream().filter(Objects::nonNull).forEach(ids::add);
+        if (ids.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> userIds = new LinkedHashSet<>();
+        userRoleMapper.lambda().in(SysUserRole::getRoleId, ids).list().stream()
+            .map(SysUserRole::getUserId)
+            .filter(Objects::nonNull)
+            .forEach(userIds::add);
+        Set<Long> userTypeIds = new LinkedHashSet<>();
+        clientMapper.lambda()
+            .in(SysClient::getDefaultRoleId, ids)
+            .eq(SysClient::getStatus, SystemConstants.NORMAL)
+            .list()
+            .stream()
+            .map(SysClient::getUserTypeId)
+            .filter(Objects::nonNull)
+            .forEach(userTypeIds::add);
+        if (!userTypeIds.isEmpty()) {
+            userTypeRelMapper.lambda()
+                .in(SysUserTypeRel::getUserTypeId, userTypeIds)
+                .eq(SysUserTypeRel::getStatus, SystemConstants.NORMAL)
+                .list()
+                .stream()
+                .map(SysUserTypeRel::getUserId)
+                .filter(Objects::nonNull)
+                .forEach(userIds::add);
+        }
+        return userIds;
+    }
+
+    private void invalidateUsers(Collection<Long> userIds) {
+        userIds.stream().filter(Objects::nonNull).distinct()
+            .forEach(openApiSessionInvalidator::invalidateByUserId);
     }
 
     private SysRole requireRoleWithClient(Long roleId) {
