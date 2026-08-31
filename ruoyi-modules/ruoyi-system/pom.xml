@@ -106,6 +106,12 @@
             <artifactId>ruoyi-common-push</artifactId>
         </dependency>
 
+        <!-- OpenAPI contracts and runtime ports -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-openapi</artifactId>
+        </dependency>
+
     </dependencies>
 
 </project>

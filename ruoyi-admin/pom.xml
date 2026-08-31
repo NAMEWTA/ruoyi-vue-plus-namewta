@@ -74,6 +74,12 @@
             <artifactId>ruoyi-common-mcp</artifactId>
         </dependency>
 
+        <!-- OpenAPI machine invocation assembly -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-openapi</artifactId>
+        </dependency>
+
         <!-- api模块 -->
         <dependency>
             <groupId>org.dromara</groupId>
