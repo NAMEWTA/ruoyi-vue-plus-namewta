@@ -45,6 +45,8 @@ public class SysLogFilter implements Filter {
         "set-cookie",
         "x-api-key",
         "api-key",
+        "x-app-key",
+        "x-signature",
         "x-auth-token",
         "x-csrf-token",
         "encrypt-key"

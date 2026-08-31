@@ -44,6 +44,8 @@ class SysLogFilterTest {
         request.addHeader("Authorization", "Bearer raw-token");
         request.addHeader("Cookie", "session=raw-cookie");
         request.addHeader("X-Api-Key", "raw-api-key");
+        request.addHeader("X-App-Key", "raw-app-key");
+        request.addHeader("X-Signature", "raw-signature");
         request.addHeader(SysLogFilter.REQUEST_ID_HEADER, "client-request-id");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -76,6 +78,10 @@ class SysLogFilterTest {
             .isEqualTo(List.of("[REDACTED]"));
         assertThat(((Map<?, ?>) requestEvent.get("requestHeaders")).get("X-Api-Key"))
             .isEqualTo(List.of("[REDACTED]"));
+        assertThat(((Map<?, ?>) requestEvent.get("requestHeaders")).get("X-App-Key"))
+            .isEqualTo(List.of("[REDACTED]"));
+        assertThat(((Map<?, ?>) requestEvent.get("requestHeaders")).get("X-Signature"))
+            .isEqualTo(List.of("[REDACTED]"));
         assertThat(((Map<?, ?>) requestEvent.get("parameters")).get("page"))
             .isEqualTo(List.of("1", "2"));
         assertThat(((Map<?, ?>) requestEvent.get("parameters")).get("password"))
@@ -107,6 +113,24 @@ class SysLogFilterTest {
             .containsEntry("bodyLogged", true)
             .containsEntry("body", "[REDACTED]")
             .containsEntry("truncated", true);
+    }
+
+    @Test
+    void recursivelyRedactsOpenApiCredentialMaterial() throws Exception {
+        List<Map<String, Object>> events = new ArrayList<>();
+        SysLogFilter filter = new SysLogFilter(1024, events::add);
+        MockHttpServletRequest request = jsonRequest("""
+            {"appSecret":"secret-value","nested":{"signature":"signature-value",\
+            "machine_token":"machine-token-value","safe":"visible"}}""");
+
+        filter.doFilter(request, new MockHttpServletResponse(), (servletRequest, servletResponse) -> {
+        });
+
+        assertThat(events.getFirst().get("body")).isEqualTo(
+            "{\"appSecret\":\"[REDACTED]\",\"nested\":{\"signature\":\"[REDACTED]\","
+                + "\"machine_token\":\"[REDACTED]\",\"safe\":\"visible\"}}");
+        assertThat(events.getFirst().toString())
+            .doesNotContain("secret-value", "signature-value", "machine-token-value");
     }
 
     @Test
