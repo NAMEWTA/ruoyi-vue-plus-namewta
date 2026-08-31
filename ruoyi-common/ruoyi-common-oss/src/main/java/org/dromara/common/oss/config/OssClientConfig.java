@@ -256,7 +256,7 @@ public class OssClientConfig implements Config<OssClientConfig, OssClientConfig.
      * @return ACL 访问策略配置
      */
     private static AccessControlPolicyConfig resolveAccessControlPolicy(String accessPolicyString) {
-        // 绝大多数云厂商不允许操作 ACL，默认禁用；当前业务只用访问策略判断是否生成预签名 URL。
+        // 未声明读取语义时必须保持私有；ACL 写入能力继续默认关闭。
         if (StringUtils.isBlank(accessPolicyString)) {
             return AccessControlPolicyConfig.DEFAULT;
         }

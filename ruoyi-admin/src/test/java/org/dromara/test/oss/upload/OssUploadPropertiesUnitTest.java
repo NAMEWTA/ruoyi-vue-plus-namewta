@@ -1,5 +1,6 @@
 package org.dromara.test.oss.upload;
 
+import org.dromara.common.oss.enums.AccessPolicy;
 import org.dromara.system.oss.upload.OssUploadException;
 import org.dromara.system.oss.upload.OssUploadMode;
 import org.dromara.system.oss.upload.OssUploadProperties;
@@ -26,6 +27,23 @@ class OssUploadPropertiesUnitTest {
         assertEquals(OssUploadMode.MULTIPART,
             properties.requirePolicy("general").resolveMode(100L * 1024 * 1024));
         assertEquals(Duration.ofMinutes(5), properties.getPresignTtl());
+        assertEquals("minio", properties.requirePolicy("general").getStorageConfigKey());
+        assertEquals(AccessPolicy.PRIVATE, properties.requirePolicy("general").getExpectedAccessPolicy());
+    }
+
+    @Test
+    void shouldRejectMissingStorageBindingOrUnsupportedAccessPolicy() {
+        OssUploadProperties properties = validProperties();
+        properties.getPolicies().get("general").setStorageConfigKey(" ");
+        assertThrows(OssUploadException.class, properties::validate);
+
+        properties = validProperties();
+        properties.getPolicies().get("general").setExpectedAccessPolicy(null);
+        assertThrows(OssUploadException.class, properties::validate);
+
+        properties = validProperties();
+        properties.getPolicies().get("general").setStorageConfigKey("storage-config-key-21");
+        assertThrows(OssUploadException.class, properties::validate);
     }
 
     @Test
@@ -52,6 +70,8 @@ class OssUploadPropertiesUnitTest {
         policy.setMode(OssUploadMode.AUTO);
         policy.setMultipartThreshold(100L * 1024 * 1024);
         policy.setPartSize(16L * 1024 * 1024);
+        policy.setStorageConfigKey("minio");
+        policy.setExpectedAccessPolicy(AccessPolicy.PRIVATE);
         OssUploadProperties properties = new OssUploadProperties();
         properties.setPolicies(Map.of("general", policy));
         return properties;

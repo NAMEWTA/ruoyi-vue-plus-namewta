@@ -23,11 +23,6 @@ public enum AccessPolicy {
     PRIVATE(0, BucketCannedACL.PRIVATE, ObjectCannedACL.PRIVATE),
 
     /**
-     * 公有读写
-     */
-    PUBLIC_READ_WRITE(1, BucketCannedACL.PUBLIC_READ_WRITE, ObjectCannedACL.PUBLIC_READ_WRITE),
-
-    /**
      * 公有只读
      */
     PUBLIC_READ(2, BucketCannedACL.PUBLIC_READ, ObjectCannedACL.PUBLIC_READ);

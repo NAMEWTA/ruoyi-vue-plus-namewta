@@ -29,7 +29,7 @@ public record AccessControlPolicyConfig(
      */
     public static final AccessControlPolicyConfig DEFAULT = AccessControlPolicyConfig.builder()
         .enabled(false)
-        .accessPolicy(AccessPolicy.PUBLIC_READ_WRITE)
+        .accessPolicy(AccessPolicy.PRIVATE)
         .build();
 
     /**
@@ -40,7 +40,7 @@ public record AccessControlPolicyConfig(
     @Override
     public @NonNull AccessPolicy accessPolicy() {
         return Optional.ofNullable(accessPolicy)
-            .orElse(AccessPolicy.PUBLIC_READ_WRITE);
+            .orElse(AccessPolicy.PRIVATE);
     }
 
     /**
