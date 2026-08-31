@@ -444,9 +444,10 @@ where menu_id = 1761400000000000003;
 
 drop temporary table namewta_runtime_gen_retire_dml_001_preflight;
 
+-- NAMEWTA-OPENAPI-CREDENTIAL-DML-001
 -- ============================================================================
--- 变更标识：NAMEWTA-OPENAPI-CREDENTIAL-DML-001
 -- 变更内容：新增应用开放管理菜单、管理员按钮与个人开放应用权限
+-- 变更标识：2026-08-31_22:02:33
 -- 执行前置：已执行 NAMEWTA-OPENAPI-CREDENTIAL-DDL-001；应用仍保持 openapi.enabled=false
 -- 适用范围：全新或当前 NAMEWTA 基座初始化
 -- 重复执行：否

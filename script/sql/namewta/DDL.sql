@@ -236,9 +236,10 @@ alter table sys_notify_delivery_log
 drop table gen_table_column;
 drop table gen_table;
 
+-- NAMEWTA-OPENAPI-CREDENTIAL-DDL-001
 -- ============================================================================
--- 变更标识：NAMEWTA-OPENAPI-CREDENTIAL-DDL-001
 -- 变更内容：新增每用户唯一的 OpenAPI 凭据表
+-- 变更标识：2026-08-31_22:02:33
 -- 执行前置：已完整执行 NAMEWTA 基线 DDL；应用仍保持 openapi.enabled=false
 -- 适用范围：全新或当前 NAMEWTA 基座初始化
 -- 重复执行：否
@@ -261,10 +262,10 @@ create table sys_open_api_credential (
     remark                 varchar(500)  default null               comment '备注',
     version                int(11)       not null default 0         comment '乐观锁版本号',
     create_dept            bigint(20)    default null               comment '创建部门',
-    create_by              bigint(20)    default null               comment '创建者',
     create_time            datetime      default null               comment '创建时间',
-    update_by              bigint(20)    default null               comment '更新者',
+    create_by              bigint(20)    default null               comment '创建者',
     update_time            datetime      default null               comment '更新时间',
+    update_by              bigint(20)    default null               comment '更新者',
     del_flag               char(1)       not null default '0'       comment '删除标志（0代表存在 1代表删除）',
     primary key (open_api_credential_id),
     unique key uk_sys_open_api_credential_active_owner (active_owner_user_id),
