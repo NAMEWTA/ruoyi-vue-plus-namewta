@@ -25,6 +25,17 @@ captcha:
   # 字符验证码长度
   charLength: 4
 
+# OpenAPI 机器调用网关。默认关闭；KEK 只能由部署密钥系统注入。
+openapi:
+  enabled: ${OPENAPI_ENABLED:false}
+  clock-skew: ${OPENAPI_CLOCK_SKEW:60s}
+  nonce-ttl: ${OPENAPI_NONCE_TTL:60s}
+  app-rate-limit-per-minute: ${OPENAPI_APP_RATE_LIMIT_PER_MINUTE:1000}
+  interface-rate-limit-per-minute: ${OPENAPI_INTERFACE_RATE_LIMIT_PER_MINUTE:100}
+  machine-session-ttl: ${OPENAPI_MACHINE_SESSION_TTL:8h}
+  kek-version: ${OPENAPI_KEK_VERSION:}
+  kek: ${OPENAPI_KEK:}
+
 # OSS 浏览器直传控制面。生产启用主动清理前先审核 dry-run，并配置 Bucket CORS/Lifecycle。
 oss:
   direct-upload:
