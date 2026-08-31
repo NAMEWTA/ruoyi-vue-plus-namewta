@@ -235,3 +235,39 @@ alter table sys_notify_delivery_log
 
 drop table gen_table_column;
 drop table gen_table;
+
+-- ============================================================================
+-- 变更标识：NAMEWTA-OPENAPI-CREDENTIAL-DDL-001
+-- 变更内容：新增每用户唯一的 OpenAPI 凭据表
+-- 执行前置：已完整执行 NAMEWTA 基线 DDL；应用仍保持 openapi.enabled=false
+-- 适用范围：全新或当前 NAMEWTA 基座初始化
+-- 重复执行：否
+-- 回滚方式：停用 OpenAPI 并确认无需保留凭据后 drop table sys_open_api_credential
+-- ============================================================================
+
+create table sys_open_api_credential (
+    open_api_credential_id bigint(20)    not null                   comment 'OpenAPI凭据主键',
+    owner_user_id          bigint(20)    not null                   comment '凭据所属用户主键',
+    active_owner_user_id   bigint(20)    generated always as
+        (case when del_flag = '0' then owner_user_id else null end) stored comment '未删除凭据所属用户唯一键',
+    app_key                varchar(64)   not null                   comment '公开应用标识',
+    app_name               varchar(100)  not null                   comment '应用名称',
+    secret_ciphertext      varbinary(512) not null                  comment 'AES-256-GCM密文',
+    secret_nonce           binary(12)    not null                   comment 'AES-GCM随机nonce',
+    secret_tag             binary(16)    not null                   comment 'AES-GCM认证标签',
+    kek_version            varchar(64)   not null                   comment '密钥加密密钥版本',
+    status                 char(1)       not null default '0'       comment '状态（0启用 1停用）',
+    expires_at             datetime      default null               comment '过期时间（空为永久）',
+    remark                 varchar(500)  default null               comment '备注',
+    version                int(11)       not null default 0         comment '乐观锁版本号',
+    create_dept            bigint(20)    default null               comment '创建部门',
+    create_by              bigint(20)    default null               comment '创建者',
+    create_time            datetime      default null               comment '创建时间',
+    update_by              bigint(20)    default null               comment '更新者',
+    update_time            datetime      default null               comment '更新时间',
+    del_flag               char(1)       not null default '0'       comment '删除标志（0代表存在 1代表删除）',
+    primary key (open_api_credential_id),
+    unique key uk_sys_open_api_credential_active_owner (active_owner_user_id),
+    unique key uk_sys_open_api_credential_app_key (app_key),
+    key idx_sys_open_api_credential_owner (owner_user_id)
+) engine=innodb comment='用户OpenAPI凭据表';

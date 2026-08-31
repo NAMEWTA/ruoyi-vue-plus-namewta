@@ -443,3 +443,39 @@ delete from sys_menu
 where menu_id = 1761400000000000003;
 
 drop temporary table namewta_runtime_gen_retire_dml_001_preflight;
+
+-- ============================================================================
+-- 变更标识：NAMEWTA-OPENAPI-CREDENTIAL-DML-001
+-- 变更内容：新增应用开放管理菜单、管理员按钮与个人开放应用权限
+-- 执行前置：已执行 NAMEWTA-OPENAPI-CREDENTIAL-DDL-001；应用仍保持 openapi.enabled=false
+-- 适用范围：全新或当前 NAMEWTA 基座初始化
+-- 重复执行：否
+-- 回滚方式：先删除对应 sys_role_menu 关系，再按固定主键逆序删除以下菜单
+-- ============================================================================
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+values (2094360621561675776, 1762000000000000001, '应用开放管理', 1761400000000000001, 13,
+        'openApi', 'system/openApi/index', '', 'N', 'Y', 'C', '0', '0',
+        'system:openApi:list', 'api', '', '', 1761000000000000103, 1761100000000000001,
+        sysdate(), 'OpenAPI凭据与接口目录管理菜单');
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+values (2094360621561675777, 1762000000000000001, '开放应用查询', 2094360621561675776, 1,
+        '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:query', '#', '', '',
+        1761000000000000103, 1761100000000000001, sysdate(), ''),
+       (2094360621561675778, 1762000000000000001, '开放应用新增', 2094360621561675776, 2,
+        '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:add', '#', '', '',
+        1761000000000000103, 1761100000000000001, sysdate(), ''),
+       (2094360621561675779, 1762000000000000001, '开放应用修改', 2094360621561675776, 3,
+        '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:edit', '#', '', '',
+        1761000000000000103, 1761100000000000001, sysdate(), ''),
+       (2094360621561675780, 1762000000000000001, '开放应用删除', 2094360621561675776, 4,
+        '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:remove', '#', '', '',
+        1761000000000000103, 1761100000000000001, sysdate(), ''),
+       (2094360621561675781, 1762000000000000001, '个人开放应用', 2094360621561675776, 5,
+        '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:self', '#', '', '',
+        1761000000000000103, 1761100000000000001, sysdate(), '个人中心开放应用权限');
