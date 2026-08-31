@@ -272,3 +272,73 @@ create table sys_open_api_credential (
     unique key uk_sys_open_api_credential_app_key (app_key),
     key idx_sys_open_api_credential_owner (owner_user_id)
 ) engine=innodb comment='用户OpenAPI凭据表';
+
+-- 变更内容：收敛OSS访问类型并新增可审计的存储边界迁移表
+-- 变更标识：2026-09-01_00:14:13
+-- 执行前置：已执行 NAMEWTA-OPENAPI-CREDENTIAL-DDL-001；随后必须执行同标识的DML安全回填
+-- 适用范围：全新环境；尚未应用本变更的升级环境
+-- 重复执行：否
+-- 回滚方式：应用回滚时保留additive迁移表；访问类型语义只允许前向修复，不恢复旧public/custom解释
+-- 逻辑标识：NAMEWTA-OSS-ACCESS-DDL-001
+-- ============================================================================
+
+alter table sys_oss_config
+    modify column access_policy char(1) not null default '0'
+        comment '桶权限类型（0=PRIVATE 2=PUBLIC_READ）';
+
+create table sys_oss_migration_batch (
+    oss_migration_batch_id bigint(20)    not null                   comment 'OSS迁移批次主键',
+    target_config_key      varchar(20)   not null                   comment '目标OSS配置标识',
+    status                 varchar(32)   not null                   comment '批次状态',
+    dry_run                char(1)       not null default 'Y'       comment '是否仅预检（Y是 N否）',
+    total_count            int(11)       not null default 0         comment '对象总数',
+    success_count          int(11)       not null default 0         comment '成功对象数',
+    failed_count           int(11)       not null default 0         comment '失败对象数',
+    started_time           datetime      default null               comment '开始时间',
+    completed_time         datetime      default null               comment '完成时间',
+    error_message          varchar(2000) default null               comment '清洗后的批次错误信息',
+    version                int(11)       not null default 0         comment '乐观锁版本号',
+    create_dept            bigint(20)    default null               comment '创建部门',
+    create_time            datetime      default null               comment '创建时间',
+    create_by              bigint(20)    default null               comment '创建者',
+    update_time            datetime      default null               comment '更新时间',
+    update_by              bigint(20)    default null               comment '更新者',
+    del_flag               char(1)       not null default '0'       comment '删除标志（0代表存在 1代表删除）',
+    primary key (oss_migration_batch_id),
+    key idx_sys_oss_migration_batch_status_time (status, create_time),
+    key idx_sys_oss_migration_batch_target (target_config_key)
+) engine=innodb comment='OSS存储边界迁移批次表';
+
+create table sys_oss_migration_item (
+    oss_migration_item_id bigint(20)    not null                   comment 'OSS迁移明细主键',
+    oss_migration_batch_id bigint(20)   not null                   comment 'OSS迁移批次主键',
+    oss_id                 bigint(20)   not null                   comment 'OSS对象存储主键',
+    source_config_key      varchar(20)  not null                   comment '来源OSS配置标识',
+    target_config_key      varchar(20)  not null                   comment '目标OSS配置标识',
+    object_key             varchar(1024) not null                  comment '供应商对象键',
+    status                 varchar(32)  not null                   comment '明细状态',
+    stage                  varchar(32)  not null                   comment '当前迁移阶段',
+    source_size            bigint(20)   default null               comment '来源对象字节数',
+    target_size            bigint(20)   default null               comment '目标对象字节数',
+    source_etag            varchar(255) default null               comment '来源对象内容标识',
+    target_etag            varchar(255) default null               comment '目标对象内容标识',
+    retry_count            int(11)      not null default 0         comment '重试次数',
+    last_error_stage       varchar(32)  default null               comment '最近失败阶段',
+    error_message          varchar(2000) default null              comment '清洗后的明细错误信息',
+    service_switched_time  datetime     default null               comment '服务归属切换时间',
+    cleanup_eligible_time  datetime     default null               comment '允许源对象清理时间',
+    cleaned_time           datetime     default null               comment '源对象清理完成时间',
+    version                int(11)      not null default 0         comment '乐观锁版本号',
+    create_dept            bigint(20)   default null               comment '创建部门',
+    create_time            datetime     default null               comment '创建时间',
+    create_by              bigint(20)   default null               comment '创建者',
+    update_time            datetime     default null               comment '更新时间',
+    update_by              bigint(20)   default null               comment '更新者',
+    del_flag               char(1)      not null default '0'       comment '删除标志（0代表存在 1代表删除）',
+    primary key (oss_migration_item_id),
+    unique key uk_sys_oss_migration_item_batch_oss (oss_migration_batch_id, oss_id),
+    key idx_sys_oss_migration_item_batch_status (oss_migration_batch_id, status),
+    key idx_sys_oss_migration_item_oss (oss_id),
+    key idx_sys_oss_migration_item_source (source_config_key),
+    key idx_sys_oss_migration_item_target (target_config_key)
+) engine=innodb comment='OSS存储边界迁移明细表';

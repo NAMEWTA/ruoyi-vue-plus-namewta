@@ -1,5 +1,6 @@
 package org.dromara.system.listener;
 
+import com.baomidou.dynamic.datasource.annotation.DsTxEventListener;
 import org.dromara.common.core.constant.CacheNames;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.oss.constant.OssConstant;
@@ -8,8 +9,6 @@ import org.dromara.common.redis.utils.CacheUtils;
 import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.system.event.OssConfigChangeEvent;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * OSS 配置变更监听器。
@@ -24,7 +23,7 @@ public class OssConfigChangeListener {
      *
      * @param event OSS 配置变更事件
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @DsTxEventListener
     public void refreshOssConfig(OssConfigChangeEvent event) {
         if (event.defaultConfig()) {
             RedisUtils.setCacheObject(OssConstant.DEFAULT_CONFIG_KEY, event.configKey());

@@ -58,7 +58,7 @@ public class SysOssConfig extends BaseEntity {
     private String domainUrl;
 
     /**
-     * 是否https（0否 1是）
+     * 是否https（Y=是，N=否）
      */
     private String isHttps;
 
@@ -83,7 +83,7 @@ public class SysOssConfig extends BaseEntity {
     private String remark;
 
     /**
-     * 桶权限类型(0private 1public 2custom)
+     * 桶权限类型（0=PRIVATE，2=PUBLIC_READ）
      */
     private String accessPolicy;
 }

@@ -480,3 +480,30 @@ values (2094360621561675777, 1762000000000000001, '开放应用查询', 20943606
        (2094360621561675781, 1762000000000000001, '个人开放应用', 2094360621561675776, 5,
         '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:self', '#', '', '',
         1761000000000000103, 1761100000000000001, sysdate(), '个人中心开放应用权限');
+
+-- 变更内容：将全部历史OSS访问类型保守回填为PRIVATE
+-- 变更标识：2026-09-01_00:14:13
+-- 执行前置：已执行 NAMEWTA-OSS-ACCESS-DDL-001；执行前应完成配置与匿名访问盘点及备份
+-- 适用范围：全新环境；含旧0/1/2或未知访问类型的升级环境
+-- 重复执行：是
+-- 回滚方式：不恢复旧值；确需公开访问时在Provider就绪后显式新建PUBLIC_READ配置并迁移对象
+-- 逻辑标识：NAMEWTA-OSS-ACCESS-DML-001
+-- ============================================================================
+
+-- 唯一默认配置是迁移前置条件。异常时故意插入两行同主键哨兵，使本块在任何UPDATE前原子失败。
+insert into sys_oss_config (oss_config_id, config_key, access_policy)
+select -9223372036854775808, '__oss_preflight__', '0'
+from dual
+where (select count(*) from sys_oss_config where status = 'Y') <> 1
+union all
+select -9223372036854775808, '__oss_preflight__', '0'
+from dual
+where (select count(*) from sys_oss_config where status = 'Y') <> 1;
+
+select count(*) as sys_oss_access_policy_backfill_count
+from sys_oss_config
+where access_policy <> '0';
+
+update sys_oss_config
+set access_policy = '0'
+where access_policy <> '0';

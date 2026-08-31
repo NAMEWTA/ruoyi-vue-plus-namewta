@@ -3,6 +3,7 @@ package org.dromara.system.domain.bo;
 import io.github.linpeilie.annotations.AutoMapper;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.dromara.common.core.validate.AddGroup;
@@ -37,7 +38,7 @@ public class SysOssConfigBo implements Serializable {
      * 配置key
      */
     @NotBlank(message = "配置key不能为空", groups = {AddGroup.class, EditGroup.class})
-    @Size(min = 2, max = 100, message = "configKey长度必须介于{min}和{max} 之间")
+    @Size(min = 2, max = 20, message = "configKey长度必须介于{min}和{max}之间")
     private String configKey;
 
     /**
@@ -50,8 +51,9 @@ public class SysOssConfigBo implements Serializable {
     /**
      * 秘钥
      */
-    @NotBlank(message = "secretKey不能为空", groups = {AddGroup.class, EditGroup.class})
-    @Size(min = 2, max = 100, message = "secretKey长度必须介于{min}和{max} 之间")
+    @NotBlank(message = "secretKey不能为空", groups = {AddGroup.class})
+    @Size(min = 2, max = 100, message = "secretKey长度必须介于{min}和{max}之间",
+        groups = {AddGroup.class, EditGroup.class})
     private String secretKey;
 
     /**
@@ -86,6 +88,7 @@ public class SysOssConfigBo implements Serializable {
     /**
      * 是否默认（Y=是,N=否）
      */
+    @Pattern(regexp = "[YN]", message = "默认状态只允许Y或N", groups = {AddGroup.class, EditGroup.class})
     private String status;
 
     /**
@@ -104,9 +107,11 @@ public class SysOssConfigBo implements Serializable {
     private String remark;
 
     /**
-     * 桶权限类型(0private 1public 2custom)
+     * 桶权限类型（0=PRIVATE，2=PUBLIC_READ）
      */
     @NotBlank(message = "桶权限类型不能为空", groups = {AddGroup.class, EditGroup.class})
+    @Pattern(regexp = "[02]", message = "桶权限类型只允许0=PRIVATE或2=PUBLIC_READ",
+        groups = {AddGroup.class, EditGroup.class})
     private String accessPolicy;
 
 }

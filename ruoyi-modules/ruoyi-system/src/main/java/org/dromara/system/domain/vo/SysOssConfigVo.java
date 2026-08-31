@@ -1,5 +1,6 @@
 package org.dromara.system.domain.vo;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import org.apache.fesod.sheet.annotation.ExcelIgnoreUnannotated;
@@ -42,6 +43,7 @@ public class SysOssConfigVo implements Serializable {
     /**
      * 秘钥
      */
+    @JsonIgnore
     private String secretKey;
 
     /**
@@ -90,7 +92,7 @@ public class SysOssConfigVo implements Serializable {
     private String remark;
 
     /**
-     * 桶权限类型(0private 1public 2custom)
+     * 桶权限类型（0=PRIVATE，2=PUBLIC_READ）
      */
     private String accessPolicy;
 

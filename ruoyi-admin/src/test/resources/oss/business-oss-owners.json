@@ -82,6 +82,22 @@
     {
       "candidate": "sys_oss_ref.oss_ref_id",
       "reason": "lifecycle reference row primary key, not a business-owned reference carrier"
+    },
+    {
+      "candidate": "sys_oss_migration_batch.oss_migration_batch_id",
+      "reason": "OSS migration governance batch primary key, not a business-owned reference carrier"
+    },
+    {
+      "candidate": "sys_oss_migration_item.oss_migration_item_id",
+      "reason": "OSS migration governance item primary key, not a business-owned reference carrier"
+    },
+    {
+      "candidate": "sys_oss_migration_item.oss_migration_batch_id",
+      "reason": "OSS migration governance batch foreign key, not a business-owned reference carrier"
+    },
+    {
+      "candidate": "sys_oss_migration_item.oss_id",
+      "reason": "OSS migration execution target recorded by infrastructure, not a business-owned reference carrier"
     }
   ],
   "callerAllowlist": [

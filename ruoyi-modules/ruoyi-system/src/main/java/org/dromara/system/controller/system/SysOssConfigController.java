@@ -70,7 +70,7 @@ public class SysOssConfigController extends BaseController {
      * @return 操作结果
      */
     @SaCheckPermission("system:ossConfig:add")
-    @Log(title = "对象存储配置", businessType = BusinessType.INSERT)
+    @Log(title = "对象存储配置", businessType = BusinessType.INSERT, isSaveRequestData = false)
     @RepeatSubmit()
     @PostMapping()
     public R<Void> add(@Validated(AddGroup.class) @RequestBody SysOssConfigBo bo) {
@@ -84,9 +84,9 @@ public class SysOssConfigController extends BaseController {
      * @return 操作结果
      */
     @SaCheckPermission("system:ossConfig:edit")
-    @Log(title = "对象存储配置", businessType = BusinessType.UPDATE)
+    @Log(title = "对象存储配置", businessType = BusinessType.UPDATE, isSaveRequestData = false)
     @RepeatSubmit()
-    @PutMapping()
+    @PostMapping("/edit")
     public R<Void> edit(@Validated(EditGroup.class) @RequestBody SysOssConfigBo bo) {
         return toAjax(ossConfigService.updateByBo(bo));
     }
@@ -99,7 +99,7 @@ public class SysOssConfigController extends BaseController {
      */
     @SaCheckPermission("system:ossConfig:remove")
     @Log(title = "对象存储配置", businessType = BusinessType.DELETE)
-    @DeleteMapping("/{ossConfigIds}")
+    @PostMapping("/remove/{ossConfigIds}")
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
                           @PathVariable Long[] ossConfigIds) {
         return toAjax(ossConfigService.deleteWithValidByIds(List.of(ossConfigIds), true));
@@ -112,9 +112,9 @@ public class SysOssConfigController extends BaseController {
      * @return 操作结果
      */
     @SaCheckPermission("system:ossConfig:edit")
-    @Log(title = "对象存储状态修改", businessType = BusinessType.UPDATE)
+    @Log(title = "对象存储状态修改", businessType = BusinessType.UPDATE, isSaveRequestData = false)
     @RepeatSubmit()
-    @PutMapping("/changeStatus")
+    @PostMapping("/changeStatus")
     public R<Void> changeStatus(@RequestBody SysOssConfigBo bo) {
         return toAjax(ossConfigService.updateOssConfigStatus(bo));
     }
