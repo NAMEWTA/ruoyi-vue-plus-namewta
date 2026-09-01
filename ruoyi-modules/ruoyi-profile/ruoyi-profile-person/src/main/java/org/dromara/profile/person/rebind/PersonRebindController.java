@@ -29,6 +29,8 @@ public class PersonRebindController {
 
     @PostMapping("/probe")
     @SaCheckPermission("profile:person:apply")
+    @Log(title = "探测个人认证绑定状态", businessType = BusinessType.OTHER,
+        isSaveRequestData = false, isSaveResponseData = false)
     public R<ProbeView> probe(@RequestBody ProbeCommand command) {
         return R.ok(service.probe(command));
     }

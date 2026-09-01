@@ -32,12 +32,10 @@ class PersonRebindHttpContractTest {
             assertThat(permission.value()).containsExactly("profile:person:apply");
             assertThat(method.getParameterTypes())
                 .doesNotContain(long.class, Long.class);
-            if (!method.getName().equals("probe")) {
-                Log log = method.getAnnotation(Log.class);
-                assertThat(log).isNotNull();
-                assertThat(log.isSaveRequestData()).isFalse();
-                assertThat(log.isSaveResponseData()).isFalse();
-            }
+            Log log = method.getAnnotation(Log.class);
+            assertThat(log).isNotNull();
+            assertThat(log.isSaveRequestData()).isFalse();
+            assertThat(log.isSaveResponseData()).isFalse();
         }
     }
 
