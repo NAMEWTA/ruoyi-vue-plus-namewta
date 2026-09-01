@@ -60,7 +60,7 @@ class PersonAdminMySqlE2ETest {
     void persistsAdminLifecycleDecisionFenceMaterialAccessAndRollback() throws Exception {
         try (SqlSession session = sessionFactory().openSession(false)) {
             cleanup(session);
-            session.commit();
+            session.commit(true);
 
             PersonAdminRepository repository = new MybatisPersonAdminRepository(
                 session.getMapper(PersonAdminMapper.class), JsonMapper.builder().build());
@@ -83,7 +83,7 @@ class PersonAdminMySqlE2ETest {
                 LocalDate.parse("2035-01-01"));
             var created = service.create(OPERATOR, new PersonAdminContracts.CreateCommand(identity, USER,
                 "e2e admin create", List.of()));
-            session.commit();
+            session.commit(true);
 
             assertThat(created.status()).isEqualTo("ACTIVE");
             assertThat(scalar(session, "select source_type from profile_person_version where person_version_id="
@@ -96,7 +96,7 @@ class PersonAdminMySqlE2ETest {
                 LocalDate.parse("2036-01-01"));
             var revised = service.revise(OPERATOR, created.profileId(),
                 new PersonAdminContracts.ReviseCommand(revisedIdentity, "e2e admin override", 1));
-            session.commit();
+            session.commit(true);
             assertThat(scalar(session, "select count(*) from profile_person_version where person_profile_id="
                 + created.profileId())).isEqualTo("2");
             assertThat(scalar(session, "select count(*) from profile_person_version where person_profile_id="
@@ -111,7 +111,7 @@ class PersonAdminMySqlE2ETest {
                 new PersonAdminContracts.BindingCommand("UNBIND", "e2e unbind", resumed.version()));
             var assigned = service.assign(OPERATOR, created.profileId(),
                 new PersonAdminContracts.AssignCommand(USER, "e2e assign"));
-            session.commit();
+            session.commit(true);
             assertThat(unbound.status()).isEqualTo("UNBOUND");
             assertThat(scalar(session, "select count(*) from profile_person_binding_event where person_profile_id="
                 + created.profileId())).isEqualTo("5");
@@ -128,7 +128,7 @@ class PersonAdminMySqlE2ETest {
 
             var revoked = service.revoke(OPERATOR, created.profileId(),
                 new PersonAdminContracts.RevokeCommand("e2e revoke", revised.version()));
-            session.commit();
+            session.commit(true);
             assertThat(revoked.status()).isEqualTo("REVOKED");
             assertThat(service.page(new PersonAdminContracts.Query(null, null, null, 1, 20)).getTotal())
                 .isZero();
@@ -140,10 +140,10 @@ class PersonAdminMySqlE2ETest {
                 .isInstanceOf(PersonAdminException.class).hasMessage("PERSON_PROFILE_REVOKED_READ_ONLY");
 
             seedWaiting(session, REJECT_APPLICATION, REJECT_SUBMISSION, "110101199001019910");
-            session.commit();
+            session.commit(true);
             var rejection = service.decide(OPERATOR, REJECT_APPLICATION,
                 new PersonAdminContracts.DecisionCommand("REJECTED", "e2e reject"));
-            session.commit();
+            session.commit(true);
             assertThat(rejection.status()).isEqualTo("REJECTED");
             assertThat(scalar(session, "select concat(status,':',decision_version,':',decision_source)"
                 + " from profile_person_application where person_application_id=" + REJECT_APPLICATION))
@@ -152,19 +152,19 @@ class PersonAdminMySqlE2ETest {
                 + " and application_id=" + REJECT_APPLICATION)).isEqualTo("FINAL");
 
             seedWaiting(session, FAIL_APPLICATION, FAIL_SUBMISSION, "110101199001019911");
-            session.commit();
+            session.commit(true);
             assertThatThrownBy(() -> service.decide(OPERATOR, FAIL_APPLICATION,
                 new PersonAdminContracts.DecisionCommand("REJECTED", "e2e fail")))
                 .isInstanceOf(PersonAdminException.class)
                 .hasMessage("PERSON_ADMIN_WORKFLOW_TERMINATION_FAILED");
-            session.rollback();
+            session.rollback(true);
             assertThat(scalar(session, "select concat(status,':',decision_version) from profile_person_application"
                 + " where person_application_id=" + FAIL_APPLICATION)).isEqualTo("WAITING:0");
             assertThat(scalar(session, "select count(*) from profile_decision_record where profile_type='PERSON'"
                 + " and application_id=" + FAIL_APPLICATION)).isEqualTo("0");
 
             cleanup(session);
-            session.commit();
+            session.commit(true);
             verify(workflow).terminateInstance(Long.toString(REJECT_APPLICATION), "e2e reject");
             assertThat(assigned.status()).isEqualTo("ACTIVE");
         }
