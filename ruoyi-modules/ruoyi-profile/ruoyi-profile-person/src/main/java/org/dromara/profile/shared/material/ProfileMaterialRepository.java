@@ -32,6 +32,10 @@ public interface ProfileMaterialRepository {
 
     MaterialOwner lockOwner(MaterialOwnerKey owner);
 
+    void requireWorkingEditable(MaterialOwnerKey owner);
+
+    void requireSnapshotRelationship(MaterialOwnerKey source, MaterialOwnerKey target);
+
     long countAttached(MaterialOwnerKey owner);
 
     MaterialReference insertReference(MaterialReference reference);

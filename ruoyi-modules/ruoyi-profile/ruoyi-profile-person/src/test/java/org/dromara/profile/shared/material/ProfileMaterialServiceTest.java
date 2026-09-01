@@ -152,6 +152,41 @@ class ProfileMaterialServiceTest {
             .hasMessageContaining("MISSING_REQUIRED_MATERIAL:ID_BACK");
     }
 
+    @Test
+    void rejectsWorkingMaterialWritesWhenTheApplicationIsNotEditable() {
+        MaterialOwnerKey owner = new MaterialOwnerKey(ProfileType.PERSON, MaterialOwnerType.WORKING, 95L);
+        when(repository.lockOwner(owner)).thenReturn(new MaterialOwner(owner, 45L));
+        org.mockito.Mockito.doThrow(new ProfileMaterialException("MATERIAL_OWNER_READ_ONLY"))
+            .when(repository).requireWorkingEditable(owner);
+
+        assertThatThrownBy(() -> service.attach(new MaterialAttachCommand(owner, 75L, 505L)))
+            .hasMessageContaining("MATERIAL_OWNER_READ_ONLY");
+        assertThatThrownBy(() -> service.detach(owner, 805L))
+            .hasMessageContaining("MATERIAL_OWNER_READ_ONLY");
+
+        verify(repository, never()).insertReference(any());
+        verify(repository, never()).detach(any(), any());
+    }
+
+    @Test
+    void publishesOnlyRelatedSubmissionEvidenceToItsProfileVersion() {
+        MaterialOwnerKey source = new MaterialOwnerKey(ProfileType.PERSON, MaterialOwnerType.SUBMISSION, 96L);
+        MaterialOwnerKey target = new MaterialOwnerKey(ProfileType.PERSON, MaterialOwnerType.VERSION, 97L);
+        MaterialOwner sourceOwner = new MaterialOwner(source, 46L);
+        when(repository.lockOwner(source)).thenReturn(sourceOwner);
+        when(repository.lockOwner(target)).thenReturn(new MaterialOwner(target, null));
+        when(repository.insertImmutableCopies(source, target, clock.instant()))
+            .thenReturn(List.of(reference(806L, target, 76L, true)));
+
+        var result = service.snapshotImmutable(source, target);
+
+        assertThat(result).singleElement().extracting(ProfileMaterialPort.MaterialReferenceView::owner)
+            .isEqualTo(target);
+        verify(repository).requireSnapshotRelationship(source, target);
+        verify(accessPolicy, never()).requireWrite(sourceOwner);
+        verify(ossService).reconcileReferences("profile_material_ref", "806", Set.of(), Set.of(76L));
+    }
+
     private MaterialNode tag(long id, ProfileType type, String code, boolean systemRequired) {
         return new MaterialNode(id, 1L, MaterialNodeType.TAG, 2, MaterialScope.valueOf(type.name()), code, code,
             systemRequired, true, 0, 0);
