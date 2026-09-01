@@ -4,9 +4,9 @@ import org.apache.ibatis.datasource.pooled.PooledDataSource;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.dromara.test.support.SqlBaselinePaths;
 
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Statement;
 
@@ -81,7 +81,7 @@ class BusinessMenuRetirementMySqlIntegrationTest {
     }
 
     private String migrationSql() throws Exception {
-        String dml = Files.readString(repositoryRoot().resolve("script/sql/namewta/DML.sql"));
+        String dml = Files.readString(SqlBaselinePaths.file("60-namewta-dml.sql"));
         int start = dml.indexOf("delete from sys_role_menu", dml.indexOf("NAMEWTA-BASE-DSL-003"));
         int end = dml.indexOf("-- NAMEWTA-BASE-DSL-003-END", start);
         assertTrue(start >= 0 && end > start, "missing NAMEWTA-BASE-DSL-003");
@@ -100,8 +100,4 @@ class BusinessMenuRetirementMySqlIntegrationTest {
         }
     }
 
-    private Path repositoryRoot() {
-        Path current = Path.of(System.getProperty("user.dir"));
-        return current.getFileName().toString().equals("ruoyi-admin") ? current.getParent() : current;
-    }
 }

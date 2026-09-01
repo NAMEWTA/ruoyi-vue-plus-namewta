@@ -2,30 +2,19 @@ package org.dromara.test.openapi.credential;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.dromara.test.support.SqlBaselinePaths;
 
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("dev")
 class OpenApiCredentialSqlContractTest {
 
-    private static final int DDL_BASELINE_BYTES = 23318;
-    private static final int DML_BASELINE_BYTES = 33188;
-
     @Test
-    void sqlIsAppendOnlyAndContainsCredentialSchemaAndPermissions() throws Exception {
-        Path repository = Path.of(System.getProperty("user.dir")).getParent();
-        byte[] ddl = Files.readAllBytes(repository.resolve("script/sql/namewta/DDL.sql"));
-        byte[] dml = Files.readAllBytes(repository.resolve("script/sql/namewta/DML.sql"));
-
-        assertThat(hashPrefix(ddl, DDL_BASELINE_BYTES))
-            .isEqualTo("4282f8edeed576a83b5a44a1c07eac999fbcd9910ea8aa6131db278d39d0793e");
-        assertThat(hashPrefix(dml, DML_BASELINE_BYTES))
-            .isEqualTo("7f8b1c44071c847d1e83b947360b58989eddfc3343bcad0ef989ea6c94d13f84");
+    void sqlContainsCredentialSchemaAndPermissions() throws Exception {
+        byte[] ddl = Files.readAllBytes(SqlBaselinePaths.file("50-namewta-ddl.sql"));
+        byte[] dml = Files.readAllBytes(SqlBaselinePaths.file("60-namewta-dml.sql"));
 
         String ddlText = new String(ddl);
         assertThat(ddlText).contains("create table sys_open_api_credential", "open_api_credential_id",
@@ -45,9 +34,4 @@ class OpenApiCredentialSqlContractTest {
             "-- 变更标识：2026-08-31_22:02:33");
     }
 
-    private static String hashPrefix(byte[] bytes, int length) throws Exception {
-        assertThat(bytes.length).isGreaterThan(length);
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
-            java.util.Arrays.copyOf(bytes, length)));
-    }
 }

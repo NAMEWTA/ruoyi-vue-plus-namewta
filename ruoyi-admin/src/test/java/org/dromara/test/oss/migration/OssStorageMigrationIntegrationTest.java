@@ -25,6 +25,7 @@ import org.dromara.system.oss.migration.mapper.SysOssMigrationItemMapper;
 import org.dromara.system.oss.readiness.OssStorageReadinessEntry;
 import org.dromara.system.oss.readiness.OssStorageReadinessProperties;
 import org.dromara.system.oss.readiness.OssStorageReadinessRegistry;
+import org.dromara.test.support.SqlBaselinePaths;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -279,7 +279,7 @@ class OssStorageMigrationIntegrationTest {
     }
 
     private String migrationDdlBlock() throws Exception {
-        String sql = Files.readString(repositoryRoot().resolve("script/sql/namewta/DDL.sql"));
+        String sql = Files.readString(SqlBaselinePaths.file("50-namewta-ddl.sql"));
         String marker = "-- 变更内容：收敛OSS访问类型并新增可审计的存储边界迁移表";
         int start = sql.indexOf(marker);
         assertThat(start).isGreaterThanOrEqualTo(0);
@@ -316,11 +316,6 @@ class OssStorageMigrationIntegrationTest {
             "sys_oss", "sys_oss_config")) {
             execute(dataSource, "drop table if exists " + table);
         }
-    }
-
-    private static Path repositoryRoot() {
-        Path current = Path.of(System.getProperty("user.dir"));
-        return current.getFileName().toString().equals("ruoyi-admin") ? current.getParent() : current;
     }
 
     private static final class MutableClock extends Clock {

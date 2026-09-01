@@ -2,10 +2,10 @@ package org.dromara.test.migration.adminruntime;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.dromara.test.support.SqlBaselinePaths;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,7 +19,7 @@ class AdminRuntimeCapabilitySqlContractTest {
 
     @Test
     void definesReplayableGeneratorSchemaRetirement() throws IOException {
-        String block = block(Files.readString(sqlRoot().resolve("DDL.sql")), DDL_START, DDL_END);
+        String block = block(Files.readString(SqlBaselinePaths.file("50-namewta-ddl.sql")), DDL_START, DDL_END);
 
         assertThat(block)
             .contains("information_schema.tables")
@@ -34,7 +34,7 @@ class AdminRuntimeCapabilitySqlContractTest {
 
     @Test
     void convergesMenusWithoutGrantingOrdinaryRoles() throws IOException {
-        String block = block(Files.readString(sqlRoot().resolve("DML.sql")), DML_START, DML_END);
+        String block = block(Files.readString(SqlBaselinePaths.file("60-namewta-dml.sql")), DML_START, DML_END);
 
         assertThat(block)
             .contains("namewta_admin_runtime_reconcile_dml_001_preflight")
@@ -67,14 +67,4 @@ class AdminRuntimeCapabilitySqlContractTest {
         return sql.substring(start, end + endMarker.length());
     }
 
-    private static Path sqlRoot() {
-        Path current = Path.of("").toAbsolutePath().normalize();
-        while (current != null && !Files.isRegularFile(current.resolve("mvnw"))) {
-            current = current.getParent();
-        }
-        if (current == null) {
-            throw new IllegalStateException("Cannot locate backend repository root");
-        }
-        return current.resolve("script/sql/namewta");
-    }
 }

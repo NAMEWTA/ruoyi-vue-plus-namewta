@@ -22,13 +22,13 @@ import org.dromara.system.notify.domain.bo.SysNotifyQuery;
 import org.dromara.system.notify.mapper.SysNotifyDeliveryLogMapper;
 import org.dromara.system.notify.mapper.SysNotifyLogMapper;
 import org.dromara.system.notify.service.impl.SysNotifyMonitorServiceImpl;
+import org.dromara.test.support.SqlBaselinePaths;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Instant;
@@ -146,7 +146,7 @@ class NotifyMonitorMySqlIntegrationTest {
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
             statement.execute("drop table if exists sys_notify_delivery_log");
             statement.execute("drop table if exists sys_notify_log");
-            String ddl = Files.readString(repositoryRoot().resolve("script/sql/namewta/DDL.sql"));
+            String ddl = Files.readString(SqlBaselinePaths.file("50-namewta-ddl.sql"));
             statement.execute(createTable(ddl, "sys_notify_log"));
             statement.execute(createTable(ddl, "sys_notify_delivery_log"));
         }
@@ -175,8 +175,4 @@ class NotifyMonitorMySqlIntegrationTest {
         return ddl.substring(start, end);
     }
 
-    private Path repositoryRoot() {
-        Path current = Path.of(System.getProperty("user.dir"));
-        return current.getFileName().toString().equals("ruoyi-admin") ? current.getParent() : current;
-    }
 }

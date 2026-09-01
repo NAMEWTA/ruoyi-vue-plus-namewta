@@ -16,7 +16,7 @@
 | 统一通知 | 邮件/短信使用渠道适配器统一分发，支持 Redis 幂等、OSS 附件快照、请求上下文、脱敏、投递记录和监控 | `ruoyi-common-notify`、`ruoyi-system` notify |
 | HTTP 系统日志 | Servlet Filter 为每次请求输出可由 requestId 关联的结构化请求/响应事件，覆盖异步、异常、正文截断和媒体类型策略 | `ruoyi-common-web/.../logging` |
 | 模块组合 | 明确 `ruoyi-admin` 组装、`ruoyi-api` 跨模块合同和 common SPI 边界，同时验证 full/core bundle | 根 POM、`ruoyi-admin`、`ruoyi-api`、`ruoyi-common` |
-| 增量 SQL | 保持上游基线不变，NAMEWTA 的 DDL/DML 使用 MySQL 8.4 验收并按变更块末尾追加 | `script/sql/namewta` |
+| MySQL 合同 | 后端测试消费父聚合仓库维护的六份 MySQL 8.4 完整基座，本仓库不保存 SQL 副本 | `../release-artifacts/docker/infrastructure/mysql/init` |
 
 在父聚合工作区中，更完整的跨端行为和安全不变量位于 `docs/namewta-enhancements.md` 与 `docs/upstream/customization-map.md`。独立克隆本仓库时，可直接以本 README、[上游边界](docs/upstream/README.md)和当前测试作为入口。
 
@@ -35,7 +35,6 @@ ruoyi-api/         跨业务模块公开服务和 DTO
 ruoyi-common/      可按需依赖的通用基础能力
 ruoyi-modules/     system、workflow、gen、demo、ai、job 业务模块
 ruoyi-extend/      monitor、SnailJob、SnailAI 等独立应用
-script/            Docker、NAMEWTA SQL 与运维脚本
 ```
 
 `ruoyi-admin` 只负责组装。跨模块调用应通过 `ruoyi-api` 或明确的 common SPI，禁止依赖其他业务模块的 mapper、entity 或内部实现。
@@ -75,12 +74,9 @@ script/            Docker、NAMEWTA SQL 与运维脚本
 
 ## SQL
 
-上游 `script/sql/ry_vue.sql` 保持不变。NAMEWTA 增量位于：
+数据库初始化与发布资产由父聚合仓库 `release-artifacts/docker/infrastructure/mysql/init/` 统一维护，本仓库不再保留 `script/` 或 SQL 副本。后端 SQL 合同测试默认自动定位父仓库；独立检出后运行相关测试时，通过 `-Dnamewta.sql.root=/绝对路径/release-artifacts/docker/infrastructure/mysql/init` 显式指定六文件基座目录。
 
-- `script/sql/namewta/DDL.sql`：结构变更。
-- `script/sql/namewta/DML.sql`：初始化、回填和补偿。
-
-两个文件均采用末尾追加策略，具体执行顺序和迁移约束见 [SQL 说明](script/sql/namewta/README.md)。
+项目只支持 MySQL 8.4。全新库按六份文件的数字前缀初始化；已有库不得重放基座，必须依据源/目标 Git Tag 的基座差异形成单独的评审与执行方案。
 
 ## 开发导航
 

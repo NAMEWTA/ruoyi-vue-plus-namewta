@@ -1,6 +1,7 @@
 package org.dromara.test.oss.owner;
 
 import org.dromara.system.api.OssService;
+import org.dromara.test.support.SqlBaselinePaths;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -143,9 +144,10 @@ class BusinessOssOwnerArchitectureUnitTest {
             require(nonBlank(owner.updateStrategy()), "updateStrategy is required for " + owner.id());
             require(nonBlank(owner.deleteStrategy()), "deleteStrategy is required for " + owner.id());
             require(nonBlank(owner.restoreStrategy()), "restoreStrategy is required for " + owner.id());
+            Path carrierSource = resolveSource(repository, owner.carrierSource());
             requireExistingSource(repository, owner.carrierSource(), "carrierSource", owner.id());
             requireExistingSource(repository, owner.contractTest(), "contractTest", owner.id());
-            String source = read(repository.resolve(owner.carrierSource()));
+            String source = read(carrierSource);
             require(source.contains(owner.carrier()) || source.contains(toCamelCase(owner.carrier())),
                 "unknown carrier " + coordinate(owner) + " in " + owner.carrierSource());
             require(source.contains(owner.primaryKey()) || source.contains(toCamelCase(owner.primaryKey())),
@@ -173,7 +175,7 @@ class BusinessOssOwnerArchitectureUnitTest {
                 }
             }
         }
-        try (Stream<Path> schemas = Files.walk(repository.resolve("script/sql"))) {
+        try (Stream<Path> schemas = Files.walk(SqlBaselinePaths.root())) {
             for (Path schema : schemas.filter(path -> path.toString().endsWith(".sql")).toList()) {
                 scanSchemaCarrierCandidates(schema, candidates);
             }
@@ -348,7 +350,16 @@ class BusinessOssOwnerArchitectureUnitTest {
 
     private void requireExistingSource(Path repository, String relativePath, String field, String owner) {
         require(nonBlank(relativePath), field + " is required for " + owner);
-        require(Files.isRegularFile(repository.resolve(relativePath)), field + " does not exist for " + owner + ": " + relativePath);
+        require(Files.isRegularFile(resolveSource(repository, relativePath)),
+            field + " does not exist for " + owner + ": " + relativePath);
+    }
+
+    private Path resolveSource(Path repository, String relativePath) {
+        String sqlPrefix = "release-artifacts/docker/infrastructure/mysql/init/";
+        if (relativePath.startsWith(sqlPrefix)) {
+            return SqlBaselinePaths.file(relativePath.substring(sqlPrefix.length()));
+        }
+        return repository.resolve(relativePath);
     }
 
     private String read(Path path) {

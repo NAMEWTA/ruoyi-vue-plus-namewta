@@ -6,9 +6,9 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.dromara.test.support.SqlBaselinePaths;
 
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -55,12 +55,12 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
         insertGeneratorMenus();
         insertHistoricalNacosMenu();
 
-        executeBlock("DDL.sql", DDL_START, DDL_END);
-        executeBlock("DML.sql", DML_START, DML_END);
+        executeBlock("50-namewta-ddl.sql", DDL_START, DDL_END);
+        executeBlock("60-namewta-dml.sql", DML_START, DML_END);
         assertFinalState();
 
-        executeBlock("DDL.sql", DDL_START, DDL_END);
-        executeBlock("DML.sql", DML_START, DML_END);
+        executeBlock("50-namewta-ddl.sql", DDL_START, DDL_END);
+        executeBlock("60-namewta-dml.sql", DML_START, DML_END);
         assertFinalState();
     }
 
@@ -72,8 +72,8 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
         insertHistoricalNacosMenu();
         execute("drop table gen_table_column", "drop table gen_table");
 
-        executeBlock("DDL.sql", DDL_START, DDL_END);
-        executeBlock("DML.sql", DML_START, DML_END);
+        executeBlock("50-namewta-ddl.sql", DDL_START, DDL_END);
+        executeBlock("60-namewta-dml.sql", DML_START, DML_END);
 
         assertFinalState();
     }
@@ -88,7 +88,7 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
             + "values(2094360621561675776,1762000000000000001,'冲突菜单',1761400000000000001,13,"
             + "'openApi','other/component','C','system:openApi:list')");
 
-        assertThatThrownBy(() -> executeBlock("DML.sql", DML_START, DML_END))
+        assertThatThrownBy(() -> executeBlock("60-namewta-dml.sql", DML_START, DML_END))
             .isInstanceOf(SQLException.class);
 
         assertThat(queryInt("select count(*) from sys_menu where menu_id in ("
@@ -111,7 +111,7 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
         insertHistoricalNacosMenu();
         execute("update sys_menu set component='other/component' where menu_id=2094360621561675778");
 
-        assertThatThrownBy(() -> executeBlock("DML.sql", DML_START, DML_END))
+        assertThatThrownBy(() -> executeBlock("60-namewta-dml.sql", DML_START, DML_END))
             .isInstanceOf(SQLException.class);
 
         assertThat(queryInt("select count(*) from sys_menu where menu_id in ("
@@ -131,7 +131,7 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
         insertHistoricalNacosMenu();
         execute("update sys_menu set menu_name='非生成器目录' where menu_id=1761400000000000003");
 
-        assertThatThrownBy(() -> executeBlock("DML.sql", DML_START, DML_END))
+        assertThatThrownBy(() -> executeBlock("60-namewta-dml.sql", DML_START, DML_END))
             .isInstanceOf(SQLException.class);
 
         assertThat(queryInt("select count(*) from sys_menu where menu_id in ("
@@ -151,7 +151,7 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
             "insert into gen_table_column(column_id,table_id) values(1,1)"
         );
 
-        assertThatThrownBy(() -> executeBlock("DDL.sql", DDL_START, DDL_END))
+        assertThatThrownBy(() -> executeBlock("50-namewta-ddl.sql", DDL_START, DDL_END))
             .isInstanceOf(SQLException.class);
 
         assertThat(tableExists("gen_table")).isTrue();
@@ -163,7 +163,7 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
         createSchema();
         execute("drop table gen_table_column", "drop table gen_table", "create table gen_table(table_id bigint)");
 
-        assertThatThrownBy(() -> executeBlock("DDL.sql", DDL_START, DDL_END))
+        assertThatThrownBy(() -> executeBlock("50-namewta-ddl.sql", DDL_START, DDL_END))
             .isInstanceOf(SQLException.class);
 
         assertThat(tableExists("gen_table")).isTrue();
@@ -304,7 +304,7 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
     }
 
     private void executeBlock(String file, String startMarker, String endMarker) throws Exception {
-        String sql = Files.readString(repositoryRoot().resolve("script/sql/namewta").resolve(file));
+        String sql = Files.readString(SqlBaselinePaths.file(file));
         int start = sql.indexOf(startMarker);
         int end = sql.indexOf(endMarker);
         assertThat(start).isGreaterThanOrEqualTo(0);
@@ -362,14 +362,4 @@ class AdminRuntimeCapabilityMySqlIntegrationTest {
         );
     }
 
-    private Path repositoryRoot() {
-        Path current = Path.of("").toAbsolutePath().normalize();
-        while (current != null && !Files.isRegularFile(current.resolve("mvnw"))) {
-            current = current.getParent();
-        }
-        if (current == null) {
-            throw new IllegalStateException("Cannot locate backend repository root");
-        }
-        return current;
-    }
 }

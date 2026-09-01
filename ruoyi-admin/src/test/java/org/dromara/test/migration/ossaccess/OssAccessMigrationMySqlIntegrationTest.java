@@ -15,6 +15,7 @@ import org.dromara.system.domain.SysOssConfig;
 import org.dromara.system.domain.bo.SysOssConfigBo;
 import org.dromara.system.mapper.SysOssConfigMapper;
 import org.dromara.system.service.impl.SysOssConfigServiceImpl;
+import org.dromara.test.support.SqlBaselinePaths;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -221,12 +222,12 @@ class OssAccessMigrationMySqlIntegrationTest {
     }
 
     private String ddlBlock() throws Exception {
-        return rewriteTableNames(block(repositoryRoot().resolve("script/sql/namewta/DDL.sql"),
+        return rewriteTableNames(block(SqlBaselinePaths.file("50-namewta-ddl.sql"),
             "-- 变更内容：收敛OSS访问类型并新增可审计的存储边界迁移表"));
     }
 
     private String dmlBlock() throws Exception {
-        return rewriteTableNames(block(repositoryRoot().resolve("script/sql/namewta/DML.sql"),
+        return rewriteTableNames(block(SqlBaselinePaths.file("60-namewta-dml.sql"),
             "-- 变更内容：将全部历史OSS访问类型保守回填为PRIVATE"));
     }
 
@@ -280,8 +281,4 @@ class OssAccessMigrationMySqlIntegrationTest {
         }
     }
 
-    private static Path repositoryRoot() {
-        Path current = Path.of(System.getProperty("user.dir"));
-        return current.getFileName().toString().equals("ruoyi-admin") ? current.getParent() : current;
-    }
 }

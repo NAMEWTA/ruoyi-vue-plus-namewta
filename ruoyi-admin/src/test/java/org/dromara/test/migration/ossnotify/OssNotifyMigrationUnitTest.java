@@ -2,10 +2,10 @@ package org.dromara.test.migration.ossnotify;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.dromara.test.support.SqlBaselinePaths;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -19,7 +19,7 @@ class OssNotifyMigrationUnitTest {
 
     @Test
     void ddlDefinesConservativeOssLifecycleAndProjectOwnedTables() throws IOException {
-        String ddl = readSql("DDL.sql");
+        String ddl = readSql("50-namewta-ddl.sql");
 
         assertTrue(ddl.contains(DDL_MARKER));
         assertTrue(ddl.contains("add column is_temp"));
@@ -56,7 +56,7 @@ class OssNotifyMigrationUnitTest {
 
     @Test
     void dmlDefinesIdempotentGlobalMonitorMenuAndThreePermissions() throws IOException {
-        String dml = readSql("DML.sql");
+        String dml = readSql("60-namewta-dml.sql");
 
         assertTrue(dml.contains(DSL_MARKER));
         assertTrue(dml.contains("monitor/notify/index"));
@@ -83,11 +83,7 @@ class OssNotifyMigrationUnitTest {
     }
 
     private String readSql(String fileName) throws IOException {
-        Path moduleDir = Path.of(System.getProperty("user.dir"));
-        Path repositoryDir = moduleDir.getFileName().toString().equals("ruoyi-admin")
-            ? moduleDir.getParent()
-            : moduleDir;
-        return Files.readString(repositoryDir.resolve("script/sql/namewta").resolve(fileName))
+        return Files.readString(SqlBaselinePaths.file(fileName))
             .toLowerCase(Locale.ROOT);
     }
 }

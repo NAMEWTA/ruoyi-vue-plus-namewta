@@ -3,13 +3,13 @@ package org.dromara.test.migration.password;
 import org.apache.ibatis.datasource.pooled.PooledDataSource;
 import org.dromara.system.password.PasswordDefaultMode;
 import org.dromara.system.password.PasswordPolicyConfigParser;
+import org.dromara.test.support.SqlBaselinePaths;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -190,7 +190,7 @@ class PasswordMigrationMySqlIntegrationTest {
     }
 
     private String migrationSql() throws Exception {
-        String dml = Files.readString(repositoryRoot().resolve("script/sql/namewta/DML.sql"));
+        String dml = Files.readString(SqlBaselinePaths.file("60-namewta-dml.sql"));
         int start = dml.indexOf("-- NAMEWTA-PASSWORD-DSL-001\n");
         int end = dml.indexOf("-- NAMEWTA-PASSWORD-DSL-001-END", start);
         assertTrue(start >= 0 && end > start);
@@ -221,8 +221,4 @@ class PasswordMigrationMySqlIntegrationTest {
         execute(dataSource, "drop table if exists " + CONFIG_TABLE);
     }
 
-    private Path repositoryRoot() {
-        Path current = Path.of(System.getProperty("user.dir"));
-        return current.getFileName().toString().equals("ruoyi-admin") ? current.getParent() : current;
-    }
 }

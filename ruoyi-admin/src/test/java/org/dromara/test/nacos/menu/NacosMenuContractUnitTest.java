@@ -2,10 +2,10 @@ package org.dromara.test.nacos.menu;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.dromara.test.support.SqlBaselinePaths;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,7 +17,7 @@ class NacosMenuContractUnitTest {
 
     @Test
     void definesOneIdempotentMenuWithoutGrantingOrdinaryRoles() throws IOException {
-        String dml = Files.readString(repositoryRoot().resolve("script/sql/namewta/DML.sql"));
+        String dml = Files.readString(SqlBaselinePaths.file("60-namewta-dml.sql"));
         String block = block(dml);
 
         assertThat(block)
@@ -38,14 +38,4 @@ class NacosMenuContractUnitTest {
         return sql.substring(start, end + END.length());
     }
 
-    private static Path repositoryRoot() {
-        Path current = Path.of("").toAbsolutePath().normalize();
-        while (current != null && !Files.isRegularFile(current.resolve("mvnw"))) {
-            current = current.getParent();
-        }
-        if (current == null) {
-            throw new IllegalStateException("Cannot locate backend repository root");
-        }
-        return current;
-    }
 }
