@@ -1,0 +1,12 @@
+package org.dromara.profile.enterprise.transfer.persistence;
+
+import lombok.Data;
+
+@Data
+public class EnterpriseTransferOwnerRow {
+
+    private Long bindingId;
+    private Long profileId;
+    private Long userId;
+    private Integer bindingVersion;
+}
