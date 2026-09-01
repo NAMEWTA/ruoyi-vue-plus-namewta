@@ -5,6 +5,7 @@ import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.system.api.OssService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -36,6 +37,7 @@ public class ProfileMaterialService implements ProfileMaterialPort {
     private final ProfileMaterialAccessPolicy accessPolicy;
     private final Clock clock;
 
+    @Autowired
     public ProfileMaterialService(ProfileMaterialRepository repository, OssService ossService,
                                   ProfileMaterialAccessPolicy accessPolicy) {
         this(repository, ossService, accessPolicy, Clock.systemUTC());
