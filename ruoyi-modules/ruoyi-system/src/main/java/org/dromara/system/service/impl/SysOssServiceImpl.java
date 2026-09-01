@@ -31,6 +31,7 @@ import org.dromara.system.service.ISysOssService;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
 import java.util.Collection;
@@ -48,6 +49,8 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor
 @Service
 public class SysOssServiceImpl implements ISysOssService, OssService {
+
+    private static final JsonMapper METADATA_JSON = JsonMapper.builder().build();
 
     private final SysOssMapper ossMapper;
 
@@ -245,6 +248,33 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
     @Override
     public OssLifecycleSnapshot snapshot(Long ossId) {
         return lifecycleManager.snapshot(ossId);
+    }
+
+    @Override
+    public OssObjectMetadata objectMetadata(Long ossId) {
+        if (ossId == null || ossId <= 0) {
+            throw new ServiceException("OSS_OBJECT_NOT_FOUND");
+        }
+        SysOss oss = ossMapper.selectById(ossId);
+        if (oss == null) {
+            throw new ServiceException("OSS_OBJECT_NOT_FOUND");
+        }
+        SysOssExt ext;
+        try {
+            ext = StringUtils.isBlank(oss.getExt1())
+                ? null : METADATA_JSON.readValue(oss.getExt1(), SysOssExt.class);
+        } catch (RuntimeException ex) {
+            throw new ServiceException("OSS_OBJECT_METADATA_UNAVAILABLE");
+        }
+        if (ext == null || ext.getFileSize() == null || ext.getFileSize() <= 0
+            || StringUtils.isBlank(ext.getContentType()) || StringUtils.isBlank(oss.getFileName())
+            || StringUtils.isBlank(oss.getOriginalName()) || StringUtils.isBlank(oss.getFileSuffix())
+            || oss.getCreateBy() == null || oss.getCreateBy() <= 0
+            || "PENDING".equals(oss.getDeleteState())) {
+            throw new ServiceException("OSS_OBJECT_METADATA_UNAVAILABLE");
+        }
+        return new OssObjectMetadata(ossId, oss.getFileName(), oss.getOriginalName(), oss.getFileSuffix(),
+            ext.getFileSize(), ext.getContentType(), oss.getCreateBy());
     }
 
     @Override
