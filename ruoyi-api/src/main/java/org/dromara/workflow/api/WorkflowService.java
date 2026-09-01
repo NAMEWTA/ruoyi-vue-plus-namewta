@@ -3,6 +3,7 @@ package org.dromara.workflow.api;
 import org.dromara.workflow.api.domain.CompleteTaskDTO;
 import org.dromara.workflow.api.domain.StartProcessDTO;
 import org.dromara.workflow.api.domain.StartProcessReturnDTO;
+import org.dromara.workflow.api.domain.WorkflowTerminationResult;
 
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,15 @@ public interface WorkflowService {
      * @return 结果
      */
     boolean deleteInstance(List<String> businessIds);
+
+    /**
+     * 按业务 ID 终止活动实例并保留流程历史。
+     *
+     * @param businessId 业务 ID
+     * @param reason     终止原因
+     * @return 终止结果；无实例或实例已终态时返回幂等结果
+     */
+    WorkflowTerminationResult terminateInstance(String businessId, String reason);
 
     /**
      * 获取当前流程状态

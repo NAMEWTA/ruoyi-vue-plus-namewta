@@ -2,15 +2,24 @@ package org.dromara.workflow.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+import com.baomidou.lock.annotation.Lock4j;
 import lombok.RequiredArgsConstructor;
+import org.dromara.common.core.enums.BusinessStatusEnum;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.warm.flow.core.dto.FlowParams;
+import org.dromara.warm.flow.core.entity.Instance;
+import org.dromara.warm.flow.core.service.TaskService;
 import org.dromara.warm.flow.orm.entity.FlowInstance;
 import org.dromara.workflow.api.WorkflowService;
 import org.dromara.workflow.api.domain.CompleteTaskDTO;
 import org.dromara.workflow.api.domain.StartProcessDTO;
 import org.dromara.workflow.api.domain.StartProcessReturnDTO;
+import org.dromara.workflow.api.domain.WorkflowTerminationResult;
 import org.dromara.workflow.common.ConditionalOnEnable;
 import org.dromara.workflow.common.enums.MessageTypeEnum;
+import org.dromara.workflow.common.enums.TaskStatusEnum;
 import org.dromara.workflow.domain.FlowInstanceBizExt;
 import org.dromara.workflow.domain.bo.CompleteTaskBo;
 import org.dromara.workflow.domain.bo.StartProcessBo;
@@ -35,6 +44,7 @@ public class WorkflowServiceImpl implements WorkflowService {
 
     private final IFlwInstanceService flwInstanceService;
     private final IFlwTaskService flwTaskService;
+    private final TaskService taskService;
 
     /**
      * 删除流程实例
@@ -45,6 +55,43 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override
     public boolean deleteInstance(List<String> businessIds) {
         return flwInstanceService.deleteByBusinessIds(businessIds);
+    }
+
+    @Override
+    @Lock4j(keys = {"'workflow:terminate:' + #businessId"})
+    @DSTransactional
+    public WorkflowTerminationResult terminateInstance(String businessId, String reason) {
+        String normalizedBusinessId = requireText(businessId, "businessId");
+        String normalizedReason = requireText(reason, "reason");
+        FlowInstance instance = flwInstanceService.selectInstByBusinessId(normalizedBusinessId);
+        if (instance == null) {
+            return new WorkflowTerminationResult(WorkflowTerminationResult.Status.NO_ACTIVE_INSTANCE, null);
+        }
+        if (BusinessStatusEnum.finishStatus().contains(instance.getFlowStatus())) {
+            return new WorkflowTerminationResult(
+                WorkflowTerminationResult.Status.NO_ACTIVE_INSTANCE, instance.getId());
+        }
+        if (!BusinessStatusEnum.runningStatus().contains(instance.getFlowStatus())) {
+            throw new ServiceException("Unsupported workflow status for termination");
+        }
+
+        FlowParams flowParams = FlowParams.build()
+            .message(normalizedReason)
+            .flowStatus(BusinessStatusEnum.TERMINATION.getStatus())
+            .hisStatus(TaskStatusEnum.TERMINATION.getStatus())
+            .ignore(true);
+        Instance terminated = taskService.terminationByInsId(instance.getId(), flowParams);
+        if (terminated == null) {
+            throw new ServiceException("Workflow engine did not confirm termination");
+        }
+        return new WorkflowTerminationResult(WorkflowTerminationResult.Status.TERMINATED, instance.getId());
+    }
+
+    private static String requireText(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be blank");
+        }
+        return value.strip();
     }
 
     /**
