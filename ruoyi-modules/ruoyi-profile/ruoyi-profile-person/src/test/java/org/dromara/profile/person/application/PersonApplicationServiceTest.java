@@ -3,6 +3,8 @@ package org.dromara.profile.person.application;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.person.verification.PersonVerificationAttemptCoordinator;
+import org.dromara.profile.person.verification.PersonVerificationException;
+import org.dromara.profile.person.verification.PersonVerificationFailureCategory;
 import org.dromara.profile.person.verification.PersonVerificationProviderRegistry;
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.event.ProcessEvent;
@@ -26,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -79,6 +82,20 @@ class PersonApplicationServiceTest {
             org.mockito.ArgumentCaptor.forClass(PersonDraftUpdate.class);
         verify(repository).saveDraft(eq(101L), eq("manual"), update.capture());
         assertThat(update.getValue().targetProfileId()).isEqualTo(9201L);
+    }
+
+    @Test
+    void mapsProviderAvailabilityFailuresToTheApplicationContract() {
+        when(config.getConfigValue("profile.person.provider.default")).thenReturn("manual");
+        when(repository.findOpenByUserId(101L)).thenReturn(Optional.empty());
+        when(repository.findDocumentType("CN_RESIDENT_ID")).thenReturn(Optional.of(documentType()));
+        doThrow(new PersonVerificationException(PersonVerificationFailureCategory.DISABLED_PROVIDER,
+            "provider disabled")).when(providers).requireEnabled("manual");
+
+        assertThatThrownBy(() -> service.save(101L, command(0)))
+            .isInstanceOf(PersonApplicationException.class)
+            .hasMessage("PERSON_PROVIDER_UNAVAILABLE");
+        verify(repository, never()).saveDraft(anyLong(), any(), any());
     }
 
     @Test
@@ -141,6 +158,26 @@ class PersonApplicationServiceTest {
 
         verify(repository).publishApproved(9001L, 3, Instant.parse("2026-09-01T12:00:00Z"));
         verify(repository, never()).updateWorkflowStatus(eq(9001L), eq(2), eq("BACK"), eq(2), any());
+    }
+
+    @Test
+    void resolvesARealWorkflowTerminalFromThePersistedSnapshotFence() {
+        PersonApplication waiting = application(9001L, 101L, "WAITING", 2, 3);
+        when(config.getConfigValue("profile.person.flowCode")).thenReturn("profile_person_verification");
+        when(repository.lockById(9001L)).thenReturn(waiting);
+        when(workflow.persistedSnapshotVersion(any())).thenReturn(3);
+        when(repository.requireSubmission(9001L, 3)).thenReturn(new PersonSubmission(
+            9101L, 9001L, 3, 101L, waiting.fields(), "manual",
+            Instant.parse("2026-09-01T11:00:00Z")));
+        when(repository.publishApproved(9001L, 3, Instant.parse("2026-09-01T12:00:00Z")))
+            .thenReturn(new PersonPublication(9201L, 9301L, 9401L, false));
+        ProcessEvent event = event("finish", 3);
+        event.setInstanceId(77L);
+        event.setParams(Map.of("message", "approved"));
+
+        service.handleProcessEvent(event);
+
+        verify(repository).publishApproved(9001L, 3, Instant.parse("2026-09-01T12:00:00Z"));
     }
 
     @Test

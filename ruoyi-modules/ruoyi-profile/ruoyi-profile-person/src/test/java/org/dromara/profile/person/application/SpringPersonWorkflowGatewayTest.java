@@ -3,10 +3,14 @@ package org.dromara.profile.person.application;
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.WorkflowService;
 import org.dromara.workflow.api.domain.StartProcessDTO;
+import org.dromara.workflow.api.event.ProcessEvent;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,5 +66,21 @@ class SpringPersonWorkflowGatewayTest {
             .containsEntry("submissionId", 92L)
             .containsEntry("snapshotVersion", 3)
             .containsEntry("profileType", "PERSON");
+    }
+
+    @Test
+    void resolvesTheSnapshotFenceFromPersistedInstanceVariables() {
+        WorkflowService workflow = mock(WorkflowService.class);
+        when(provider.getIfAvailable()).thenReturn(workflow);
+        when(workflow.instanceVariable(77L)).thenReturn(Map.of("variableList", List.of(
+            Map.of("key", "profileType", "value", "PERSON"),
+            Map.of("key", "snapshotVersion", "value", 3))));
+        ProcessEvent event = new ProcessEvent();
+        event.setInstanceId(77L);
+
+        Integer snapshotVersion = new SpringPersonWorkflowGateway(provider, config)
+            .persistedSnapshotVersion(event);
+
+        assertThat(snapshotVersion).isEqualTo(3);
     }
 }

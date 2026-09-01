@@ -6,6 +6,7 @@ import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
 import org.dromara.profile.person.verification.PersonVerificationAttemptCoordinator;
+import org.dromara.profile.person.verification.PersonVerificationException;
 import org.dromara.profile.person.verification.PersonVerificationProviderRegistry;
 import org.dromara.profile.person.verification.PersonVerificationStartAttemptCommand;
 import org.dromara.system.api.ConfigService;
@@ -79,7 +80,7 @@ public class PersonApplicationService {
             throw failure("PERSON_APPLICATION_READ_ONLY");
         }
         String providerCode = current.map(PersonApplication::providerCode).orElseGet(this::defaultProvider);
-        providers.requireEnabled(providerCode);
+        requireProviderEnabled(providerCode);
         Long accountProfileId = repository.findEffectiveProfileIdByUser(userId);
         Long identityProfileId = fields.identityKey() == null
             ? null : repository.findActiveProfileIdByIdentity(fields.identityKey());
@@ -100,7 +101,7 @@ public class PersonApplicationService {
             throw failure("PERSON_APPLICATION_VERSION_CONFLICT");
         }
         validateComplete(application.fields());
-        providers.requireEnabled(application.providerCode());
+        requireProviderEnabled(application.providerCode());
         repository.requireSubmissionAllowed(userId, application.targetProfileId(),
             application.fields().identityKey());
         MaterialOwnerKey working = owner(MaterialOwnerType.WORKING, application.personApplicationId());
@@ -114,7 +115,7 @@ public class PersonApplicationService {
             submission.personSubmissionId()));
         PersonApplication waiting = repository.markWaiting(application.personApplicationId(), snapshotVersion,
             expectedVersion, submittedTime);
-        attempts.startAttempt(new PersonVerificationStartAttemptCommand(application.personApplicationId(),
+        startVerificationAttempt(new PersonVerificationStartAttemptCommand(application.personApplicationId(),
             submission.personSubmissionId(), fingerprint(application.fields(), snapshotVersion)));
         workflow.start(application.personApplicationId(), submission.personSubmissionId(), snapshotVersion);
         return PersonApplicationView.from(waiting);
@@ -127,8 +128,14 @@ public class PersonApplicationService {
             return;
         }
         Long applicationId = positiveLong(event.getBusinessId());
+        if (applicationId == null) {
+            return;
+        }
         Integer snapshotVersion = snapshotVersion(event.getParams());
-        if (applicationId == null || snapshotVersion == null) {
+        if (snapshotVersion == null) {
+            snapshotVersion = workflow.persistedSnapshotVersion(event);
+        }
+        if (snapshotVersion == null) {
             return;
         }
         PersonApplication application = repository.lockById(applicationId);
@@ -205,6 +212,22 @@ public class PersonApplicationService {
             throw failure("PERSON_PROVIDER_NOT_CONFIGURED");
         }
         return providerCode.strip();
+    }
+
+    private void requireProviderEnabled(String providerCode) {
+        try {
+            providers.requireEnabled(providerCode);
+        } catch (PersonVerificationException exception) {
+            throw new PersonApplicationException("PERSON_PROVIDER_UNAVAILABLE", exception);
+        }
+    }
+
+    private void startVerificationAttempt(PersonVerificationStartAttemptCommand command) {
+        try {
+            attempts.startAttempt(command);
+        } catch (PersonVerificationException exception) {
+            throw new PersonApplicationException("PERSON_PROVIDER_UNAVAILABLE", exception);
+        }
     }
 
     private String expectedFlowCode() {
