@@ -22,6 +22,7 @@ import org.dromara.common.openapi.spi.OpenApiAuthorizationResolver;
 import org.dromara.common.openapi.spi.OpenApiCallEventPublisher;
 import org.dromara.common.openapi.spi.OpenApiCredentialResolver;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -50,8 +51,9 @@ public class OpenApiAutoConfiguration {
     }
 
     @Bean
-    OpenApiOperationRegistry openApiOperationRegistry(RequestMappingHandlerMapping handlerMapping,
-                                                       SpringDocOperationSchemaResolver schemaResolver) {
+    OpenApiOperationRegistry openApiOperationRegistry(
+        @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping,
+        SpringDocOperationSchemaResolver schemaResolver) {
         return new OpenApiOperationRegistry(handlerMapping, schemaResolver);
     }
 
@@ -108,6 +110,7 @@ public class OpenApiAutoConfiguration {
 
     @Bean
     FilterRegistrationBean<OpenApiGatewayFilter> openApiGatewayFilterRegistration(
+        @Qualifier("requestMappingHandlerMapping")
         RequestMappingHandlerMapping handlerMapping,
         OpenApiOperationRegistry operationRegistry,
         OpenApiCredentialResolver credentialResolver,

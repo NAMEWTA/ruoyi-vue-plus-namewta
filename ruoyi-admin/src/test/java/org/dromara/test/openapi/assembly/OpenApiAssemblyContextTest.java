@@ -153,6 +153,27 @@ class OpenApiAssemblyContextTest {
             });
     }
 
+    @Test
+    void assemblesWhenActuatorContributesAnotherHandlerMapping() {
+        RequestMappingHandlerMapping managementMapping = mock(RequestMappingHandlerMapping.class);
+        when(managementMapping.getHandlerMethods()).thenReturn(Map.of());
+
+        new WebApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(WebMvcAutoConfiguration.class, OpenApiAutoConfiguration.class))
+            .withBean("controllerEndpointHandlerMapping", RequestMappingHandlerMapping.class,
+                () -> managementMapping)
+            .withBean(StpLogic.class, () -> mock(StpLogic.class))
+            .withBean(OpenApiAuthorizationResolver.class, () -> userId -> null)
+            .withBean(RedissonClient.class, () -> mock(RedissonClient.class))
+            .withBean(OpenApiCredentialResolver.class, OpenApiAssemblyContextTest::credentialResolver)
+            .withPropertyValues(validProperties())
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context).hasSingleBean(OpenApiOperationRegistry.class);
+                assertThat(context).hasBean("openApiGatewayFilterRegistration");
+            });
+    }
+
     private static ApplicationContextRunner dependencies(ApplicationContextRunner context) {
         return dependenciesWithoutCredential(context)
             .withBean(OpenApiCredentialResolver.class, OpenApiAssemblyContextTest::credentialResolver);
