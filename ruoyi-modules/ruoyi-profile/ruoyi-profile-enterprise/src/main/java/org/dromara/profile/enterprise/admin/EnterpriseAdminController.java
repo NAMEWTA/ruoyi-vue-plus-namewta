@@ -75,7 +75,7 @@ public class EnterpriseAdminController {
 
     @PostMapping("/{profileId}/assign")
     @SaCheckPermission("profile:enterprise:override")
-    @Log(title = "管理员指定个人档案账户", businessType = BusinessType.UPDATE,
+    @Log(title = "管理员指定企业档案负责人", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<Result> assign(@PathVariable long profileId, @RequestBody AssignCommand command) {
         return R.ok(service.assign(LoginHelper.getUserId(), profileId, command));
