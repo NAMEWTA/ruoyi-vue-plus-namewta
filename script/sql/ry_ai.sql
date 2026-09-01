@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- Snail AI MySQL 全量建表脚本（仅 CREATE，无 ALTER）
 -- 使用：mysql -u user -p database < ry_ai.sql
