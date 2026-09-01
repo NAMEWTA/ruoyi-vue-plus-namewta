@@ -1,6 +1,7 @@
 package org.dromara.profile.person.notification;
 
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+import com.baomidou.dynamic.datasource.annotation.DsTxEventListener;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,8 +18,6 @@ import org.dromara.profile.person.rebind.PersonReboundEvent;
 import org.dromara.system.api.MessageService;
 import org.dromara.system.api.UserService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -38,7 +37,7 @@ public class PersonRebindNotificationService {
     private final UserService users;
     private final NotifyClient notifyClient;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @DsTxEventListener
     public void notifyOldAccount(PersonReboundEvent event) {
         if (event == null) {
             return;
