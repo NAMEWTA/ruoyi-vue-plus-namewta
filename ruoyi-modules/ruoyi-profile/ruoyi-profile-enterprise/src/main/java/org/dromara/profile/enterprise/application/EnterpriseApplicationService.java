@@ -165,6 +165,11 @@ public class EnterpriseApplicationService {
         }
         String status = normalizeStatus(event.getStatus());
         if ("FINISH".equals(status)) {
+            if ("REJECT".equals(normalizeDecision(event.getParams()))) {
+                repository.updateWorkflowStatus(applicationId, snapshotVersion, "INVALID",
+                    application.version(), clock.instant());
+                return;
+            }
             EnterpriseSubmission submission = repository.requireSubmission(applicationId, snapshotVersion);
             EnterprisePublication publication = repository.publishApproved(applicationId, snapshotVersion, clock.instant());
             materials.snapshotImmutable(owner(MaterialOwnerType.SUBMISSION, submission.enterpriseSubmissionId()),
@@ -173,6 +178,11 @@ public class EnterpriseApplicationService {
             repository.updateWorkflowStatus(applicationId, snapshotVersion, status,
                 application.version(), clock.instant());
         }
+    }
+
+    private String normalizeDecision(Map<String, Object> params) {
+        Object value = params == null ? null : params.get("profileDecision");
+        return value == null ? "" : value.toString().strip().toUpperCase(Locale.ROOT);
     }
 
     private void validateDraft(EnterpriseIdentityFields fields) {

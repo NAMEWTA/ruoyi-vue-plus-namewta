@@ -17,6 +17,8 @@ import org.dromara.profile.enterprise.application.EnterpriseSubmission;
 import org.dromara.system.api.UserService;
 import org.dromara.system.api.domain.UserDTO;
 import org.dromara.workflow.api.WorkflowService;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -24,6 +26,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -41,9 +44,18 @@ public class EnterpriseAdminService {
     private final ProfileService profiles;
     private final Clock clock;
 
+    @Autowired
     public EnterpriseAdminService(EnterpriseAdminRepository repository, EnterpriseApplicationRepository applications,
-                              ProfileMaterialPort materials, WorkflowService workflow, UserService users,
-                              ProfileService profiles) {
+                                  ProfileMaterialPort materials,
+                                  ObjectProvider<WorkflowService> workflowProvider, UserService users,
+                                  ProfileService profiles) {
+        this(repository, applications, materials, workflowProvider.getIfAvailable(), users, profiles,
+            Clock.systemUTC());
+    }
+
+    EnterpriseAdminService(EnterpriseAdminRepository repository, EnterpriseApplicationRepository applications,
+                           ProfileMaterialPort materials, WorkflowService workflow, UserService users,
+                           ProfileService profiles) {
         this(repository, applications, materials, workflow, users, profiles, Clock.systemUTC());
     }
 
@@ -61,6 +73,26 @@ public class EnterpriseAdminService {
 
     public PageResult<Summary> page(Query query) {
         return repository.page(query == null ? new Query(null, null, null, 1, 20) : query);
+    }
+
+    public List<AccountCandidate> eligibleUsers(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        List<UserDTO> candidates = users.searchActiveUsers(keyword.strip(), 50).stream()
+            .filter(user -> user.getUserId() != null && "0".equals(user.getStatus()))
+            .toList();
+        Map<Long, org.dromara.profile.api.domain.ProfileSummary> summaries = profiles.findByUserIds(
+            candidates.stream().map(UserDTO::getUserId).toList());
+        return candidates.stream()
+            .filter(user -> {
+                var summary = summaries.get(user.getUserId());
+                return summary != null && summary.person() != null;
+            })
+            .filter(user -> !repository.hasEffectiveBinding(user.getUserId()))
+            .limit(20)
+            .map(user -> new AccountCandidate(user.getUserId(), user.getUserName(), user.getNickName()))
+            .toList();
     }
 
     public Detail detail(long profileId) {
@@ -97,6 +129,9 @@ public class EnterpriseAdminService {
         String decision = upper(command == null ? null : command.decision());
         if (!DECISIONS.contains(decision)) {
             throw failure("ENTERPRISE_ADMIN_DECISION_INVALID");
+        }
+        if (workflow == null) {
+            throw failure("ENTERPRISE_ADMIN_WORKFLOW_UNAVAILABLE");
         }
         Instant now = clock.instant();
         var state = repository.beginDecision(positive(applicationId, "ENTERPRISE_APPLICATION_INVALID"), decision,

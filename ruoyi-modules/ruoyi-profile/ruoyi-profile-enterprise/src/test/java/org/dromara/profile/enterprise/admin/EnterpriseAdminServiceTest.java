@@ -2,10 +2,14 @@ package org.dromara.profile.enterprise.admin;
 
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.api.ProfileService;
+import org.dromara.profile.api.domain.ProfileBindingSummary;
+import org.dromara.profile.api.domain.ProfileSummary;
+import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.enterprise.application.EnterpriseApplicationRepository;
 import org.dromara.profile.enterprise.application.EnterprisePublication;
 import org.dromara.profile.enterprise.application.EnterpriseSubmission;
 import org.dromara.system.api.UserService;
+import org.dromara.system.api.domain.UserDTO;
 import org.dromara.workflow.api.WorkflowService;
 import org.dromara.workflow.api.domain.WorkflowTerminationResult;
 import org.junit.jupiter.api.Test;
@@ -14,8 +18,10 @@ import org.junit.jupiter.api.Tag;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 @Tag("dev")
@@ -66,5 +72,42 @@ class EnterpriseAdminServiceTest {
             .isInstanceOf(EnterpriseAdminException.class).hasMessage("ENTERPRISE_ADMIN_WORKFLOW_TERMINATION_FAILED");
         verify(applications, never()).publishApproved(anyLong(), anyInt(), any());
         verify(repository, never()).finalizeApproved(any(), anyLong(), anyLong(), anyLong(), anyString(), any());
+    }
+
+    @Test
+    void eligibleUsersRequireAnActivePersonProfileAndNoEnterpriseBinding() {
+        UserDTO eligible = user(201L, "owner", "Owner");
+        UserDTO unverified = user(202L, "guest", "Guest");
+        UserDTO occupied = user(203L, "busy", "Busy");
+        when(users.searchActiveUsers("o", 50)).thenReturn(java.util.List.of(eligible, unverified, occupied));
+        var verified = new ProfileBindingSummary(301L, ProfileType.PERSON, Instant.parse("2026-09-01T00:00:00Z"));
+        when(profiles.findByUserIds(java.util.List.of(201L, 202L, 203L))).thenReturn(Map.of(
+            201L, new ProfileSummary(201L, verified, null),
+            202L, ProfileSummary.unverified(202L),
+            203L, new ProfileSummary(203L, verified, null)));
+        when(repository.hasEffectiveBinding(203L)).thenReturn(true);
+
+        assertThat(service.eligibleUsers(" o ")).containsExactly(
+            new EnterpriseAdminContracts.AccountCandidate(201L, "owner", "Owner"));
+    }
+
+    @Test
+    void missingWorkflowFailsClosedBeforeAnyAdminDecisionStateIsWritten() {
+        EnterpriseAdminService core = new EnterpriseAdminService(repository, applications, materials, null, users,
+            profiles, Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC));
+
+        assertThatThrownBy(() -> core.decide(99L, 11L,
+            new EnterpriseAdminContracts.DecisionCommand("REJECTED", "checked")))
+            .isInstanceOf(EnterpriseAdminException.class).hasMessage("ENTERPRISE_ADMIN_WORKFLOW_UNAVAILABLE");
+        verify(repository, never()).beginDecision(anyLong(), anyString(), anyLong(), anyString(), any());
+    }
+
+    private UserDTO user(long id, String userName, String nickName) {
+        UserDTO user = new UserDTO();
+        user.setUserId(id);
+        user.setUserName(userName);
+        user.setNickName(nickName);
+        user.setStatus("0");
+        return user;
     }
 }

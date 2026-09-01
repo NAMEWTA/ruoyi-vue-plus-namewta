@@ -5,6 +5,7 @@ import org.dromara.profile.person.application.PersonApplicationRepository;
 import org.dromara.profile.person.application.PersonPublication;
 import org.dromara.profile.person.application.PersonSubmission;
 import org.dromara.system.api.UserService;
+import org.dromara.system.api.domain.UserDTO;
 import org.dromara.workflow.api.WorkflowService;
 import org.dromara.workflow.api.domain.WorkflowTerminationResult;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 @Tag("dev")
@@ -64,5 +66,36 @@ class PersonAdminServiceTest {
             .isInstanceOf(PersonAdminException.class).hasMessage("PERSON_ADMIN_WORKFLOW_TERMINATION_FAILED");
         verify(applications, never()).publishApproved(anyLong(), anyInt(), any());
         verify(repository, never()).finalizeApproved(any(), anyLong(), anyLong(), anyLong(), anyString(), any());
+    }
+
+    @Test
+    void eligibleUsersUsesTheClosedSystemSeamAndExcludesExistingPersonBindings() {
+        UserDTO available = user(101L, "alice", "Alice");
+        UserDTO bound = user(102L, "bob", "Bob");
+        when(users.searchActiveUsers("ali", 50)).thenReturn(java.util.List.of(available, bound));
+        when(repository.hasEffectiveBinding(102L)).thenReturn(true);
+
+        assertThat(service.eligibleUsers(" ali ")).containsExactly(
+            new PersonAdminContracts.AccountCandidate(101L, "alice", "Alice"));
+    }
+
+    @Test
+    void missingWorkflowFailsClosedBeforeAnyAdminDecisionStateIsWritten() {
+        PersonAdminService core = new PersonAdminService(repository, applications, materials, null, users,
+            Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC));
+
+        assertThatThrownBy(() -> core.decide(99L, 11L,
+            new PersonAdminContracts.DecisionCommand("APPROVED", "checked")))
+            .isInstanceOf(PersonAdminException.class).hasMessage("PERSON_ADMIN_WORKFLOW_UNAVAILABLE");
+        verify(repository, never()).beginDecision(anyLong(), anyString(), anyLong(), anyString(), any());
+    }
+
+    private UserDTO user(long id, String userName, String nickName) {
+        UserDTO user = new UserDTO();
+        user.setUserId(id);
+        user.setUserName(userName);
+        user.setNickName(nickName);
+        user.setStatus("0");
+        return user;
     }
 }

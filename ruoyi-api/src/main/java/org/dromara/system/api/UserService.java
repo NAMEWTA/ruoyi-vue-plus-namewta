@@ -14,6 +14,17 @@ import java.util.Map;
 public interface UserService {
 
     /**
+     * Search active users for closed business candidate selection.
+     *
+     * @param keyword username, nickname, or phone keyword
+     * @param limit maximum number of candidates
+     * @return active user candidates
+     */
+    default List<UserDTO> searchActiveUsers(String keyword, int limit) {
+        return List.of();
+    }
+
+    /**
      * 通过用户ID查询用户账户
      *
      * @param userId 用户ID

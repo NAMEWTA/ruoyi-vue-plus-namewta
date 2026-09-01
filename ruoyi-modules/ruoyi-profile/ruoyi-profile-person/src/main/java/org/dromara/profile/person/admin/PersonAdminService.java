@@ -16,6 +16,8 @@ import org.dromara.profile.person.application.PersonSubmission;
 import org.dromara.system.api.UserService;
 import org.dromara.system.api.domain.UserDTO;
 import org.dromara.workflow.api.WorkflowService;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -39,8 +41,15 @@ public class PersonAdminService {
     private final UserService users;
     private final Clock clock;
 
+    @Autowired
     public PersonAdminService(PersonAdminRepository repository, PersonApplicationRepository applications,
-                              ProfileMaterialPort materials, WorkflowService workflow, UserService users) {
+                              ProfileMaterialPort materials, ObjectProvider<WorkflowService> workflowProvider,
+                              UserService users) {
+        this(repository, applications, materials, workflowProvider.getIfAvailable(), users, Clock.systemUTC());
+    }
+
+    PersonAdminService(PersonAdminRepository repository, PersonApplicationRepository applications,
+                       ProfileMaterialPort materials, WorkflowService workflow, UserService users) {
         this(repository, applications, materials, workflow, users, Clock.systemUTC());
     }
 
@@ -56,6 +65,18 @@ public class PersonAdminService {
 
     public PageResult<Summary> page(Query query) {
         return repository.page(query == null ? new Query(null, null, null, 1, 20) : query);
+    }
+
+    public List<AccountCandidate> eligibleUsers(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        return users.searchActiveUsers(keyword.strip(), 50).stream()
+            .filter(user -> user.getUserId() != null && "0".equals(user.getStatus()))
+            .filter(user -> !repository.hasEffectiveBinding(user.getUserId()))
+            .limit(20)
+            .map(user -> new AccountCandidate(user.getUserId(), user.getUserName(), user.getNickName()))
+            .toList();
     }
 
     public Detail detail(long profileId) {
@@ -92,6 +113,9 @@ public class PersonAdminService {
         String decision = upper(command == null ? null : command.decision());
         if (!DECISIONS.contains(decision)) {
             throw failure("PERSON_ADMIN_DECISION_INVALID");
+        }
+        if (workflow == null) {
+            throw failure("PERSON_ADMIN_WORKFLOW_UNAVAILABLE");
         }
         Instant now = clock.instant();
         var state = repository.beginDecision(positive(applicationId, "PERSON_APPLICATION_INVALID"), decision,

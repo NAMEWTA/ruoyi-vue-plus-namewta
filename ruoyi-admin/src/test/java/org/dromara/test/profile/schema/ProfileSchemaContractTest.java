@@ -118,6 +118,9 @@ class ProfileSchemaContractTest {
             "ENTERPRISE_LEGAL_REPRESENTATIVE_DOCUMENT", "ENTERPRISE_AUTHORIZATION_LETTER"
         ).contains("system_required", "PERSON", "ENTERPRISE", "COMMON")
             .contains("profile.person.flowCode", "profile.enterprise.flowCode")
+            .contains("profile_person_verification", "profile_enterprise_verification")
+            .contains("profile/person/review", "profile/enterprise/review")
+            .contains("insert into flow_definition", "insert into flow_node", "insert into flow_skip")
             .contains("profile.person.provider.default", "profile.enterprise.provider.default", "manual")
             .contains("profile_subject_status", "profile_application_status", "profile_binding_status");
 
