@@ -33,6 +33,7 @@
         <anyline.version>8.7.3-20260306</anyline.version>
         <easy-es.version>3.0.2</easy-es.version>
         <elasticsearch-client.version>7.17.28</elasticsearch-client.version>
+        <nacos-client.version>2.5.1</nacos-client.version>
 
         <!-- 安全认证与加密相关依赖版本 -->
         <satoken.version>1.45.0</satoken.version>
@@ -371,6 +372,13 @@
                 <groupId>org.dromara.mica-mqtt</groupId>
                 <artifactId>mica-mqtt-client-spring-boot-starter</artifactId>
                 <version>${mica-mqtt.version}</version>
+            </dependency>
+
+            <!-- Nacos 配置客户端 -->
+            <dependency>
+                <groupId>com.alibaba.nacos</groupId>
+                <artifactId>nacos-client</artifactId>
+                <version>${nacos-client.version}</version>
             </dependency>
 
             <!-- Easy-Es 搜索引擎 -->

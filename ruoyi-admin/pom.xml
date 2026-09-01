@@ -68,6 +68,12 @@
             <artifactId>ruoyi-common-notify</artifactId>
         </dependency>
 
+        <!-- 可选 Nacos 动态配置 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-nacos</artifactId>
+        </dependency>
+
         <!-- mcp模块 -->
         <dependency>
             <groupId>org.dromara</groupId>

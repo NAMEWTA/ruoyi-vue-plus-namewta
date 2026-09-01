@@ -25,6 +25,21 @@ captcha:
   # 字符验证码长度
   charLength: 4
 
+# 可选 Nacos 稀疏配置覆盖。关闭时不创建客户端或监听器。
+nacos:
+  config:
+    enabled: ${NACOS_CONFIG_ENABLED:false}
+    server-addr: ${NACOS_CONFIG_SERVER_ADDR:127.0.0.1:8848}
+    username: ${NACOS_CONFIG_USERNAME:}
+    password: ${NACOS_CONFIG_PASSWORD:}
+    group: DEFAULT_GROUP
+    data-id: ruoyi-namewta.yml
+    timeout-ms: ${NACOS_CONFIG_TIMEOUT_MS:3000}
+    namespaces:
+      local: ${NACOS_CONFIG_NAMESPACE_LOCAL:local}
+      dev: ${NACOS_CONFIG_NAMESPACE_DEV:dev}
+      prod: ${NACOS_CONFIG_NAMESPACE_PROD:prod}
+
 # OpenAPI 机器调用网关。默认关闭；KEK 只能由部署密钥系统注入。
 openapi:
   enabled: ${OPENAPI_ENABLED:false}

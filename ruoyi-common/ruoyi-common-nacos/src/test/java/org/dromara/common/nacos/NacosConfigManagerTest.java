@@ -1,0 +1,100 @@
+package org.dromara.common.nacos;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.mock.env.MockEnvironment;
+
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@Tag("dev")
+class NacosConfigManagerTest {
+
+    @Test
+    void appliesSparseYamlWithoutReplacingLocalValues() {
+        MockEnvironment environment = new MockEnvironment()
+            .withProperty("feature.local-only", "local")
+            .withProperty("feature.mode", "local");
+        NacosConfigManager manager = manager(environment);
+
+        assertThat(manager.apply("feature:\n  mode: remote\n", NacosUpdateOrigin.LISTENER)).isTrue();
+
+        assertThat(environment.getProperty("feature.mode")).isEqualTo("remote");
+        assertThat(environment.getProperty("feature.local-only")).isEqualTo("local");
+    }
+
+    @Test
+    void rejectsProtectedKeysAndKeepsThePreviousVersion() {
+        MockEnvironment environment = new MockEnvironment().withProperty("feature.mode", "local");
+        NacosConfigManager manager = manager(environment);
+        manager.apply("feature.mode: accepted", NacosUpdateOrigin.LISTENER);
+        String digest = manager.state().digest();
+
+        assertThat(manager.apply("feature.mode: rejected\nnacos.config.enabled: false", NacosUpdateOrigin.LISTENER))
+            .isFalse();
+
+        assertThat(environment.getProperty("feature.mode")).isEqualTo("accepted");
+        assertThat(manager.state().digest()).isEqualTo(digest);
+        assertThat(manager.state().errorCode()).isEqualTo("PROTECTED_KEY");
+    }
+
+    @Test
+    void participantFailureRejectsTheWholeCandidate() {
+        MockEnvironment environment = new MockEnvironment().withProperty("sample.count", "3");
+        NacosConfigManager manager = manager(environment);
+        manager.registerParticipants(Set.of(new IntegerParticipant()));
+
+        assertThat(manager.apply("sample.count: invalid", NacosUpdateOrigin.LISTENER)).isFalse();
+        assertThat(environment.getProperty("sample.count")).isEqualTo("3");
+        assertThat(manager.state().errorCode()).isEqualTo("PARTICIPANT_REJECTED");
+    }
+
+    @Test
+    void rejectsKnownInvalidScalarBeforeParticipantsExist() {
+        MockEnvironment environment = new MockEnvironment().withProperty("captcha.numberLength", "1");
+        NacosConfigManager manager = manager(environment);
+
+        assertThat(manager.apply("captcha.numberLength: broken", NacosUpdateOrigin.STARTUP)).isFalse();
+
+        assertThat(environment.getProperty("captcha.numberLength")).isEqualTo("1");
+        assertThat(manager.state().errorCode()).isEqualTo("KNOWN_TYPE_INVALID");
+    }
+
+    @Test
+    void emptyRemoteDocumentRemovesTheOverlay() {
+        MockEnvironment environment = new MockEnvironment().withProperty("feature.mode", "local");
+        NacosConfigManager manager = manager(environment);
+        manager.apply("feature.mode: remote", NacosUpdateOrigin.LISTENER);
+
+        assertThat(manager.apply("", NacosUpdateOrigin.LISTENER)).isTrue();
+
+        assertThat(environment.getProperty("feature.mode")).isEqualTo("local");
+        assertThat(manager.state().digest()).isNull();
+    }
+
+    private static NacosConfigManager manager(MockEnvironment environment) {
+        NacosConfigManager manager = new NacosConfigManager(environment, NacosConfigSettings.from(environment));
+        NacosPropertySourceRegistrar.register(environment, manager.propertySource());
+        return manager;
+    }
+
+    private static final class IntegerParticipant implements NacosConfigParticipant<Integer> {
+
+        @Override
+        public String id() {
+            return "sample";
+        }
+
+        @Override
+        public Set<String> prefixes() {
+            return Set.of("sample.");
+        }
+
+        @Override
+        public Integer prepare(Binder binder) {
+            return binder.bindOrCreate("sample.count", Integer.class);
+        }
+    }
+}
