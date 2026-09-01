@@ -3,25 +3,21 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <artifactId>ruoyi-vue-plus</artifactId>
         <groupId>org.dromara</groupId>
+        <artifactId>ruoyi-modules</artifactId>
         <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>ruoyi-modules</artifactId>
+
+    <artifactId>ruoyi-profile</artifactId>
     <packaging>pom</packaging>
 
-    <description>
-        ruoyi-modules 业务模块
-    </description>
+    <description>账户个人与企业档案聚合模块</description>
 
     <modules>
-        <module>ruoyi-demo</module>
-        <module>ruoyi-job</module>
-        <module>ruoyi-system</module>
-        <module>ruoyi-workflow</module>
-        <module>ruoyi-ai</module>
-        <module>ruoyi-profile</module>
+        <module>ruoyi-profile-bom</module>
+        <module>ruoyi-profile-person</module>
+        <module>ruoyi-profile-enterprise</module>
     </modules>
-
 </project>

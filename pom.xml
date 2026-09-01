@@ -165,6 +165,15 @@
                 <scope>import</scope>
             </dependency>
 
+            <!-- 档案模块的依赖配置 -->
+            <dependency>
+                <groupId>org.dromara</groupId>
+                <artifactId>ruoyi-profile-bom</artifactId>
+                <version>${revision}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- 接口文档 -->
             <dependency>
                 <groupId>org.springdoc</groupId>
