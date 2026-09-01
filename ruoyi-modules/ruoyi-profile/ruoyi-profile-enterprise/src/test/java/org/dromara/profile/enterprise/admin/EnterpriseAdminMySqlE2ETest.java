@@ -64,7 +64,7 @@ class EnterpriseAdminMySqlE2ETest {
     void persistsAdminLifecycleQualifiedOwnerDecisionFenceAndRollback() throws Exception {
         try (SqlSession session = sessionFactory().openSession(false)) {
             cleanup(session);
-            session.commit();
+            session.commit(true);
 
             EnterpriseAdminRepository repository = new MybatisEnterpriseAdminRepository(
                 session.getMapper(EnterpriseAdminMapper.class), JsonMapper.builder().build());
@@ -88,7 +88,7 @@ class EnterpriseAdminMySqlE2ETest {
             var identity = identity("管理直建企业", "软件开发");
             var created = service.create(OPERATOR, new EnterpriseAdminContracts.CreateCommand(identity, USER,
                 "e2e admin create", List.of()));
-            session.commit();
+            session.commit(true);
             assertThat(created.status()).isEqualTo("ACTIVE");
             assertThat(scalar(session, "select source_type from profile_enterprise_version where enterprise_version_id="
                 + created.versionId())).isEqualTo("ADMIN_CREATE");
@@ -98,7 +98,7 @@ class EnterpriseAdminMySqlE2ETest {
             var revised = service.revise(OPERATOR, created.profileId(),
                 new EnterpriseAdminContracts.ReviseCommand(identity("管理修订企业", "软件开发与技术服务"),
                     "e2e admin override", 1));
-            session.commit();
+            session.commit(true);
             assertThat(scalar(session, "select count(*) from profile_enterprise_version where enterprise_profile_id="
                 + created.profileId())).isEqualTo("2");
             assertThat(scalar(session, "select count(*) from profile_enterprise_version where enterprise_profile_id="
@@ -113,7 +113,7 @@ class EnterpriseAdminMySqlE2ETest {
                 new EnterpriseAdminContracts.BindingCommand("UNBIND", "e2e unbind", resumed.version()));
             var assigned = service.assign(OPERATOR, created.profileId(),
                 new EnterpriseAdminContracts.AssignCommand(USER, "e2e assign"));
-            session.commit();
+            session.commit(true);
             assertThat(scalar(session, "select count(*) from profile_enterprise_binding_event where enterprise_profile_id="
                 + created.profileId())).isEqualTo("5");
 
@@ -124,7 +124,7 @@ class EnterpriseAdminMySqlE2ETest {
                 new EnterpriseAdminContracts.AssignCommand(USER, "must have person profile")))
                 .isInstanceOf(EnterpriseAdminException.class)
                 .hasMessage("ENTERPRISE_BINDING_TARGET_INELIGIBLE");
-            session.rollback();
+            session.rollback(true);
 
             MockMvc mvc = MockMvcBuilders.standaloneSetup(new EnterpriseAdminController(service))
                 .setControllerAdvice(new EnterpriseAdminExceptionHandler()).build();
@@ -138,7 +138,7 @@ class EnterpriseAdminMySqlE2ETest {
 
             var revoked = service.revoke(OPERATOR, created.profileId(),
                 new EnterpriseAdminContracts.RevokeCommand("e2e revoke", revised.version()));
-            session.commit();
+            session.commit(true);
             assertThat(revoked.status()).isEqualTo("REVOKED");
             assertThat(service.page(new EnterpriseAdminContracts.Query(null, null, null, 1, 20)).getTotal())
                 .isZero();
@@ -150,10 +150,10 @@ class EnterpriseAdminMySqlE2ETest {
                 .isInstanceOf(EnterpriseAdminException.class).hasMessage("ENTERPRISE_PROFILE_REVOKED_READ_ONLY");
 
             seedWaiting(session, REJECT_APPLICATION, REJECT_SUBMISSION, "91310000E2EREJ9901");
-            session.commit();
+            session.commit(true);
             var rejection = service.decide(OPERATOR, REJECT_APPLICATION,
                 new EnterpriseAdminContracts.DecisionCommand("REJECTED", "e2e reject"));
-            session.commit();
+            session.commit(true);
             assertThat(rejection.status()).isEqualTo("REJECTED");
             assertThat(scalar(session, "select concat(status,':',decision_version,':',decision_source)"
                 + " from profile_enterprise_application where enterprise_application_id=" + REJECT_APPLICATION))
@@ -162,19 +162,19 @@ class EnterpriseAdminMySqlE2ETest {
                 + " and application_id=" + REJECT_APPLICATION)).isEqualTo("FINAL");
 
             seedWaiting(session, FAIL_APPLICATION, FAIL_SUBMISSION, "91310000E2EFAI9901");
-            session.commit();
+            session.commit(true);
             assertThatThrownBy(() -> service.decide(OPERATOR, FAIL_APPLICATION,
                 new EnterpriseAdminContracts.DecisionCommand("REJECTED", "e2e fail")))
                 .isInstanceOf(EnterpriseAdminException.class)
                 .hasMessage("ENTERPRISE_ADMIN_WORKFLOW_TERMINATION_FAILED");
-            session.rollback();
+            session.rollback(true);
             assertThat(scalar(session, "select concat(status,':',decision_version) from profile_enterprise_application"
                 + " where enterprise_application_id=" + FAIL_APPLICATION)).isEqualTo("WAITING:0");
             assertThat(scalar(session, "select count(*) from profile_decision_record where profile_type='ENTERPRISE'"
                 + " and application_id=" + FAIL_APPLICATION)).isEqualTo("0");
 
             cleanup(session);
-            session.commit();
+            session.commit(true);
             verify(workflow).terminateInstance(Long.toString(REJECT_APPLICATION), "e2e reject");
         }
     }
