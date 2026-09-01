@@ -16,19 +16,29 @@ import java.util.List;
 public interface OssService {
 
     /**
-     * 通过ossId查询对应的url
+     * 通过 ossId 查询对应的 URL。
      *
-     * @param ossIds ossId串逗号分隔
-     * @return url串逗号分隔
+     * <p>兼容接口，不建议新代码优先使用。该返回值会丢失 PUBLIC/PRIVATE 访问类型和签名到期时间；
+     * 新接口应在完成业务授权后逐个调用 {@link #resolveAccessUrl(Long)}。</p>
+     *
+     * @param ossIds ossId 串，逗号分隔
+     * @return URL 串，逗号分隔
+     * @deprecated 仅为旧调用方和 OSS 翻译器保留；新代码使用 {@link #resolveAccessUrl(Long)}
      */
+    @Deprecated(since = "6.0.0", forRemoval = false)
     String selectUrlByIds(String ossIds);
 
     /**
-     * 通过ossId查询列表
+     * 通过 ossId 查询包含访问 URL 的兼容 DTO 列表。
      *
-     * @param ossIds ossId串逗号分隔
+     * <p>兼容接口，不建议新代码优先使用。DTO 中的私有 URL 可能短时失效，且该合同不返回到期时间；
+     * 新接口应从业务 owner 获取已授权对象，再调用 {@link #resolveAccessUrl(Long)}。</p>
+     *
+     * @param ossIds ossId 串，逗号分隔
      * @return 列表
+     * @deprecated 仅为旧调用方和 OSS 翻译器保留；新代码使用 {@link #resolveAccessUrl(Long)}
      */
+    @Deprecated(since = "6.0.0", forRemoval = false)
     List<OssDTO> selectByIds(String ossIds);
 
     /**

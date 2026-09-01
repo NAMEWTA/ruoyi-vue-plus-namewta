@@ -91,11 +91,16 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
     }
 
     /**
-     * 根据一组 ossIds 获取对应文件的 URL 列表
+     * 根据一组 ossIds 获取对应文件的 URL 列表。
+     *
+     * <p>仅供旧调用方和 OSS 翻译器兼容，新接口不应优先使用；
+     * 应在业务授权后调用 {@link #resolveAccessUrl(Long)} 保留访问类型和到期时间。</p>
      *
      * @param ossIds 以逗号分隔的 ossId 字符串
      * @return 以逗号分隔的文件 URL 字符串
+     * @deprecated 使用 {@link #resolveAccessUrl(Long)}
      */
+    @Deprecated(since = "6.0.0", forRemoval = false)
     @Override
     public String selectUrlByIds(String ossIds) {
         List<Long> ids = StringUtils.splitTo(ossIds, Convert::toLong);
@@ -110,9 +115,13 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
     /**
      * 根据逗号分隔的文件主键列表查询文件传输对象集合。
      *
+     * <p>仅供旧调用方和 OSS 翻译器兼容，新接口不应优先使用；DTO 无法表达私有 URL 的到期时间。</p>
+     *
      * @param ossIds 逗号分隔的文件主键字符串
      * @return 文件传输对象列表
+     * @deprecated 使用 {@link #resolveAccessUrl(Long)}
      */
+    @Deprecated(since = "6.0.0", forRemoval = false)
     @Override
     public List<OssDTO> selectByIds(String ossIds) {
         List<Long> ids = StringUtils.splitTo(ossIds, Convert::toLong);

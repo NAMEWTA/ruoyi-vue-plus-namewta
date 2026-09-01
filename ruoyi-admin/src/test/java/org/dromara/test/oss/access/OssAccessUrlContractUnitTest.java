@@ -34,6 +34,15 @@ class OssAccessUrlContractUnitTest {
     }
 
     @Test
+    void marksLegacyBulkUrlMethodsAsDeprecatedCompatibilityOnly() throws Exception {
+        Method selectUrlByIds = OssService.class.getMethod("selectUrlByIds", String.class);
+        Method selectByIds = OssService.class.getMethod("selectByIds", String.class);
+
+        assertCompatibilityDeprecation(selectUrlByIds);
+        assertCompatibilityDeprecation(selectByIds);
+    }
+
+    @Test
     void managementDownloadEndpointUsesResolverAndRemainsAuthorized() throws Exception {
         Method endpoint = SysOssController.class.getDeclaredMethod("downloadUrl", Long.class);
 
@@ -45,5 +54,12 @@ class OssAccessUrlContractUnitTest {
             .filter(method -> method.getAnnotation(GetMapping.class) != null)
             .map(method -> String.join(",", method.getAnnotation(GetMapping.class).value())))
             .noneMatch(path -> path.contains("anonymous") || path.contains("public/{ossId}"));
+    }
+
+    private void assertCompatibilityDeprecation(Method method) {
+        Deprecated deprecated = method.getAnnotation(Deprecated.class);
+        assertThat(deprecated).as(method.getName()).isNotNull();
+        assertThat(deprecated.since()).isEqualTo("6.0.0");
+        assertThat(deprecated.forRemoval()).isFalse();
     }
 }
