@@ -2,12 +2,12 @@ package org.dromara.profile.person.admin;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import org.dromara.common.core.domain.PageResult;
-import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.profile.person.admin.PersonAdminContracts.*;
 import org.dromara.profile.person.admin.PersonAdminRows.*;
 import org.dromara.profile.person.application.PersonIdentityFields;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,9 +17,11 @@ import java.util.Locale;
 public class MybatisPersonAdminRepository implements PersonAdminRepository {
 
     private final PersonAdminMapper mapper;
+    private final JsonMapper jsonMapper;
 
-    public MybatisPersonAdminRepository(PersonAdminMapper mapper) {
+    public MybatisPersonAdminRepository(PersonAdminMapper mapper, JsonMapper jsonMapper) {
         this.mapper = mapper;
+        this.jsonMapper = jsonMapper;
     }
 
     @Override
@@ -249,7 +251,7 @@ public class MybatisPersonAdminRepository implements PersonAdminRepository {
                               long operatorId, String reason, Instant now) {
         changed(mapper.insertSource(sourceId, profileId, sourceType, operatorId, reason, fields.fullName(),
             fields.documentTypeCode(), fields.documentNumber(), fields.identityKey(), fields.gender(),
-            fields.birthDate(), fields.validFrom(), fields.validUntil(), JsonUtils.toJsonString(fields), now),
+            fields.birthDate(), fields.validFrom(), fields.validUntil(), jsonMapper.writeValueAsString(fields), now),
             "PERSON_ADMIN_SOURCE_CONFLICT");
     }
 

@@ -2,12 +2,12 @@ package org.dromara.profile.enterprise.admin;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import org.dromara.common.core.domain.PageResult;
-import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.profile.enterprise.admin.EnterpriseAdminContracts.*;
 import org.dromara.profile.enterprise.admin.EnterpriseAdminRows.*;
 import org.dromara.profile.enterprise.application.EnterpriseIdentityFields;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,9 +17,11 @@ import java.util.Locale;
 public class MybatisEnterpriseAdminRepository implements EnterpriseAdminRepository {
 
     private final EnterpriseAdminMapper mapper;
+    private final JsonMapper jsonMapper;
 
-    public MybatisEnterpriseAdminRepository(EnterpriseAdminMapper mapper) {
+    public MybatisEnterpriseAdminRepository(EnterpriseAdminMapper mapper, JsonMapper jsonMapper) {
         this.mapper = mapper;
+        this.jsonMapper = jsonMapper;
     }
 
     @Override
@@ -265,7 +267,7 @@ public class MybatisEnterpriseAdminRepository implements EnterpriseAdminReposito
             fields.establishedDate(), fields.businessTermFrom(), fields.businessTermUntil(),
             fields.registeredAddress(), fields.businessScope(), fields.contactName(), fields.contactPhone(),
             fields.email(), fields.registeredCapital(), fields.industryCode(), fields.website(),
-            JsonUtils.toJsonString(fields), now),
+            jsonMapper.writeValueAsString(fields), now),
             "ENTERPRISE_ADMIN_SOURCE_CONFLICT");
     }
 

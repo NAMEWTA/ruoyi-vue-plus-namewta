@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
@@ -66,7 +67,7 @@ class EnterpriseAdminMySqlE2ETest {
             session.commit();
 
             EnterpriseAdminRepository repository = new MybatisEnterpriseAdminRepository(
-                session.getMapper(EnterpriseAdminMapper.class));
+                session.getMapper(EnterpriseAdminMapper.class), JsonMapper.builder().build());
             EnterpriseApplicationRepository applications = mock(EnterpriseApplicationRepository.class);
             when(applications.findDocumentType("CN_RESIDENT_ID"))
                 .thenReturn(Optional.of(new DocumentTypeRule("CN_RESIDENT_ID", "^[0-9]{17}[0-9X]$", true)));
