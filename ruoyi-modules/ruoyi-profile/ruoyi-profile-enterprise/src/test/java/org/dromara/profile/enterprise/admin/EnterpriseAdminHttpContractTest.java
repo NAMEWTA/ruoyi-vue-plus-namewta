@@ -29,6 +29,7 @@ class EnterpriseAdminHttpContractTest {
         assertPermission("create", PostMapping.class, "profile:enterprise:override");
         assertPermission("revise", PostMapping.class, "profile:enterprise:override");
         assertPermission("assign", PostMapping.class, "profile:enterprise:override");
+        assertThat(method("assign").getAnnotation(Log.class).title()).isEqualTo("管理员指定企业档案负责人");
         assertPermission("manageBinding", PostMapping.class, "profile:enterprise:manage");
         assertPermission("revoke", PostMapping.class, "profile:enterprise:override");
 
@@ -45,9 +46,13 @@ class EnterpriseAdminHttpContractTest {
     }
 
     private void assertPermission(String methodName, Class<?> mappingType, String permission) {
-        Method method = Arrays.stream(EnterpriseAdminController.class.getDeclaredMethods())
-            .filter(candidate -> candidate.getName().equals(methodName)).findFirst().orElseThrow();
+        Method method = method(methodName);
         assertThat(method.isAnnotationPresent((Class) mappingType)).isTrue();
         assertThat(method.getAnnotation(SaCheckPermission.class).value()).containsExactly(permission);
+    }
+
+    private Method method(String methodName) {
+        return Arrays.stream(EnterpriseAdminController.class.getDeclaredMethods())
+            .filter(candidate -> candidate.getName().equals(methodName)).findFirst().orElseThrow();
     }
 }
