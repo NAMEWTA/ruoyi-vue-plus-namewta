@@ -61,6 +61,16 @@ public interface OssService {
     OssLifecycleSnapshot snapshot(Long ossId);
 
     /**
+     * 查询对象上传完成后由 OSS 校验并持久化的权威元数据。
+     *
+     * <p>该方法不返回访问 URL，也不替代业务 owner 的访问授权。旧的第三方实现可以继续加载，
+     * 但消费元数据前必须提供覆盖实现。</p>
+     */
+    default OssObjectMetadata objectMetadata(Long ossId) {
+        throw new UnsupportedOperationException("OSS object metadata is not supported by this implementation");
+    }
+
+    /**
      * 在调用方完成业务权限校验后解析对象访问地址。
      */
     OssAccessUrl resolveAccessUrl(Long ossId);
@@ -86,6 +96,10 @@ public interface OssService {
         public OssLifecycleSnapshot {
             references = references == null ? List.of() : List.copyOf(references);
         }
+    }
+
+    record OssObjectMetadata(Long ossId, String objectKey, String fileName, String fileSuffix,
+                             long fileSize, String contentType, Long uploaderUserId) {
     }
 
     record OssDownloadUrl(String url, Instant expiresAt, String fileName) {
