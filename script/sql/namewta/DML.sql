@@ -569,7 +569,7 @@ where not exists (select 1 from sys_menu where menu_id = 2094360621561675790);
 -- 执行前置：系统管理/系统监控父菜单存在；目标固定 ID 只允许缺失、历史态或最终态
 -- 适用范围：全新初始化、当前混合升级环境或已完成状态重放
 -- 重复执行：是
--- 恢复方式：从执行前备份恢复目标 sys_menu/sys_role_menu 行；不恢复生成器运行能力
+-- 恢复方式：本次无迁移前备份；失败时保持 OpenAPI disabled，修正冲突后前向重放
 -- ============================================================================
 
 drop temporary table if exists namewta_admin_runtime_reconcile_dml_001_preflight;
