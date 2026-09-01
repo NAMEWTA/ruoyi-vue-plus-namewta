@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.dromara.common.core.constant.HttpStatus;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.log.annotation.Log;
@@ -44,7 +45,7 @@ public class SysOpenApiCredentialController {
     @SaCheckPermission("system:openApi:self")
     @GetMapping("/self/credential")
     public R<OpenApiCredentialSummary> getSelfCredential() {
-        return R.ok(credentialService.get(LoginHelper.getUserId()));
+        return R.ok(requiredCredential(credentialService.get(LoginHelper.getUserId())));
     }
 
     @SaCheckPermission("system:openApi:self")
@@ -104,7 +105,7 @@ public class SysOpenApiCredentialController {
     @GetMapping("/users/{userId}/credential")
     public R<OpenApiCredentialSummary> getUserCredential(@PathVariable Long userId) {
         requireSuperAdmin();
-        return R.ok(credentialService.get(userId));
+        return R.ok(requiredCredential(credentialService.get(userId)));
     }
 
     @SaCheckPermission("system:openApi:add")
@@ -161,5 +162,12 @@ public class SysOpenApiCredentialController {
         if (!LoginHelper.isSuperAdmin()) {
             throw new ServiceException("OpenAPI credential management is unavailable");
         }
+    }
+
+    private static OpenApiCredentialSummary requiredCredential(OpenApiCredentialSummary credential) {
+        if (credential == null) {
+            throw new ServiceException("OpenAPI credential is unavailable", HttpStatus.NOT_FOUND);
+        }
+        return credential;
     }
 }

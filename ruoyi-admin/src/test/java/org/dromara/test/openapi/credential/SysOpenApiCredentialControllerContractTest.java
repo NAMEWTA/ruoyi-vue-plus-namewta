@@ -2,6 +2,7 @@ package org.dromara.test.openapi.credential;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import jakarta.servlet.http.HttpServletResponse;
+import org.dromara.common.core.constant.HttpStatus;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
@@ -36,6 +37,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @Tag("dev")
 class SysOpenApiCredentialControllerContractTest {
+
+    @Test
+    void missingCredentialUsesNotFoundContract() {
+        SystemOpenApiCredentialService service = mock(SystemOpenApiCredentialService.class);
+        SysOpenApiCredentialController controller = new SysOpenApiCredentialController(service);
+        when(service.get(41L)).thenReturn(null);
+
+        try (MockedStatic<LoginHelper> login = mockStatic(LoginHelper.class)) {
+            login.when(LoginHelper::getUserId).thenReturn(41L);
+            assertThatThrownBy(controller::getSelfCredential)
+                .isInstanceOfSatisfying(ServiceException.class,
+                    exception -> assertThat(exception.getCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        }
+    }
 
     @Test
     void selfOwnerComesOnlyFromLoginContextAndAdminRechecksSuperAdmin() {
