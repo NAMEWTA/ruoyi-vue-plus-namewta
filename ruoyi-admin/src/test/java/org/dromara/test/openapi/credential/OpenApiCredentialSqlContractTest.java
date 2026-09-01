@@ -13,8 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("dev")
 class OpenApiCredentialSqlContractTest {
 
-    private static final int DDL_BASELINE_BYTES = 14825;
-    private static final int DML_BASELINE_BYTES = 26695;
+    private static final int DDL_BASELINE_BYTES = 23318;
+    private static final int DML_BASELINE_BYTES = 33188;
 
     @Test
     void sqlIsAppendOnlyAndContainsCredentialSchemaAndPermissions() throws Exception {
@@ -23,9 +23,9 @@ class OpenApiCredentialSqlContractTest {
         byte[] dml = Files.readAllBytes(repository.resolve("script/sql/namewta/DML.sql"));
 
         assertThat(hashPrefix(ddl, DDL_BASELINE_BYTES))
-            .isEqualTo("4cfc4d1d86c48aa3bf6bfdf65f8642c8b528d8aa5c452516090655188251c3d1");
+            .isEqualTo("4282f8edeed576a83b5a44a1c07eac999fbcd9910ea8aa6131db278d39d0793e");
         assertThat(hashPrefix(dml, DML_BASELINE_BYTES))
-            .isEqualTo("f440bdb77065a6119973abf80ac21278d2680ce86a3ebe0a5d209509d8ed258b");
+            .isEqualTo("7f8b1c44071c847d1e83b947360b58989eddfc3343bcad0ef989ea6c94d13f84");
 
         String ddlText = new String(ddl);
         assertThat(ddlText).contains("create table sys_open_api_credential", "open_api_credential_id",

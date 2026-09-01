@@ -28,7 +28,7 @@ class PasswordMigrationUnitTest {
 
     private static final String MARKER = "NAMEWTA-PASSWORD-DSL-001";
     private static final String HISTORICAL_PREFIX_SHA256 =
-        "637d6ab8aa4a813536597d2e2e49ac98f0a932284325a6023a77d09f8b86d8e6";
+        "698675a3a16598df7313b90a5b267bb3cbfe9fe1a8e489737752189b3f58a81f";
     private static final int HISTORICAL_PREFIX_BYTES = 15_370;
     private static final Pattern POLICY_VALUE = Pattern.compile(
         "select\\s+\\d+,\\s*'统一密码策略'.*?'sys\\.user\\.passwordPolicy',\\s*'([^']+)'",

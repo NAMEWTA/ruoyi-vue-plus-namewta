@@ -562,3 +562,445 @@ where not exists (select 1 from sys_menu where menu_id = 2094360621561675790);
 
 -- 不在迁移脚本中向普通角色授予入口；非超级管理员必须由管理员显式授权。
 -- NAMEWTA-NACOS-CONSOLE-DML-001-END
+
+-- NAMEWTA-ADMIN-RUNTIME-RECONCILE-DML-001
+-- ============================================================================
+-- 变更内容：收敛 OpenAPI、Nacos 与已退役代码生成器的 Admin 菜单最终态
+-- 执行前置：系统管理/系统监控父菜单存在；目标固定 ID 只允许缺失、历史态或最终态
+-- 适用范围：全新初始化、当前混合升级环境或已完成状态重放
+-- 重复执行：是
+-- 恢复方式：从执行前备份恢复目标 sys_menu/sys_role_menu 行；不恢复生成器运行能力
+-- ============================================================================
+
+drop temporary table if exists namewta_admin_runtime_reconcile_dml_001_preflight;
+create temporary table namewta_admin_runtime_reconcile_dml_001_preflight (
+    preflight_ok tinyint not null,
+    constraint chk_namewta_admin_runtime_reconcile_dml_001 check (preflight_ok = 1)
+);
+
+insert into namewta_admin_runtime_reconcile_dml_001_preflight (preflight_ok)
+select if(
+    exists (
+        select 1 from sys_menu
+        where menu_id = 1761400000000000001 and menu_type = 'M'
+    )
+    and exists (
+        select 1 from sys_menu
+        where menu_id = 1761400000000000002 and menu_type = 'M'
+    )
+    and (
+        (
+            (select count(*) from sys_menu
+             where menu_id in (
+                 1761400000000000003,
+                 1761400000000000115, 1761400000000000116,
+                 1761400000000001055, 1761400000000001056, 1761400000000001057,
+                 1761400000000001058, 1761400000000001059, 1761400000000001060
+             )) = 0
+            and not exists (
+                select 1 from sys_menu
+                where parent_id in (1761400000000000003, 1761400000000000115, 1761400000000000116)
+            )
+        )
+        or
+        (
+            (select count(*) from sys_menu
+             where menu_id in (
+                 1761400000000000003,
+                 1761400000000000115, 1761400000000000116,
+                 1761400000000001055, 1761400000000001056, 1761400000000001057,
+                 1761400000000001058, 1761400000000001059, 1761400000000001060
+             )) = 9
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000000003
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '系统工具'
+                  and parent_id <=> 0
+                  and path <=> 'tool'
+                  and coalesce(component, '') = ''
+                  and menu_type <=> 'M'
+                  and coalesce(perms, '') = ''
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000000115
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '代码生成'
+                  and parent_id <=> 1761400000000000003
+                  and path <=> 'gen'
+                  and menu_type <=> 'C'
+                  and component <=> 'tool/gen/index'
+                  and perms <=> 'tool:gen:list'
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000000116
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '修改生成配置'
+                  and parent_id <=> 1761400000000000003
+                  and path <=> 'gen-edit/index/:tableId'
+                  and menu_type <=> 'C'
+                  and component <=> 'tool/gen/editTable'
+                  and perms <=> 'tool:gen:edit'
+                  and active_menu <=> '/tool/gen'
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000001055
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '生成查询'
+                  and parent_id <=> 1761400000000000115
+                  and path <=> '#'
+                  and component <=> ''
+                  and menu_type <=> 'F'
+                  and perms <=> 'tool:gen:query'
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000001056
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '生成修改'
+                  and parent_id <=> 1761400000000000115
+                  and path <=> '#'
+                  and component <=> ''
+                  and menu_type <=> 'F'
+                  and perms <=> 'tool:gen:edit'
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000001057
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '生成删除'
+                  and parent_id <=> 1761400000000000115
+                  and path <=> '#'
+                  and component <=> ''
+                  and menu_type <=> 'F'
+                  and perms <=> 'tool:gen:remove'
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000001058
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '导入代码'
+                  and parent_id <=> 1761400000000000115
+                  and path <=> '#'
+                  and component <=> ''
+                  and menu_type <=> 'F'
+                  and perms <=> 'tool:gen:import'
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000001059
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '预览代码'
+                  and parent_id <=> 1761400000000000115
+                  and path <=> '#'
+                  and component <=> ''
+                  and menu_type <=> 'F'
+                  and perms <=> 'tool:gen:preview'
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 1761400000000001060
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '生成代码'
+                  and parent_id <=> 1761400000000000115
+                  and path <=> '#'
+                  and component <=> ''
+                  and menu_type <=> 'F'
+                  and perms <=> 'tool:gen:code'
+            )
+            and not exists (
+                select 1 from sys_menu
+                where parent_id = 1761400000000000003
+                  and menu_id not in (1761400000000000115, 1761400000000000116)
+            )
+            and not exists (
+                select 1 from sys_menu
+                where parent_id = 1761400000000000115
+                  and menu_id not in (
+                      1761400000000001055, 1761400000000001056, 1761400000000001057,
+                      1761400000000001058, 1761400000000001059, 1761400000000001060
+                  )
+            )
+            and not exists (
+                select 1 from sys_menu where parent_id = 1761400000000000116
+            )
+        )
+    )
+    and (
+        (select count(*) from sys_menu
+         where menu_id between 2094360621561675776 and 2094360621561675781) = 0
+        or
+        (
+            (select count(*) from sys_menu
+             where menu_id between 2094360621561675776 and 2094360621561675781) = 6
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 2094360621561675776
+                  and client_id <=> 1762000000000000001
+                  and menu_name in ('应用开放管理', 'OpenAPI管理')
+                  and parent_id <=> 1761400000000000001
+                  and order_num <=> 13
+                  and path <=> 'openApi'
+                  and component <=> 'system/openApi/index'
+                  and query_param <=> ''
+                  and is_frame <=> 'N'
+                  and is_cache <=> 'Y'
+                  and menu_type <=> 'C'
+                  and visible <=> '0'
+                  and status <=> '0'
+                  and perms <=> 'system:openApi:list'
+                  and icon <=> 'api'
+                  and active_menu <=> ''
+                  and ext <=> ''
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 2094360621561675777
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '开放应用查询'
+                  and parent_id <=> 2094360621561675776
+                  and order_num <=> 1
+                  and path <=> ''
+                  and component <=> ''
+                  and query_param <=> ''
+                  and is_frame <=> 'N'
+                  and is_cache <=> 'Y'
+                  and menu_type <=> 'F'
+                  and visible <=> '0'
+                  and status <=> '0'
+                  and perms <=> 'system:openApi:query'
+                  and icon <=> '#'
+                  and active_menu <=> ''
+                  and ext <=> ''
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 2094360621561675778
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '开放应用新增'
+                  and parent_id <=> 2094360621561675776
+                  and order_num <=> 2
+                  and path <=> ''
+                  and component <=> ''
+                  and query_param <=> ''
+                  and is_frame <=> 'N'
+                  and is_cache <=> 'Y'
+                  and menu_type <=> 'F'
+                  and visible <=> '0'
+                  and status <=> '0'
+                  and perms <=> 'system:openApi:add'
+                  and icon <=> '#'
+                  and active_menu <=> ''
+                  and ext <=> ''
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 2094360621561675779
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '开放应用修改'
+                  and parent_id <=> 2094360621561675776
+                  and order_num <=> 3
+                  and path <=> ''
+                  and component <=> ''
+                  and query_param <=> ''
+                  and is_frame <=> 'N'
+                  and is_cache <=> 'Y'
+                  and menu_type <=> 'F'
+                  and visible <=> '0'
+                  and status <=> '0'
+                  and perms <=> 'system:openApi:edit'
+                  and icon <=> '#'
+                  and active_menu <=> ''
+                  and ext <=> ''
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 2094360621561675780
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '开放应用删除'
+                  and parent_id <=> 2094360621561675776
+                  and order_num <=> 4
+                  and path <=> ''
+                  and component <=> ''
+                  and query_param <=> ''
+                  and is_frame <=> 'N'
+                  and is_cache <=> 'Y'
+                  and menu_type <=> 'F'
+                  and visible <=> '0'
+                  and status <=> '0'
+                  and perms <=> 'system:openApi:remove'
+                  and icon <=> '#'
+                  and active_menu <=> ''
+                  and ext <=> ''
+            )
+            and exists (
+                select 1 from sys_menu
+                where menu_id = 2094360621561675781
+                  and client_id <=> 1762000000000000001
+                  and menu_name <=> '个人开放应用'
+                  and parent_id <=> 2094360621561675776
+                  and order_num <=> 5
+                  and path <=> ''
+                  and component <=> ''
+                  and query_param <=> ''
+                  and is_frame <=> 'N'
+                  and is_cache <=> 'Y'
+                  and menu_type <=> 'F'
+                  and visible <=> '0'
+                  and status <=> '0'
+                  and perms <=> 'system:openApi:self'
+                  and icon <=> '#'
+                  and active_menu <=> ''
+                  and ext <=> ''
+            )
+        )
+    )
+    and not exists (
+        select 1 from sys_menu
+        where menu_id not between 2094360621561675776 and 2094360621561675781
+          and (component = 'system/openApi/index'
+            or perms in (
+                'system:openApi:list', 'system:openApi:query', 'system:openApi:add',
+                'system:openApi:edit', 'system:openApi:remove', 'system:openApi:self'
+            ))
+    )
+    and not exists (
+        select 1 from sys_menu
+        where menu_id = 2094360621561675790
+          and not (
+              client_id <=> 1762000000000000001
+              and menu_name in ('配置中心', 'Nacos配置中心')
+              and (
+                  (parent_id <=> 1761400000000000001 and order_num <=> 14 and menu_name <=> '配置中心')
+                  or
+                  (parent_id <=> 1761400000000000002 and order_num <=> 8 and menu_name <=> 'Nacos配置中心')
+              )
+              and path <=> 'nacos'
+              and component <=> 'monitor/nacos/index'
+              and query_param <=> ''
+              and is_frame <=> 'N'
+              and is_cache <=> 'Y'
+              and menu_type <=> 'C'
+              and visible <=> '0'
+              and status <=> '0'
+              and perms <=> 'system:nacos:console'
+              and icon <=> 'server'
+              and active_menu <=> ''
+              and ext <=> ''
+          )
+    )
+    and not exists (
+        select 1 from sys_menu
+        where menu_id <> 2094360621561675790
+          and (component = 'monitor/nacos/index' or perms = 'system:nacos:console')
+    ),
+    1,
+    0
+);
+
+drop temporary table namewta_admin_runtime_reconcile_dml_001_preflight;
+
+start transaction;
+
+delete from sys_role_menu
+where menu_id in (
+    1761400000000000003,
+    1761400000000000115, 1761400000000000116,
+    1761400000000001055, 1761400000000001056, 1761400000000001057,
+    1761400000000001058, 1761400000000001059, 1761400000000001060
+);
+
+delete from sys_menu
+where menu_id in (
+    1761400000000001055, 1761400000000001056, 1761400000000001057,
+    1761400000000001058, 1761400000000001059, 1761400000000001060
+);
+delete from sys_menu where menu_id in (1761400000000000115, 1761400000000000116);
+delete from sys_menu where menu_id = 1761400000000000003;
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2094360621561675776, 1762000000000000001, 'OpenAPI管理', 1761400000000000001, 13,
+       'openApi', 'system/openApi/index', '', 'N', 'Y', 'C', '0', '0',
+       'system:openApi:list', 'api', '', '', 1761000000000000103, 1761100000000000001,
+       sysdate(), 'OpenAPI凭据与接口目录管理菜单'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2094360621561675776);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2094360621561675777, 1762000000000000001, '开放应用查询', 2094360621561675776, 1,
+       '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:query', '#', '', '',
+       1761000000000000103, 1761100000000000001, sysdate(), ''
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2094360621561675777);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2094360621561675778, 1762000000000000001, '开放应用新增', 2094360621561675776, 2,
+       '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:add', '#', '', '',
+       1761000000000000103, 1761100000000000001, sysdate(), ''
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2094360621561675778);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2094360621561675779, 1762000000000000001, '开放应用修改', 2094360621561675776, 3,
+       '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:edit', '#', '', '',
+       1761000000000000103, 1761100000000000001, sysdate(), ''
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2094360621561675779);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2094360621561675780, 1762000000000000001, '开放应用删除', 2094360621561675776, 4,
+       '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:remove', '#', '', '',
+       1761000000000000103, 1761100000000000001, sysdate(), ''
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2094360621561675780);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2094360621561675781, 1762000000000000001, '个人开放应用', 2094360621561675776, 5,
+       '', '', '', 'N', 'Y', 'F', '0', '0', 'system:openApi:self', '#', '', '',
+       1761000000000000103, 1761100000000000001, sysdate(), '个人中心开放应用权限'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2094360621561675781);
+
+update sys_menu
+set menu_name = 'OpenAPI管理', parent_id = 1761400000000000001, order_num = 13
+where menu_id = 2094360621561675776
+  and not (menu_name <=> 'OpenAPI管理'
+    and parent_id <=> 1761400000000000001
+    and order_num <=> 13);
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2094360621561675790, 1762000000000000001, 'Nacos配置中心', 1761400000000000002, 8,
+       'nacos', 'monitor/nacos/index', '', 'N', 'Y', 'C', '0', '0',
+       'system:nacos:console', 'server', '', '', 1761000000000000103, 1761100000000000001,
+       sysdate(), 'Nacos 官方控制台入口；配置权限由 Nacos 独立鉴权'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2094360621561675790);
+
+update sys_menu
+set menu_name = 'Nacos配置中心', parent_id = 1761400000000000002, order_num = 8
+where menu_id = 2094360621561675790
+  and not (menu_name <=> 'Nacos配置中心'
+    and parent_id <=> 1761400000000000002
+    and order_num <=> 8);
+
+commit;
+
+-- 本块不向普通角色授予 OpenAPI 或 Nacos 菜单；授权继续由管理员显式管理。
+-- NAMEWTA-ADMIN-RUNTIME-RECONCILE-DML-001-END
