@@ -7,6 +7,7 @@ import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
 import org.dromara.profile.person.application.PersonWorkflowGateway;
+import org.dromara.profile.person.notification.PersonRebindNotificationService;
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.event.ProcessEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,6 +30,7 @@ public class PersonRebindProcessListener {
     private final ProfileMaterialPort materials;
     private final PersonWorkflowGateway workflow;
     private final ConfigService configService;
+    private final PersonRebindNotificationService notifications;
     private final ApplicationEventPublisher events;
     private final Clock clock = Clock.systemUTC();
 
@@ -54,6 +56,7 @@ public class PersonRebindProcessListener {
         repository.publish(applicationId, snapshotVersion, clock.instant()).ifPresent(publication -> {
             materials.snapshotImmutable(owner(MaterialOwnerType.SUBMISSION, publication.personSubmissionId()),
                 owner(MaterialOwnerType.VERSION, publication.personVersionId()));
+            notifications.stage(publication.event());
             events.publishEvent(publication.event());
         });
     }
