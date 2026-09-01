@@ -1,0 +1,93 @@
+package org.dromara.profile.enterprise.application;
+
+import org.dromara.system.api.ConfigService;
+import org.dromara.workflow.api.WorkflowService;
+import org.dromara.workflow.api.domain.StartProcessDTO;
+import org.dromara.workflow.api.event.ProcessEvent;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+@Component
+public class SpringEnterpriseWorkflowGateway implements EnterpriseWorkflowGateway {
+
+    static final String FLOW_CODE_KEY = "profile.enterprise.flowCode";
+
+    private final ObjectProvider<WorkflowService> workflowProvider;
+    private final ConfigService configService;
+
+    public SpringEnterpriseWorkflowGateway(ObjectProvider<WorkflowService> workflowProvider,
+                                       ConfigService configService) {
+        this.workflowProvider = workflowProvider;
+        this.configService = configService;
+    }
+
+    @Override
+    public void start(long applicationId, long submissionId, int snapshotVersion) {
+        WorkflowService workflow = workflowProvider.getIfAvailable();
+        String flowCode = configService.getConfigValue(FLOW_CODE_KEY);
+        if (workflow == null || flowCode == null || flowCode.isBlank()) {
+            throw new EnterpriseApplicationException("ENTERPRISE_WORKFLOW_UNAVAILABLE");
+        }
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("profileType", "ENTERPRISE");
+        variables.put("snapshotVersion", snapshotVersion);
+        variables.put("submissionId", submissionId);
+        StartProcessDTO process = new StartProcessDTO();
+        process.setBusinessId(String.valueOf(applicationId));
+        process.setFlowCode(flowCode.strip());
+        process.setVariables(variables);
+        try {
+            if (!workflow.startCompleteTask(process)) {
+                throw new EnterpriseApplicationException("ENTERPRISE_WORKFLOW_START_FAILED");
+            }
+        } catch (EnterpriseApplicationException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new EnterpriseApplicationException("ENTERPRISE_WORKFLOW_START_FAILED", exception);
+        }
+    }
+
+    @Override
+    public Integer persistedSnapshotVersion(ProcessEvent event) {
+        if (event == null || event.getInstanceId() == null || event.getInstanceId() <= 0) {
+            return null;
+        }
+        WorkflowService workflow = workflowProvider.getIfAvailable();
+        if (workflow == null) {
+            throw new EnterpriseApplicationException("ENTERPRISE_WORKFLOW_UNAVAILABLE");
+        }
+        try {
+            Map<String, Object> variables = workflow.instanceVariable(event.getInstanceId());
+            Object entries = variables == null ? null : variables.get("variableList");
+            if (entries instanceof List<?> list) {
+                for (Object entry : list) {
+                    if (entry instanceof Map<?, ?> item && "snapshotVersion".equals(item.get("key"))) {
+                        Integer snapshotVersion = positiveInteger(item.get("value"));
+                        if (snapshotVersion != null) {
+                            return snapshotVersion;
+                        }
+                        break;
+                    }
+                }
+            }
+            throw new EnterpriseApplicationException("ENTERPRISE_WORKFLOW_SNAPSHOT_UNAVAILABLE");
+        } catch (EnterpriseApplicationException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new EnterpriseApplicationException("ENTERPRISE_WORKFLOW_SNAPSHOT_UNAVAILABLE", exception);
+        }
+    }
+
+    private Integer positiveInteger(Object value) {
+        try {
+            int parsed = value instanceof Number number ? number.intValue() : Integer.parseInt(String.valueOf(value));
+            return parsed > 0 ? parsed : null;
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+}
