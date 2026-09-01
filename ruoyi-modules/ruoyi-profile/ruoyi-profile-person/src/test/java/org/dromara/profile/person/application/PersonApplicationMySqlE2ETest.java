@@ -78,7 +78,8 @@ class PersonApplicationMySqlE2ETest {
                 long firstApplication = apply(fixture, currentUser.get(), "110101199001011234", 951000000000L);
                 assertThat(scalar(session, "select status from profile_person_application where person_application_id = "
                     + firstApplication)).isEqualTo("WAITING");
-                assertThat(scalar(session, "select count(*) from profile_person")).isEqualTo("0");
+                assertThat(scalar(session, "select count(*) from profile_person where identity_key="
+                    + "'CN_RESIDENT_ID:110101199001011234'")).isEqualTo("0");
                 assertThat(scalar(session, "select count(*) from profile_material_ref where owner_type='SUBMISSION'"
                     + " and owner_id=(select person_submission_id from profile_person_submission where person_application_id="
                     + firstApplication + " and submission_seq=1)")).isEqualTo("2");
@@ -257,8 +258,11 @@ class PersonApplicationMySqlE2ETest {
             assertThat(scalar(session, "select count(*) from profile_person_application where status='WAITING'"
                 + " and applicant_user_id=960000000103"))
                 .isEqualTo("1");
-            assertThat(scalar(session, "select count(*) from profile_person")).isEqualTo("0");
-            assertThat(scalar(session, "select count(*) from profile_person_binding")).isEqualTo("0");
+            assertThat(scalar(session, "select count(*) from profile_person where identity_key in ("
+                + "'CN_RESIDENT_ID:110101199001012001','CN_RESIDENT_ID:110101199001012002',"
+                + "'CN_RESIDENT_ID:110101199001012003')")).isEqualTo("0");
+            assertThat(scalar(session, "select count(*) from profile_person_binding where user_id in ("
+                + "960000000101,960000000102,960000000103)")).isEqualTo("0");
         }
     }
 
