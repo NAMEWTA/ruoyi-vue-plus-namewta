@@ -74,7 +74,8 @@ public final class NacosConfigManager implements NacosConfigAccessor {
         Map<String, NacosConfigParticipant<?>> byId = new LinkedHashMap<>();
         for (NacosConfigParticipant<?> participant : candidates) {
             if (participant == null || participant.id() == null || participant.id().isBlank()
-                || participant.prefixes() == null || participant.prefixes().isEmpty()) {
+                || participant.prefixes() == null || participant.exactKeys() == null
+                || (participant.prefixes().isEmpty() && participant.exactKeys().isEmpty())) {
                 throw new IllegalStateException("Invalid Nacos config participant");
             }
             if (byId.putIfAbsent(participant.id(), participant) != null) {
@@ -91,7 +92,7 @@ public final class NacosConfigManager implements NacosConfigAccessor {
                 new NacosConfigState(state.enabled(), state.connected(), state.digest(), state.result(),
                     state.lastSuccessAt(), counts.immediate(), counts.restart(), state.errorCode())));
         } catch (RuntimeException ex) {
-            reject(current, "PARTICIPANT_REJECTED");
+            restoreLocalBaseline(current, "PARTICIPANT_REJECTED");
         }
     }
 
@@ -163,12 +164,14 @@ public final class NacosConfigManager implements NacosConfigAccessor {
 
     private Counts classify(Map<String, Object> candidate) {
         Set<String> prefixes = new LinkedHashSet<>();
+        Set<String> exactKeys = new LinkedHashSet<>();
         for (NacosConfigParticipant<?> participant : participants) {
             prefixes.addAll(participant.prefixes());
+            exactKeys.addAll(participant.exactKeys());
         }
         int immediate = 0;
         for (String key : candidate.keySet()) {
-            if (prefixes.stream().anyMatch(key::startsWith)) {
+            if (exactKeys.contains(key) || prefixes.stream().anyMatch(key::startsWith)) {
                 immediate++;
             }
         }
@@ -180,6 +183,19 @@ public final class NacosConfigManager implements NacosConfigAccessor {
         snapshot.set(new Snapshot(current.overlay(), current.prepared(),
             new NacosConfigState(state.enabled(), state.connected(), state.digest(), "REJECTED",
                 state.lastSuccessAt(), state.immediateKeyCount(), state.restartKeyCount(), code)));
+    }
+
+    private void restoreLocalBaseline(Snapshot current, String code) {
+        Map<String, Object> prepared;
+        try {
+            prepared = prepare(Map.of());
+        } catch (RuntimeException ignored) {
+            prepared = Map.of();
+        }
+        NacosConfigState state = current.state();
+        snapshot.set(new Snapshot(Map.of(), prepared,
+            new NacosConfigState(state.enabled(), state.connected(), null, "REJECTED",
+                null, 0, 0, code)));
     }
 
     private static String digest(String content) {

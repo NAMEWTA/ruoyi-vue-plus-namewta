@@ -52,6 +52,21 @@ class NacosConfigManagerTest {
     }
 
     @Test
+    void lateParticipantRejectionRestoresTheLocalBaseline() {
+        MockEnvironment environment = new MockEnvironment().withProperty("sample.count", "3");
+        NacosConfigManager manager = manager(environment);
+        assertThat(manager.apply("sample.count: broken", NacosUpdateOrigin.STARTUP)).isTrue();
+
+        manager.registerParticipants(Set.of(new IntegerParticipant()));
+
+        assertThat(environment.getProperty("sample.count")).isEqualTo("3");
+        assertThat(manager.configuration("sample", Integer.class)).contains(3);
+        assertThat(manager.state().digest()).isNull();
+        assertThat(manager.state().result()).isEqualTo("REJECTED");
+        assertThat(manager.state().errorCode()).isEqualTo("PARTICIPANT_REJECTED");
+    }
+
+    @Test
     void rejectsKnownInvalidScalarBeforeParticipantsExist() {
         MockEnvironment environment = new MockEnvironment().withProperty("captcha.numberLength", "1");
         NacosConfigManager manager = manager(environment);
@@ -72,6 +87,42 @@ class NacosConfigManagerTest {
 
         assertThat(environment.getProperty("feature.mode")).isEqualTo("local");
         assertThat(manager.state().digest()).isNull();
+    }
+
+    @Test
+    void classifiesExactKeysWithoutIncludingAdjacentProperties() {
+        MockEnvironment environment = new MockEnvironment()
+            .withProperty("oss.lifecycle.download-ttl", "2m")
+            .withProperty("oss.lifecycle.download-ttl-max", "10m");
+        NacosConfigManager manager = manager(environment);
+        manager.registerParticipants(Set.of(new ExactDurationParticipant()));
+
+        assertThat(manager.apply("""
+            oss:
+              lifecycle:
+                download-ttl: 3m
+                download-ttl-max: 20m
+            """, NacosUpdateOrigin.LISTENER)).isTrue();
+
+        assertThat(manager.state().immediateKeyCount()).isEqualTo(1);
+        assertThat(manager.state().restartKeyCount()).isEqualTo(1);
+    }
+
+    @Test
+    void participantFailureKeepsEveryPreviouslyPreparedSnapshot() {
+        MockEnvironment environment = new MockEnvironment()
+            .withProperty("first.count", "1")
+            .withProperty("second.count", "2");
+        NacosConfigManager manager = manager(environment);
+        manager.registerParticipants(Set.of(
+            new NamedIntegerParticipant("first"),
+            new NamedIntegerParticipant("second")));
+        assertThat(manager.apply("first.count: 10\nsecond.count: 20", NacosUpdateOrigin.LISTENER)).isTrue();
+
+        assertThat(manager.apply("first.count: 30\nsecond.count: broken", NacosUpdateOrigin.LISTENER)).isFalse();
+
+        assertThat(manager.configuration("first", Integer.class)).contains(10);
+        assertThat(manager.configuration("second", Integer.class)).contains(20);
     }
 
     private static NacosConfigManager manager(MockEnvironment environment) {
@@ -95,6 +146,42 @@ class NacosConfigManagerTest {
         @Override
         public Integer prepare(Binder binder) {
             return binder.bindOrCreate("sample.count", Integer.class);
+        }
+    }
+
+    private record NamedIntegerParticipant(String id) implements NacosConfigParticipant<Integer> {
+
+        @Override
+        public Set<String> prefixes() {
+            return Set.of(id + ".");
+        }
+
+        @Override
+        public Integer prepare(Binder binder) {
+            return binder.bindOrCreate(id + ".count", Integer.class);
+        }
+    }
+
+    private static final class ExactDurationParticipant implements NacosConfigParticipant<String> {
+
+        @Override
+        public String id() {
+            return "oss-download-ttl";
+        }
+
+        @Override
+        public Set<String> prefixes() {
+            return Set.of();
+        }
+
+        @Override
+        public Set<String> exactKeys() {
+            return Set.of("oss.lifecycle.download-ttl");
+        }
+
+        @Override
+        public String prepare(Binder binder) {
+            return binder.bindOrCreate("oss.lifecycle.download-ttl", String.class);
         }
     }
 }

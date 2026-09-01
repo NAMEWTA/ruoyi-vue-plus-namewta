@@ -16,6 +16,12 @@
     </description>
 
     <dependencies>
+        <!-- 可选 Nacos 动态配置接缝 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-nacos</artifactId>
+        </dependency>
+
         <!-- 序列化模块 -->
         <dependency>
             <groupId>org.dromara</groupId>

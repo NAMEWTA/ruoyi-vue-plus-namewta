@@ -58,9 +58,10 @@ public final class NotifyIdempotencyCoordinator {
     }
 
     public Duration resolveWindow(Duration requested) {
-        Duration window = requested == null ? properties.getDefaultWindow() : requested;
-        Duration minimum = properties.getMinWindow();
-        Duration maximum = properties.getMaxWindow();
+        NotifyIdempotencyProperties.Snapshot settings = properties.currentSnapshot();
+        Duration window = requested == null ? settings.defaultWindow() : requested;
+        Duration minimum = settings.minWindow();
+        Duration maximum = settings.maxWindow();
         if (window == null || minimum == null || maximum == null || minimum.isNegative()
             || minimum.isZero() || maximum.compareTo(minimum) < 0
             || window.compareTo(minimum) < 0 || window.compareTo(maximum) > 0) {

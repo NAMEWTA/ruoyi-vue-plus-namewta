@@ -22,6 +22,12 @@
             <artifactId>ruoyi-common-core</artifactId>
         </dependency>
 
+        <!-- 可选 Nacos 动态配置接缝 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-nacos</artifactId>
+        </dependency>
+
         <!-- api模块 -->
         <dependency>
             <groupId>org.dromara</groupId>

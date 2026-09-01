@@ -15,5 +15,12 @@ public interface NacosConfigParticipant<T> {
 
     Set<String> prefixes();
 
+    /**
+     * 即时生效的精确配置键。用于不能安全表达为前缀的单键合同。
+     */
+    default Set<String> exactKeys() {
+        return Set.of();
+    }
+
     T prepare(Binder binder);
 }

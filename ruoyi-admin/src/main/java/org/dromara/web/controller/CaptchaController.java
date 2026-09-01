@@ -166,11 +166,11 @@ public class CaptchaController {
      */
     @GetMapping("/auth/code")
     public R<CaptchaVo> getCode() {
-        boolean captchaEnabled = captchaProperties.getEnable();
-        if (!captchaEnabled) {
+        CaptchaProperties.Snapshot settings = captchaProperties.currentSnapshot();
+        if (!Boolean.TRUE.equals(settings.enable())) {
             return R.ok(new CaptchaVo(false, null, null));
         }
-        return R.ok(SpringUtils.getAopProxy(this).getCodeImpl());
+        return R.ok(SpringUtils.getAopProxy(this).getCodeImpl(settings));
     }
 
     /**
@@ -180,16 +180,24 @@ public class CaptchaController {
      */
     @RateLimiter(time = 60, count = 10, limitType = LimitType.IP)
     public CaptchaVo getCodeImpl() {
+        return getCodeImpl(captchaProperties.currentSnapshot());
+    }
+
+    /**
+     * 使用请求开始时捕获的完整快照生成验证码。
+     */
+    @RateLimiter(time = 60, count = 10, limitType = LimitType.IP)
+    public CaptchaVo getCodeImpl(CaptchaProperties.Snapshot settings) {
         // 保存验证码信息
         String uuid = IdUtil.simpleUUID();
         String verifyKey = GlobalConstants.CAPTCHA_CODE_KEY + uuid;
         // 生成验证码
-        String captchaType = captchaProperties.getType();
+        String captchaType = settings.type();
         CodeGenerator codeGenerator;
         if ("math".equals(captchaType)) {
-            codeGenerator = new MathGenerator(captchaProperties.getNumberLength(), false);
+            codeGenerator = new MathGenerator(settings.numberLength(), false);
         } else {
-            codeGenerator = new RandomGenerator(captchaProperties.getCharLength());
+            codeGenerator = new RandomGenerator(settings.charLength());
         }
         WaveAndCircleCaptcha captcha = new WaveAndCircleCaptcha(160, 60);
         // captcha.setBackground(Color.WHITE); // 不设置就是透明底

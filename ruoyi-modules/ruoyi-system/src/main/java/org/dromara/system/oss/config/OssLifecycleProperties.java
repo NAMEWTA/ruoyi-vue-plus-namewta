@@ -1,22 +1,31 @@
 package org.dromara.system.oss.config;
 
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import org.dromara.common.nacos.NacosConfigAccessor;
+import org.dromara.common.nacos.NacosConfigParticipant;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
  * OSS 临时对象生命周期配置。
  */
-@Data
+@Getter
+@Setter
 @Component
 @ConfigurationProperties(prefix = "oss.lifecycle")
-public class OssLifecycleProperties implements InitializingBean {
+public class OssLifecycleProperties implements InitializingBean, NacosConfigParticipant<Duration> {
 
     private static final Pattern POLICY_KEY = Pattern.compile("[a-z][a-z0-9-]{0,63}");
 
@@ -43,6 +52,44 @@ public class OssLifecycleProperties implements InitializingBean {
 
     /** 每批扫描上限。 */
     private int cleanupBatchSize = 100;
+
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private transient volatile NacosConfigAccessor nacosConfigAccessor;
+
+    @Override
+    public String id() {
+        return "oss-download-ttl";
+    }
+
+    @Override
+    public Set<String> prefixes() {
+        return Set.of();
+    }
+
+    @Override
+    public Set<String> exactKeys() {
+        return Set.of("oss.lifecycle.download-ttl");
+    }
+
+    @Override
+    public Duration prepare(Binder binder) {
+        Duration candidate = binder.bind("oss.lifecycle.download-ttl", Duration.class).orElse(downloadTtl);
+        requireDownloadTtl(candidate, "默认下载签名 TTL");
+        return candidate;
+    }
+
+    @Autowired(required = false)
+    public void setNacosConfigAccessor(NacosConfigAccessor nacosConfigAccessor) {
+        this.nacosConfigAccessor = nacosConfigAccessor;
+    }
+
+    public Duration getDownloadTtl() {
+        NacosConfigAccessor accessor = nacosConfigAccessor;
+        return accessor == null
+            ? downloadTtl
+            : accessor.configuration(id(), Duration.class).orElse(downloadTtl);
+    }
 
     @Override
     public void afterPropertiesSet() {
@@ -80,7 +127,7 @@ public class OssLifecycleProperties implements InitializingBean {
      */
     public Duration resolveDownloadTtl(String policyName) {
         if (policyName == null || policyName.isBlank()) {
-            return downloadTtl;
+            return getDownloadTtl();
         }
         DownloadPolicy policy = downloadPolicies.get(policyName);
         if (policy == null || !policy.enabled) {
