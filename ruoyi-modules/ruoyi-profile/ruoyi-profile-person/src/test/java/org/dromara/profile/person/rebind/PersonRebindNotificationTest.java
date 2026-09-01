@@ -28,8 +28,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @Tag("dev")
@@ -43,6 +43,19 @@ class PersonRebindNotificationTest {
         new PersonRebindNotificationService(audits, messages, users, notify);
 
     @Test
+    void stagesRetryableAuditRowsBeforeAnyDelivery() {
+        when(audits.insert(any())).thenReturn(1);
+
+        service.stage(new PersonReboundEvent(9201L, 9001L, 202L));
+
+        ArgumentCaptor<NotificationAuditRow> audit = ArgumentCaptor.forClass(NotificationAuditRow.class);
+        verify(audits, org.mockito.Mockito.times(2)).insert(audit.capture());
+        assertThat(audit.getAllValues()).extracting(NotificationAuditRow::getStatus)
+            .containsExactly("PENDING", "PENDING");
+        verifyNoInteractions(messages, users, notify);
+    }
+
+    @Test
     void defersDeliveryUntilDynamicDataSourceTransactionCommits() throws Exception {
         Method listener = PersonRebindNotificationService.class.getMethod("notifyOldAccount",
             PersonReboundEvent.class);
@@ -53,7 +66,7 @@ class PersonRebindNotificationTest {
         when(users.selectPhonenumberById(202L)).thenReturn("13800138000");
         when(notify.send(any())).thenReturn(new NotifyResult("sms-person-rebind-9001", NotifyChannel.SMS,
             "sms-provider", NotifyStatus.ACCEPTED, List.of()));
-        when(audits.insert(any())).thenReturn(1);
+        stubPendingRows();
 
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DsTxEventListenerFactory.class);
@@ -79,7 +92,7 @@ class PersonRebindNotificationTest {
         when(users.selectPhonenumberById(202L)).thenReturn("13800138000");
         when(notify.send(any())).thenReturn(new NotifyResult("sms-person-rebind-9001", NotifyChannel.SMS,
             "sms-provider", NotifyStatus.ACCEPTED, List.of()));
-        when(audits.insert(any())).thenReturn(1);
+        stubPendingRows();
 
         service.notifyOldAccount(new PersonReboundEvent(9201L, 9001L, 202L));
 
@@ -91,7 +104,7 @@ class PersonRebindNotificationTest {
             .doesNotContain("张三", "110101", "101");
         assertThat(request.getValue().auditPolicy().name()).isEqualTo("REDACT_SENSITIVE");
         ArgumentCaptor<NotificationAuditRow> audit = ArgumentCaptor.forClass(NotificationAuditRow.class);
-        verify(audits, org.mockito.Mockito.times(2)).insert(audit.capture());
+        verify(audits, org.mockito.Mockito.times(2)).updateDelivery(audit.capture());
         assertThat(audit.getAllValues()).extracting(NotificationAuditRow::getStatus)
             .containsExactly("ACCEPTED", "ACCEPTED");
     }
@@ -101,12 +114,12 @@ class PersonRebindNotificationTest {
         doThrow(new IllegalStateException("offline")).when(messages).sendMessage(anyLong(), anyString());
         when(users.selectPhonenumberById(202L)).thenReturn("13800138000");
         when(notify.send(any())).thenThrow(new IllegalStateException("offline"));
-        when(audits.insert(any())).thenReturn(1);
+        stubPendingRows();
 
         service.notifyOldAccount(new PersonReboundEvent(9201L, 9001L, 202L));
 
         ArgumentCaptor<NotificationAuditRow> audit = ArgumentCaptor.forClass(NotificationAuditRow.class);
-        verify(audits, org.mockito.Mockito.times(2)).insert(audit.capture());
+        verify(audits, org.mockito.Mockito.times(2)).updateDelivery(audit.capture());
         assertThat(audit.getAllValues()).extracting(NotificationAuditRow::getStatus)
             .containsExactly("FAILED", "FAILED");
         assertThat(audit.getAllValues()).extracting(NotificationAuditRow::getFailureCategory)
@@ -123,11 +136,29 @@ class PersonRebindNotificationTest {
         row.setTargetUserId(202L);
         row.setStatus("FAILED");
         row.setVersion(0);
-        when(audits.lockFailed(9901L)).thenReturn(row);
-        when(audits.updateRetry(row)).thenReturn(1);
+        when(audits.lockRetryable(9901L)).thenReturn(row);
+        when(audits.updateDelivery(row)).thenReturn(1);
 
         assertThat(service.retryFailed(9901L)).isTrue();
         assertThat(row.getStatus()).isEqualTo("ACCEPTED");
         verify(messages).sendMessage(202L, "您的个人实名认证绑定已变更。如非本人操作，请联系平台。");
+    }
+
+    private void stubPendingRows() {
+        when(audits.selectRetryable(anyString(), anyLong(), anyLong(), anyLong()))
+            .thenAnswer(invocation -> pending(invocation.getArgument(0)));
+        when(audits.updateDelivery(any())).thenReturn(1);
+    }
+
+    private NotificationAuditRow pending(String type) {
+        NotificationAuditRow row = new NotificationAuditRow();
+        row.setNotificationAuditId("PERSON_REBIND_INTERNAL".equals(type) ? 9901L : 9902L);
+        row.setNotificationType(type);
+        row.setProfileId(9201L);
+        row.setApplicationId(9001L);
+        row.setTargetUserId(202L);
+        row.setStatus("PENDING");
+        row.setVersion(0);
+        return row;
     }
 }

@@ -27,21 +27,37 @@ public interface PersonNotificationAuditMapper {
         select notification_audit_id, notification_type, profile_id, application_id,
                target_user_id, notify_request_id, status, failure_category, occurred_time, version
           from profile_notification_audit
+         where notification_type = #{notificationType} and profile_type = 'PERSON'
+           and profile_id = #{profileId} and application_id = #{applicationId}
+           and target_user_id = #{targetUserId} and status in ('PENDING', 'FAILED')
+           and del_flag = '0'
+         order by occurred_time asc, notification_audit_id asc
+         limit 1
+        """)
+    NotificationAuditRow selectRetryable(@Param("notificationType") String notificationType,
+                                         @Param("profileId") long profileId,
+                                         @Param("applicationId") long applicationId,
+                                         @Param("targetUserId") long targetUserId);
+
+    @Select("""
+        select notification_audit_id, notification_type, profile_id, application_id,
+               target_user_id, notify_request_id, status, failure_category, occurred_time, version
+          from profile_notification_audit
          where notification_audit_id = #{auditId} and profile_type = 'PERSON'
-           and status = 'FAILED' and del_flag = '0'
+           and status in ('PENDING', 'FAILED') and del_flag = '0'
          for update
         """)
-    NotificationAuditRow lockFailed(@Param("auditId") long auditId);
+    NotificationAuditRow lockRetryable(@Param("auditId") long auditId);
 
     @Update("""
         update profile_notification_audit
            set notify_request_id = #{notifyRequestId}, status = #{status},
                failure_category = #{failureCategory}, occurred_time = #{occurredTime},
                version = version + 1, update_time = current_timestamp, update_by = -1
-         where notification_audit_id = #{notificationAuditId} and status = 'FAILED'
+         where notification_audit_id = #{notificationAuditId} and status in ('PENDING', 'FAILED')
            and version = #{version} and del_flag = '0'
         """)
-    int updateRetry(NotificationAuditRow row);
+    int updateDelivery(NotificationAuditRow row);
 
     @Data
     class NotificationAuditRow {

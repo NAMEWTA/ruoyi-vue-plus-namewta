@@ -191,15 +191,14 @@ class PersonRebindMySqlE2ETest {
         ConfigService config = mock(ConfigService.class);
         when(config.getConfigValue("profile.person.flowCode")).thenReturn("profile_person_verification");
         ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-        PersonRebindProcessListener listener = new PersonRebindProcessListener(rebinds, materials, workflow,
-            config, events);
-
         MessageService messages = mock(MessageService.class);
         doThrow(new IllegalStateException("offline")).when(messages).sendMessage(anyLong(), anyString());
         NotifyClient notifyClient = mock(NotifyClient.class);
         when(notifyClient.send(any())).thenThrow(new IllegalStateException("offline"));
         PersonRebindNotificationService notifications = new PersonRebindNotificationService(
             session.getMapper(PersonNotificationAuditMapper.class), messages, users, notifyClient);
+        PersonRebindProcessListener listener = new PersonRebindProcessListener(rebinds, materials, workflow,
+            config, notifications, events);
         return new Fixture(service, listener, notifications, events, mvc);
     }
 

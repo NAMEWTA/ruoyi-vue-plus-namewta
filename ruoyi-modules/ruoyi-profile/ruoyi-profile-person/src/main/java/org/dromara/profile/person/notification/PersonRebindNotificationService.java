@@ -37,13 +37,21 @@ public class PersonRebindNotificationService {
     private final UserService users;
     private final NotifyClient notifyClient;
 
+    public void stage(PersonReboundEvent event) {
+        if (event == null) {
+            return;
+        }
+        stageOne(INTERNAL_TYPE, event.personProfileId(), event.personApplicationId(), event.oldUserId());
+        stageOne(SMS_TYPE, event.personProfileId(), event.personApplicationId(), event.oldUserId());
+    }
+
     @DsTxEventListener
     public void notifyOldAccount(PersonReboundEvent event) {
         if (event == null) {
             return;
         }
-        deliverAndInsert(INTERNAL_TYPE, event.personProfileId(), event.personApplicationId(), event.oldUserId());
-        deliverAndInsert(SMS_TYPE, event.personProfileId(), event.personApplicationId(), event.oldUserId());
+        deliverStaged(INTERNAL_TYPE, event.personProfileId(), event.personApplicationId(), event.oldUserId());
+        deliverStaged(SMS_TYPE, event.personProfileId(), event.personApplicationId(), event.oldUserId());
     }
 
     @DSTransactional
@@ -51,7 +59,7 @@ public class PersonRebindNotificationService {
         if (auditId <= 0) {
             return false;
         }
-        NotificationAuditRow row = audits.lockFailed(auditId);
+        NotificationAuditRow row = audits.lockRetryable(auditId);
         if (row == null || !isKnownType(row.getNotificationType())) {
             return false;
         }
@@ -61,25 +69,41 @@ public class PersonRebindNotificationService {
         row.setStatus(delivery.status());
         row.setFailureCategory(delivery.failureCategory());
         row.setOccurredTime(Instant.now());
-        return audits.updateRetry(row) == 1 && !"FAILED".equals(delivery.status());
+        return audits.updateDelivery(row) == 1 && !"FAILED".equals(delivery.status());
     }
 
-    private void deliverAndInsert(String type, long profileId, long applicationId, long userId) {
-        Delivery delivery = deliver(type, profileId, applicationId, userId);
+    private void stageOne(String type, long profileId, long applicationId, long userId) {
         NotificationAuditRow row = new NotificationAuditRow();
         row.setNotificationAuditId(IdWorker.getId());
         row.setNotificationType(type);
         row.setProfileId(profileId);
         row.setApplicationId(applicationId);
         row.setTargetUserId(userId);
-        row.setNotifyRequestId(delivery.requestId());
-        row.setStatus(delivery.status());
-        row.setFailureCategory(delivery.failureCategory());
+        row.setNotifyRequestId(requestId(type, applicationId));
+        row.setStatus("PENDING");
         row.setOccurredTime(Instant.now());
+        if (audits.insert(row) != 1) {
+            throw new IllegalStateException("个人换绑通知待办写入失败");
+        }
+    }
+
+    private void deliverStaged(String type, long profileId, long applicationId, long userId) {
         try {
-            audits.insert(row);
+            NotificationAuditRow row = audits.selectRetryable(type, profileId, applicationId, userId);
+            if (row == null) {
+                log.error("个人换绑通知待办不存在，channel={}，category=PENDING_AUDIT_MISSING", type);
+                return;
+            }
+            Delivery delivery = deliver(type, profileId, applicationId, userId);
+            row.setNotifyRequestId(delivery.requestId());
+            row.setStatus(delivery.status());
+            row.setFailureCategory(delivery.failureCategory());
+            row.setOccurredTime(Instant.now());
+            if (audits.updateDelivery(row) != 1) {
+                log.error("个人换绑通知结果更新失败，channel={}，category=AUDIT_UPDATE_CONFLICT", type);
+            }
         } catch (RuntimeException exception) {
-            log.error("个人换绑通知审计写入失败，channel={}，category=AUDIT_WRITE_FAILED", type);
+            log.error("个人换绑通知处理失败，channel={}，category=DELIVERY_PROCESS_FAILED", type);
         }
     }
 
