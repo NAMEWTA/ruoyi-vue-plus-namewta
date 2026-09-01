@@ -507,3 +507,56 @@ where access_policy <> '0';
 update sys_oss_config
 set access_policy = '0'
 where access_policy <> '0';
+
+-- NAMEWTA-NACOS-CONSOLE-DML-001
+-- ============================================================================
+-- 变更内容：在系统管理下增加 Nacos 官方配置中心入口
+-- 执行前置：系统管理父菜单 1761400000000000001 已存在
+-- 适用范围：全新或当前 NAMEWTA 基座初始化
+-- 重复执行：是；固定菜单存在且合同一致时无操作
+-- 回滚方式：先撤销显式角色授权，再删除 menu_id 2094360621561675790
+-- ============================================================================
+
+drop temporary table if exists namewta_nacos_console_dml_001_preflight;
+create temporary table namewta_nacos_console_dml_001_preflight (
+    preflight_ok tinyint not null,
+    constraint chk_namewta_nacos_console_dml_001 check (preflight_ok = 1)
+);
+
+insert into namewta_nacos_console_dml_001_preflight (preflight_ok)
+select if(
+    exists (select 1 from sys_menu where menu_id = 1761400000000000001 and menu_type = 'M')
+    and not exists (
+        select 1 from sys_menu
+        where menu_id = 2094360621561675790
+          and not (client_id <=> 1762000000000000001
+              and menu_name <=> '配置中心'
+              and parent_id <=> 1761400000000000001
+              and path <=> 'nacos'
+              and component <=> 'monitor/nacos/index'
+              and menu_type <=> 'C'
+              and perms <=> 'system:nacos:console')
+    )
+    and not exists (
+        select 1 from sys_menu
+        where menu_id <> 2094360621561675790
+          and (component = 'monitor/nacos/index' or perms = 'system:nacos:console')
+    ),
+    1,
+    0
+);
+
+drop temporary table namewta_nacos_console_dml_001_preflight;
+
+insert into sys_menu (menu_id, client_id, menu_name, parent_id, order_num, path, component, query_param,
+                      is_frame, is_cache, menu_type, visible, status, perms, icon, active_menu, ext,
+                      create_dept, create_by, create_time, remark)
+select 2094360621561675790, 1762000000000000001, '配置中心', 1761400000000000001, 14,
+       'nacos', 'monitor/nacos/index', '', 'N', 'Y', 'C', '0', '0',
+       'system:nacos:console', 'server', '', '', 1761000000000000103, 1761100000000000001,
+       sysdate(), 'Nacos 官方控制台入口；配置权限由 Nacos 独立鉴权'
+from dual
+where not exists (select 1 from sys_menu where menu_id = 2094360621561675790);
+
+-- 不在迁移脚本中向普通角色授予入口；非超级管理员必须由管理员显式授权。
+-- NAMEWTA-NACOS-CONSOLE-DML-001-END
