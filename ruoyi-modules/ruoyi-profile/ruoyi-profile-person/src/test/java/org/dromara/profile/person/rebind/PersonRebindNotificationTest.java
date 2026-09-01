@@ -1,5 +1,8 @@
 package org.dromara.profile.person.rebind;
 
+import com.baomidou.dynamic.datasource.annotation.DsTxEventListener;
+import com.baomidou.dynamic.datasource.tx.DsTxEventListenerFactory;
+import com.baomidou.dynamic.datasource.tx.TransactionContext;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.notify.model.NotifyChannel;
 import org.dromara.common.notify.model.NotifyResult;
@@ -12,6 +15,10 @@ import org.dromara.system.api.UserService;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.transaction.event.TransactionPhase;
+
+import java.lang.reflect.Method;
 
 import java.util.List;
 
@@ -21,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +41,38 @@ class PersonRebindNotificationTest {
     private final NotifyClient notify = mock(NotifyClient.class);
     private final PersonRebindNotificationService service =
         new PersonRebindNotificationService(audits, messages, users, notify);
+
+    @Test
+    void defersDeliveryUntilDynamicDataSourceTransactionCommits() throws Exception {
+        Method listener = PersonRebindNotificationService.class.getMethod("notifyOldAccount",
+            PersonReboundEvent.class);
+        DsTxEventListener annotation = listener.getAnnotation(DsTxEventListener.class);
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+
+        when(users.selectPhonenumberById(202L)).thenReturn("13800138000");
+        when(notify.send(any())).thenReturn(new NotifyResult("sms-person-rebind-9001", NotifyChannel.SMS,
+            "sms-provider", NotifyStatus.ACCEPTED, List.of()));
+        when(audits.insert(any())).thenReturn(1);
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(DsTxEventListenerFactory.class);
+            context.registerBean(PersonRebindNotificationService.class, () -> service);
+            context.refresh();
+            TransactionContext.bind("person-rebind-test");
+            try {
+                context.publishEvent(new PersonReboundEvent(9201L, 9001L, 202L));
+                verifyNoInteractions(messages, users, notify, audits);
+                assertThat(TransactionContext.getSynchronizations()).hasSize(1);
+                TransactionContext.getSynchronizations().getFirst().afterCommit();
+                verify(messages).sendMessage(202L,
+                    "您的个人实名认证绑定已变更。如非本人操作，请联系平台。");
+            } finally {
+                TransactionContext.removeSynchronizations();
+                TransactionContext.remove();
+            }
+        }
+    }
 
     @Test
     void sendsBothSafeChannelsWithoutIdentityOrNewAccountData() {
