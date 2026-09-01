@@ -205,6 +205,20 @@ class PersonApplicationServiceTest {
     }
 
     @Test
+    void workflowReviewRejectInvalidatesTheSnapshotWithoutPublishing() {
+        when(config.getConfigValue("profile.person.flowCode")).thenReturn("profile_person_verification");
+        when(repository.lockById(9001L)).thenReturn(application(9001L, 101L, "WAITING", 2, 1));
+        ProcessEvent rejected = event("finish", 1);
+        rejected.setParams(Map.of("snapshotVersion", 1, "profileDecision", "REJECT"));
+
+        service.handleProcessEvent(rejected);
+
+        verify(repository).updateWorkflowStatus(9001L, 1, "INVALID", 2,
+            Instant.parse("2026-09-01T12:00:00Z"));
+        verify(repository, never()).publishApproved(anyLong(), anyInt(), any());
+    }
+
+    @Test
     void rejectsInvalidDocumentAndValidityMatrix() {
         when(config.getConfigValue("profile.person.provider.default")).thenReturn("manual");
         when(repository.findOpenByUserId(101L)).thenReturn(Optional.empty());

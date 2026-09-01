@@ -43,6 +43,9 @@ public final class EnterpriseAdminContracts {
     public record AssignCommand(Long userId, String reason) {
     }
 
+    public record AccountCandidate(long userId, String userName, String nickName) {
+    }
+
     public record RevokeCommand(String reason, int expectedVersion) {
     }
 

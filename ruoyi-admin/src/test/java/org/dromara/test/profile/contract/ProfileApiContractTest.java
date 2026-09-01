@@ -5,6 +5,7 @@ import org.dromara.profile.api.ProfileProjectionContributor;
 import org.dromara.profile.api.domain.ProfileBindingSummary;
 import org.dromara.profile.api.domain.ProfileSummary;
 import org.dromara.profile.api.domain.ProfileType;
+import org.dromara.system.api.UserService;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +22,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Tag("dev")
 class ProfileApiContractTest {
+
+    @Test
+    void activeUserCandidateSearchIsAnOptionalCompatibleSystemSeam() throws Exception {
+        var method = UserService.class.getMethod("searchActiveUsers", String.class, int.class);
+
+        assertThat(method.isDefault()).isTrue();
+        assertThat(method.getReturnType()).isEqualTo(List.class);
+    }
 
     @Test
     void combinesContributorsInOneBatchAndDefaultsMissingTypesToUnverified() {

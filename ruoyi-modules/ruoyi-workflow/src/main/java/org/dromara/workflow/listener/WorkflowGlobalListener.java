@@ -191,8 +191,11 @@ public class WorkflowGlobalListener implements GlobalListener {
             params.put("handler", flowParams.getHandler());
             // 办理意见
             params.put("message", flowParams.getMessage());
-            variable = flowParams.getVariable();
+            if (flowParams.getVariable() != null) {
+                variable = flowParams.getVariable();
+            }
         }
+        variable.forEach(params::putIfAbsent);
         //申请人提交事件
         Boolean submit = MapUtil.getBool(variable, FlowConstant.SUBMIT);
         if (submit != null && submit) {

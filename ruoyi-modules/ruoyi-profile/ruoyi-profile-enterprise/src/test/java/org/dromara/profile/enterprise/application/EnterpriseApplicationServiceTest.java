@@ -148,6 +148,19 @@ class EnterpriseApplicationServiceTest {
     }
 
     @Test
+    void workflowReviewRejectInvalidatesTheSnapshotWithoutPublishing() {
+        when(config.getConfigValue("profile.enterprise.flowCode")).thenReturn("profile_enterprise_verification");
+        when(repository.lockById(9001L)).thenReturn(application(9001L, "WAITING", 2, 1, true));
+        ProcessEvent rejected = event("finish", 1);
+        rejected.setParams(Map.of("snapshotVersion", 1, "profileDecision", "REJECT"));
+
+        service.handleProcessEvent(rejected);
+
+        verify(repository).updateWorkflowStatus(9001L, 1, "INVALID", 2, clock.instant());
+        verify(repository, never()).publishApproved(anyLong(), anyInt(), any());
+    }
+
+    @Test
     void rejectsExpiredBusinessTermsAndInvalidCreditCodes() {
         when(config.getConfigValue("profile.enterprise.provider.default")).thenReturn("manual");
         when(repository.findOpenByUserId(101L)).thenReturn(Optional.empty());

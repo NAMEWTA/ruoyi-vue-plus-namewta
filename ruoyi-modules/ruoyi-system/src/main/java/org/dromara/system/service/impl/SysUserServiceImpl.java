@@ -78,6 +78,27 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         this.openApiSessionInvalidator = Objects.requireNonNull(openApiSessionInvalidator);
     }
 
+    @Override
+    public List<UserDTO> searchActiveUsers(String keyword, int limit) {
+        if (StringUtils.isBlank(keyword)) {
+            return List.of();
+        }
+        int boundedLimit = Math.clamp(limit, 1, 50);
+        String normalized = keyword.strip();
+        List<SysUserVo> list = userMapper.lambda()
+            .select(SysUser::getUserId, SysUser::getUserName, SysUser::getNickName,
+                SysUser::getPhoneNumber, SysUser::getStatus)
+            .eq(SysUser::getStatus, SystemConstants.NORMAL)
+            .eq(SysUser::getDelFlag, SystemConstants.NORMAL)
+            .and(wrapper -> wrapper.like(SysUser::getUserName, normalized)
+                .or().like(SysUser::getNickName, normalized)
+                .or().like(SysUser::getPhoneNumber, normalized))
+            .orderByAsc(SysUser::getUserId)
+            .last("limit " + boundedLimit)
+            .voList();
+        return BeanUtil.copyToList(list, UserDTO.class);
+    }
+
     /**
      * 分页查询用户列表。
      *

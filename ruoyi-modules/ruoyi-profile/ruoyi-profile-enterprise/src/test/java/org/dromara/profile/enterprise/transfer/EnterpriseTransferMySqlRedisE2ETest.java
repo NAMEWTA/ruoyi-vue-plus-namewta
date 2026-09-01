@@ -96,7 +96,7 @@ class EnterpriseTransferMySqlRedisE2ETest {
 
                 MvcResult sent = mvc.perform(post("/profile/enterprise/transfer/send")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"fullName\":\"张三\",\"documentLastFour\":\"3001\","
+                        .content("{\"fullName\":\"张三\",\"documentLastFour\":\"9999\","
                             + "\"phone\":\"13800138000\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.status").value("SENT"))
@@ -195,7 +195,7 @@ class EnterpriseTransferMySqlRedisE2ETest {
         execute(session, "insert into profile_person (person_profile_id,full_name,document_type_code,"
             + "document_number,identity_key,gender,birth_date,status,version,create_time,create_by,update_time,"
             + "update_by,del_flag) values (" + PERSON_PROFILE
-            + ",'张三','CN_RESIDENT_ID','110101199001013001','CN_RESIDENT_ID:110101199001013001',"
+            + ",'张三','CN_RESIDENT_ID','110101199001019999','CN_RESIDENT_ID:110101199001019999',"
             + "'MALE','1990-01-01','ACTIVE',0,current_timestamp,-1,current_timestamp,-1,'0')");
         execute(session, "insert into profile_person_binding (person_binding_id,person_profile_id,user_id,status,"
             + "binding_version,source_type,source_id,bound_time,version,create_time,create_by,update_time,update_by,"

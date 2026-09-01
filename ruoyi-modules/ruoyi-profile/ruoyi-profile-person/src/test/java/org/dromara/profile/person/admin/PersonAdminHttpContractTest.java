@@ -25,6 +25,7 @@ class PersonAdminHttpContractTest {
         assertPermission("reviewContext", GetMapping.class, "profile:person:review");
         assertPermission("reviewMaterial", GetMapping.class, "profile:person:review");
         assertPermission("material", GetMapping.class, "profile:person:material");
+        assertPermission("eligibleUsers", GetMapping.class, "profile:person:override");
         assertPermission("decide", PostMapping.class, "profile:person:override");
         assertPermission("create", PostMapping.class, "profile:person:override");
         assertPermission("revise", PostMapping.class, "profile:person:override");

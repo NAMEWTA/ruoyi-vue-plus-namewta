@@ -57,6 +57,12 @@ class ProfileSchemaMySqlIntegrationTest {
                 "select count(*) from sys_dict_type where dict_type like 'profile\\_%'"));
             assertEquals("12", scalar(dataSource,
                 "select count(*) from sys_dict_data where dict_type like 'profile\\_%'"));
+            assertEquals("2", scalar(dataSource,
+                "select count(*) from flow_definition where flow_code like 'profile\\_%\\_verification'"
+                    + " and is_publish=1 and activity_status=1"));
+            assertEquals("2", scalar(dataSource,
+                "select count(*) from flow_node where node_code in ('person_review','enterprise_review')"
+                    + " and permission_flag='role:1761300000000000001' and form_custom='Y'"));
 
             assertIdentityGuard(dataSource);
             assertApplicationGuard(dataSource);
@@ -182,6 +188,23 @@ class ProfileSchemaMySqlIntegrationTest {
             + "dict_value varchar(100),dict_type varchar(100),css_class varchar(100),list_class varchar(100),"
             + "is_default char(1),create_dept bigint,create_by bigint,create_time datetime,update_by bigint,"
             + "update_time datetime,remark varchar(500),primary key(dict_code)) engine=innodb");
+        execute(dataSource, "create table flow_definition (id bigint not null,flow_code varchar(40) not null,"
+            + "flow_name varchar(100) not null,model_value varchar(40),category varchar(100),version varchar(20) not null,"
+            + "is_publish tinyint not null,form_custom char(1),form_path varchar(100),activity_status tinyint not null,"
+            + "listener_type varchar(100),listener_path varchar(400),ext varchar(500),create_time datetime,"
+            + "create_by varchar(64),update_time datetime,update_by varchar(64),del_flag char(1),tenant_id varchar(40),"
+            + "primary key(id)) engine=innodb");
+        execute(dataSource, "create table flow_node (id bigint not null,node_type tinyint not null,"
+            + "definition_id bigint not null,node_code varchar(100) not null,node_name varchar(100),"
+            + "permission_flag varchar(200),node_ratio varchar(200),coordinate varchar(100),any_node_skip varchar(100),"
+            + "listener_type varchar(100),listener_path varchar(400),form_custom char(1),form_path varchar(100),"
+            + "version varchar(20) not null,create_time datetime,create_by varchar(64),update_time datetime,"
+            + "update_by varchar(64),ext text,del_flag char(1),tenant_id varchar(40),primary key(id)) engine=innodb");
+        execute(dataSource, "create table flow_skip (id bigint not null,definition_id bigint not null,"
+            + "now_node_code varchar(100) not null,now_node_type tinyint,next_node_code varchar(100) not null,"
+            + "next_node_type tinyint,skip_name varchar(100),skip_type varchar(40),skip_condition varchar(200),"
+            + "coordinate varchar(100),create_time datetime,create_by varchar(64),update_time datetime,"
+            + "update_by varchar(64),del_flag char(1),tenant_id varchar(40),primary key(id)) engine=innodb");
     }
 
     private static String sqlBlock(String file, String marker) throws Exception {
@@ -226,6 +249,9 @@ class ProfileSchemaMySqlIntegrationTest {
         execute(dataSource, "drop table if exists sys_config");
         execute(dataSource, "drop table if exists sys_dict_data");
         execute(dataSource, "drop table if exists sys_dict_type");
+        execute(dataSource, "drop table if exists flow_skip");
+        execute(dataSource, "drop table if exists flow_node");
+        execute(dataSource, "drop table if exists flow_definition");
     }
 
     private static Path repositoryRoot() {

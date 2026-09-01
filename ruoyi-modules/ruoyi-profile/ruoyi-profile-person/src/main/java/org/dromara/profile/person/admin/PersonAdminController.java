@@ -11,6 +11,8 @@ import org.dromara.profile.person.admin.PersonAdminContracts.*;
 import org.dromara.system.api.OssService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/profile/person/archive")
@@ -22,6 +24,12 @@ public class PersonAdminController {
     @SaCheckPermission("profile:person:query")
     public R<PageResult<Summary>> page(Query query) {
         return R.ok(service.page(query));
+    }
+
+    @GetMapping("/eligible-users")
+    @SaCheckPermission("profile:person:override")
+    public R<List<AccountCandidate>> eligibleUsers(@RequestParam String keyword) {
+        return R.ok(service.eligibleUsers(keyword));
     }
 
     @GetMapping("/{profileId}")

@@ -22,6 +22,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -144,6 +145,11 @@ public class PersonApplicationService {
         }
         String status = normalizeStatus(event.getStatus());
         if ("FINISH".equals(status)) {
+            if ("REJECT".equals(normalizeDecision(event.getParams()))) {
+                repository.updateWorkflowStatus(applicationId, snapshotVersion, "INVALID",
+                    application.version(), clock.instant());
+                return;
+            }
             PersonSubmission submission = repository.requireSubmission(applicationId, snapshotVersion);
             PersonPublication publication = repository.publishApproved(applicationId, snapshotVersion, clock.instant());
             materials.snapshotImmutable(owner(MaterialOwnerType.SUBMISSION, submission.personSubmissionId()),
@@ -152,6 +158,11 @@ public class PersonApplicationService {
             repository.updateWorkflowStatus(applicationId, snapshotVersion, status,
                 application.version(), clock.instant());
         }
+    }
+
+    private String normalizeDecision(Map<String, Object> params) {
+        Object value = params == null ? null : params.get("profileDecision");
+        return value == null ? "" : value.toString().strip().toUpperCase(Locale.ROOT);
     }
 
     private void validateDraft(PersonIdentityFields fields) {

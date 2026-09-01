@@ -29,7 +29,7 @@ public class MaterialTagController {
 
     @GetMapping("/tree")
     @SaCheckPermission(value = {"profile:material-tag:query", "profile:person:material",
-        "profile:enterprise:material"}, mode = SaMode.OR)
+        "profile:enterprise:material", "profile:person:override", "profile:enterprise:override"}, mode = SaMode.OR)
     public R<List<MaterialNodeView>> tree(@RequestParam MaterialScope scope,
                                           @RequestParam(defaultValue = "false") boolean includeDisabled) {
         return R.ok(materialPort.tree(scope, includeDisabled));
