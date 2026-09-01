@@ -140,7 +140,7 @@ class ProfileMaterialMySqlE2ETest {
             insert into profile_person_application (
                 person_application_id, applicant_user_id, status, provider_code, submission_seq,
                 version, create_time, update_time, del_flag
-            ) values (?, ?, 'WAITING', 'manual', 1, 0, current_timestamp, current_timestamp, '0')
+            ) values (?, ?, 'DRAFT', 'manual', 1, 0, current_timestamp, current_timestamp, '0')
             """)) {
             application.setLong(1, APPLICATION_ID);
             application.setLong(2, USER_ID);

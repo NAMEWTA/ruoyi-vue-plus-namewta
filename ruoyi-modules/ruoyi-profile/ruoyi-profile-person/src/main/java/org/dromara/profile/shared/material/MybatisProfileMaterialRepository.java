@@ -112,6 +112,22 @@ public class MybatisProfileMaterialRepository implements ProfileMaterialReposito
     }
 
     @Override
+    public void requireWorkingEditable(MaterialOwnerKey owner) {
+        if (owner.ownerType() != MaterialOwnerType.WORKING
+            || mapper.countEditableWorkingOwner(owner.profileType().name(), owner.ownerId()) != 1) {
+            throw failure("MATERIAL_OWNER_READ_ONLY");
+        }
+    }
+
+    @Override
+    public void requireSnapshotRelationship(MaterialOwnerKey source, MaterialOwnerKey target) {
+        if (mapper.countSnapshotRelationship(source.profileType().name(), source.ownerType().name(),
+            source.ownerId(), target.ownerType().name(), target.ownerId()) != 1) {
+            throw failure("MATERIAL_SNAPSHOT_OWNER_INVALID");
+        }
+    }
+
+    @Override
     public long countAttached(MaterialOwnerKey owner) {
         return mapper.countAttached(owner.profileType().name(), owner.ownerType().name(), owner.ownerId());
     }

@@ -114,6 +114,7 @@ public class ProfileMaterialService implements ProfileMaterialPort {
         if (command.owner().ownerType() != MaterialOwnerType.WORKING) {
             throw failure("IMMUTABLE_MATERIAL_OWNER");
         }
+        repository.requireWorkingEditable(command.owner());
         MaterialNode tag = repository.requireNode(command.materialNodeId());
         requireApplicableTag(command.owner().profileType(), tag);
         if (repository.countAttached(command.owner()) >= MAX_FILE_COUNT) {
@@ -139,9 +140,13 @@ public class ProfileMaterialService implements ProfileMaterialPort {
     public void detach(MaterialOwnerKey ownerKey, Long materialRefId) {
         MaterialOwner owner = repository.lockOwner(ownerKey);
         accessPolicy.requireWrite(owner);
+        if (ownerKey.ownerType() != MaterialOwnerType.WORKING) {
+            throw failure("IMMUTABLE_MATERIAL");
+        }
+        repository.requireWorkingEditable(ownerKey);
         MaterialReference reference = repository.requireReference(materialRefId);
         requireSameOwner(ownerKey, reference);
-        if (ownerKey.ownerType() != MaterialOwnerType.WORKING || reference.immutableEvidence()) {
+        if (reference.immutableEvidence()) {
             throw failure("IMMUTABLE_MATERIAL");
         }
         if (!reference.attached()) {
@@ -189,22 +194,34 @@ public class ProfileMaterialService implements ProfileMaterialPort {
     @Override
     @DSTransactional
     public List<MaterialReferenceView> snapshotImmutable(MaterialOwnerKey source, MaterialOwnerKey target) {
-        if (source.profileType() != target.profileType() || source.ownerType() != MaterialOwnerType.WORKING
-            || target.ownerType() == MaterialOwnerType.WORKING) {
+        if (source.profileType() != target.profileType() || !validSnapshotTransition(source, target)) {
             throw failure("MATERIAL_SNAPSHOT_OWNER_INVALID");
         }
         MaterialOwner sourceOwner = repository.lockOwner(source);
-        accessPolicy.requireWrite(sourceOwner);
+        if (source.ownerType() == MaterialOwnerType.WORKING) {
+            repository.requireWorkingEditable(source);
+            accessPolicy.requireWrite(sourceOwner);
+        }
         MaterialOwner targetOwner = repository.lockOwner(target);
         if (targetOwner.applicantUserId() != null
             && !Objects.equals(sourceOwner.applicantUserId(), targetOwner.applicantUserId())) {
             throw failure("MATERIAL_SNAPSHOT_OWNER_INVALID");
         }
+        repository.requireSnapshotRelationship(source, target);
         return repository.insertImmutableCopies(source, target, clock.instant()).stream().map(reference -> {
             ossService.reconcileReferences(REFERENCE_TABLE, String.valueOf(reference.materialRefId()),
                 Set.of(), Set.of(reference.ossId()));
             return view(reference);
         }).toList();
+    }
+
+    private boolean validSnapshotTransition(MaterialOwnerKey source, MaterialOwnerKey target) {
+        return (source.ownerType() == MaterialOwnerType.WORKING
+            && target.ownerType() == MaterialOwnerType.SUBMISSION)
+            || (source.ownerType() == MaterialOwnerType.SUBMISSION
+            && target.ownerType() == MaterialOwnerType.VERSION)
+            || (source.ownerType() == MaterialOwnerType.SOURCE
+            && target.ownerType() == MaterialOwnerType.VERSION);
     }
 
     private Shape shape(MaterialNodeCommand command, MaterialNode current) {

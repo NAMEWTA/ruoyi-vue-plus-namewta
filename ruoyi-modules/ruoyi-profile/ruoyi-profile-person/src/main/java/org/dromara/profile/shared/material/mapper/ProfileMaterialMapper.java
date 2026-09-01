@@ -145,6 +145,71 @@ public interface ProfileMaterialMapper {
                              @Param("ownerId") long ownerId);
 
     @Select("""
+        <script>
+        select count(*) from (
+            select person_application_id as id
+              from profile_person_application
+             where #{profileType} = 'PERSON' and person_application_id = #{ownerId}
+               and status in ('DRAFT','BACK','CANCEL') and del_flag = '0'
+            union all
+            select enterprise_application_id
+              from profile_enterprise_application
+             where #{profileType} = 'ENTERPRISE' and enterprise_application_id = #{ownerId}
+               and status in ('DRAFT','BACK','CANCEL') and del_flag = '0'
+        ) editable_owner
+        </script>
+        """)
+    long countEditableWorkingOwner(@Param("profileType") String profileType,
+                                   @Param("ownerId") long ownerId);
+
+    @Select("""
+        <script>
+        select count(*) from (
+            select 1 as allowed
+              from profile_person_submission s
+             where #{profileType} = 'PERSON' and #{sourceType} = 'WORKING'
+               and #{targetType} = 'SUBMISSION' and s.person_application_id = #{sourceId}
+               and s.person_submission_id = #{targetId} and s.del_flag = '0'
+            union all
+            select 1
+              from profile_enterprise_submission s
+             where #{profileType} = 'ENTERPRISE' and #{sourceType} = 'WORKING'
+               and #{targetType} = 'SUBMISSION' and s.enterprise_application_id = #{sourceId}
+               and s.enterprise_submission_id = #{targetId} and s.del_flag = '0'
+            union all
+            select 1
+              from profile_person_version v
+             where #{profileType} = 'PERSON' and #{sourceType} = 'SUBMISSION'
+               and #{targetType} = 'VERSION' and v.source_type = 'USER_SUBMISSION'
+               and v.source_id = #{sourceId} and v.person_version_id = #{targetId} and v.del_flag = '0'
+            union all
+            select 1
+              from profile_enterprise_version v
+             where #{profileType} = 'ENTERPRISE' and #{sourceType} = 'SUBMISSION'
+               and #{targetType} = 'VERSION' and v.source_type = 'USER_SUBMISSION'
+               and v.source_id = #{sourceId} and v.enterprise_version_id = #{targetId} and v.del_flag = '0'
+            union all
+            select 1
+              from profile_person_version v
+             where #{profileType} = 'PERSON' and #{sourceType} = 'SOURCE'
+               and #{targetType} = 'VERSION' and v.source_type in ('ADMIN_CREATE','ADMIN_OVERRIDE')
+               and v.source_id = #{sourceId} and v.person_version_id = #{targetId} and v.del_flag = '0'
+            union all
+            select 1
+              from profile_enterprise_version v
+             where #{profileType} = 'ENTERPRISE' and #{sourceType} = 'SOURCE'
+               and #{targetType} = 'VERSION' and v.source_type in ('ADMIN_CREATE','ADMIN_OVERRIDE')
+               and v.source_id = #{sourceId} and v.enterprise_version_id = #{targetId} and v.del_flag = '0'
+        ) snapshot_relationship
+        </script>
+        """)
+    long countSnapshotRelationship(@Param("profileType") String profileType,
+                                   @Param("sourceType") String sourceType,
+                                   @Param("sourceId") long sourceId,
+                                   @Param("targetType") String targetType,
+                                   @Param("targetId") long targetId);
+
+    @Select("""
         select count(*) from profile_material_ref
          where profile_type = #{profileType} and owner_type = #{ownerType} and owner_id = #{ownerId}
            and status = 'ATTACHED' and del_flag = '0'
