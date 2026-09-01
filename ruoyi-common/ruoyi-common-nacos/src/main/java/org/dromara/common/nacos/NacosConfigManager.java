@@ -100,7 +100,7 @@ public final class NacosConfigManager implements NacosConfigAccessor {
         Snapshot current = snapshot.get();
         try {
             Map<String, Object> candidate = NacosYamlOverlay.parse(yaml);
-            NacosCandidateValidator.validate(candidate);
+            NacosCandidateValidator.validate(candidate, environment);
             Map<String, Object> prepared = prepare(candidate);
             Counts counts = classify(candidate);
             String digest = candidate.isEmpty() ? null : digest(yaml == null ? "" : yaml);

@@ -78,6 +78,35 @@ class NacosConfigManagerTest {
     }
 
     @Test
+    void rejectsKnownCrossFieldViolationsBeforeParticipantsExist() {
+        MockEnvironment environment = new MockEnvironment()
+            .withProperty("notify.idempotency.default-window", "5m")
+            .withProperty("notify.idempotency.min-window", "30s")
+            .withProperty("notify.idempotency.max-window", "24h")
+            .withProperty("oss.lifecycle.download-ttl", "2m")
+            .withProperty("oss.lifecycle.download-ttl-min", "1m")
+            .withProperty("oss.lifecycle.download-ttl-max", "10m");
+        NacosConfigManager manager = manager(environment);
+
+        assertThat(manager.apply("""
+            notify:
+              idempotency:
+                default-window: 7m
+                min-window: 10m
+                max-window: 5m
+            """, NacosUpdateOrigin.STARTUP)).isFalse();
+        assertThat(manager.state().errorCode()).isEqualTo("PARTICIPANT_REJECTED");
+        assertThat(environment.getProperty("notify.idempotency.default-window")).isEqualTo("5m");
+
+        assertThat(manager.apply("oss.lifecycle.download-ttl: 30m", NacosUpdateOrigin.STARTUP)).isFalse();
+        assertThat(manager.state().errorCode()).isEqualTo("PARTICIPANT_REJECTED");
+        assertThat(environment.getProperty("oss.lifecycle.download-ttl")).isEqualTo("2m");
+
+        assertThat(manager.apply("captcha.enable: false", NacosUpdateOrigin.LISTENER)).isTrue();
+        assertThat(environment.getProperty("captcha.enable")).isEqualTo("false");
+    }
+
+    @Test
     void emptyRemoteDocumentRemovesTheOverlay() {
         MockEnvironment environment = new MockEnvironment().withProperty("feature.mode", "local");
         NacosConfigManager manager = manager(environment);
