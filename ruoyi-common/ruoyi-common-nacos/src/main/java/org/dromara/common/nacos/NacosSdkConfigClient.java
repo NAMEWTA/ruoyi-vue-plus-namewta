@@ -4,6 +4,7 @@ import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.PropertyKeyConst;
 import com.alibaba.nacos.api.config.ConfigService;
 import com.alibaba.nacos.api.config.listener.AbstractListener;
+import com.alibaba.nacos.client.config.utils.SnapShotSwitch;
 import org.springframework.util.StringUtils;
 
 import java.util.Properties;
@@ -21,6 +22,7 @@ final class NacosSdkConfigClient implements NacosConfigClient {
     }
 
     static NacosConfigClient create(NacosConfigSettings settings) throws Exception {
+        disableSnapshotFallback();
         Properties properties = new Properties();
         properties.put(PropertyKeyConst.SERVER_ADDR, settings.serverAddr());
         properties.put(PropertyKeyConst.NAMESPACE, settings.namespace());
@@ -29,6 +31,10 @@ final class NacosSdkConfigClient implements NacosConfigClient {
             properties.put(PropertyKeyConst.PASSWORD, settings.password() == null ? "" : settings.password());
         }
         return new NacosSdkConfigClient(settings, NacosFactory.createConfigService(properties));
+    }
+
+    static void disableSnapshotFallback() {
+        SnapShotSwitch.setIsSnapShot(false);
     }
 
     @Override
