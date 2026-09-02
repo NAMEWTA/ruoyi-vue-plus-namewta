@@ -72,14 +72,14 @@
       "carrier": "oss_id",
       "encoding": "single-positive-oss-id",
       "primaryKey": "material_ref_id",
-      "ownerService": "org.dromara.profile.shared.material.ProfileMaterialService",
-      "callerClass": "org.dromara.profile.shared.material.ProfileMaterialService",
+      "ownerService": "org.dromara.profile.person.service.impl.ProfileMaterialServiceImpl",
+      "callerClass": "org.dromara.profile.person.service.impl.ProfileMaterialServiceImpl",
       "insertStrategy": "validate OSS ownership and reconcile empty set to the inserted working or immutable snapshot reference",
       "updateStrategy": "material OSS references are immutable; metadata and tags are snapshot fields",
       "deleteStrategy": "reconcile the persisted OSS id to empty set when mutable working evidence is logically detached",
       "restoreStrategy": "not supported; detached evidence is retained and a new reference is attached instead",
-      "carrierSource": "ruoyi-modules/ruoyi-profile/ruoyi-profile-person/src/main/java/org/dromara/profile/shared/material/MaterialReference.java",
-      "contractTest": "ruoyi-modules/ruoyi-profile/ruoyi-profile-person/src/test/java/org/dromara/profile/shared/material/ProfileMaterialServiceTest.java"
+      "carrierSource": "ruoyi-modules/ruoyi-profile/ruoyi-profile-person/src/main/java/org/dromara/profile/person/domain/material/MaterialReference.java",
+      "contractTest": "ruoyi-modules/ruoyi-profile/ruoyi-profile-person/src/test/java/org/dromara/profile/person/service/impl/ProfileMaterialServiceTest.java"
     }
   ],
   "carrierAllowlist": [

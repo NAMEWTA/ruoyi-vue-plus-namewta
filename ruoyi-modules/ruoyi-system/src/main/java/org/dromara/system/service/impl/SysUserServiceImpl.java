@@ -100,6 +100,30 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     }
 
     /**
+     * 在调用方的动态数据源事务内锁定一个有效用户。
+     *
+     * @param userId 用户 ID
+     * @return 未删除且状态正常的用户；不存在时返回 {@code null}
+     */
+    @Override
+    public UserDTO lockActiveById(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("userId must be positive");
+        }
+        SysUserVo vo = userMapper.lambda()
+            .select(SysUser::getUserId, SysUser::getDeptId, SysUser::getUserName,
+                SysUser::getNickName, SysUser::getEmail,
+                SysUser::getPhoneNumber, SysUser::getGender, SysUser::getStatus,
+                SysUser::getCreateTime)
+            .eq(SysUser::getUserId, userId)
+            .eq(SysUser::getStatus, SystemConstants.NORMAL)
+            .eq(SysUser::getDelFlag, SystemConstants.NORMAL)
+            .last("for update")
+            .voOne();
+        return BeanUtil.copyProperties(vo, UserDTO.class);
+    }
+
+    /**
      * 分页查询用户列表。
      *
      * @param user      用户筛选条件

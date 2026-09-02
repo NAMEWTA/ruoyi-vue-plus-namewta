@@ -25,6 +25,20 @@ public interface UserService {
     }
 
     /**
+     * 在事务内锁定并返回一个当前有效的用户账户。
+     *
+     * <p>调用方必须在覆盖后续业务状态变更的动态数据源事务中调用本方法。旧实现默认拒绝该能力，
+     * 避免在没有真实数据库行锁时静默退化为普通查询。</p>
+     *
+     * @param userId 用户 ID，必须为正数
+     * @return 未删除且状态正常的用户；不存在时返回 {@code null}
+     * @throws UnsupportedOperationException 当前实现不支持事务内用户锁定时抛出
+     */
+    default UserDTO lockActiveById(Long userId) {
+        throw new UnsupportedOperationException("Active user locking is not supported by this implementation");
+    }
+
+    /**
      * 通过用户ID查询用户账户
      *
      * @param userId 用户ID

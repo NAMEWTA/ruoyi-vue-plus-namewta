@@ -229,6 +229,7 @@ class BusinessOssOwnerArchitectureUnitTest {
         try (Stream<Path> files = Files.walk(repository)) {
             return files.filter(path -> path.toString().endsWith(".java"))
                 .filter(path -> path.toString().contains("/src/main/java/"))
+                .filter(path -> !repository.relativize(path).startsWith("specdev-worktree"))
                 .toList();
         }
     }
