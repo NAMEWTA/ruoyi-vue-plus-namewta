@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/** EnterpriseAdminIdentityBo 请求参数模型。 */
 public record EnterpriseAdminIdentityBo(
     @NotBlank @Size(max = 255) String enterpriseName,
     @NotBlank @Size(max = 64) String unifiedCreditCode,

@@ -5,6 +5,7 @@ import org.dromara.profile.api.material.ProfileMaterialPort.MaterialReferenceVie
 import java.time.Instant;
 import java.util.List;
 
+/** PersonReviewContextVo 对外返回模型。 */
 public record PersonReviewContextVo(
     long applicationId,
     long applicantUserId,

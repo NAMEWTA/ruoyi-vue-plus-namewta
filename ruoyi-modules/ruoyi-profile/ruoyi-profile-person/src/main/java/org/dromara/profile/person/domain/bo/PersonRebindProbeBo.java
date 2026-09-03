@@ -5,6 +5,7 @@ import java.io.Serializable;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+/** PersonRebindProbeBo 请求参数模型。 */
 public record PersonRebindProbeBo(@NotBlank @Size(max = 64) String documentTypeCode,
                                   @NotBlank @Size(max = 128) String documentNumber) implements Serializable {
 

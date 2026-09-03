@@ -4,7 +4,7 @@
     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper">
 
-    <select id="lockApplication" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationApplicationRow">
+    <select id="lockApplication" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationApplicationRow">
         select a.enterprise_application_id as application_id,
                s.enterprise_submission_id as submission_id,
                a.provider_code,
@@ -43,7 +43,7 @@
         )
     </insert>
 
-    <select id="lockByProviderRequest" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationAttemptRow">
+    <select id="lockByProviderRequest" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationAttemptRow">
         select verification_attempt_id, application_id, submission_id, provider_code,
                provider_request_id, request_fingerprint, attempt_no, status,
                normalized_result_json, provider_evidence_json, error_code, completed_time

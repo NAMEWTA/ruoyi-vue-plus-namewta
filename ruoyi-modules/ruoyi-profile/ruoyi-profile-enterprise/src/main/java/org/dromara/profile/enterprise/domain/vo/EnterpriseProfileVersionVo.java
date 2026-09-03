@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/** EnterpriseProfileVersionVo 对外返回模型。 */
 public record EnterpriseProfileVersionVo(
     long versionId,
     int versionNo,

@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
 
+/** ProfileMaterialRequirement 持久化实体模型。 */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("profile_material_requirement")

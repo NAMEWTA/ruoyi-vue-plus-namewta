@@ -1,0 +1,27 @@
+package org.dromara.profile.person.port;
+
+import org.dromara.profile.person.domain.application.PersonDocumentTypeRule;
+import org.dromara.profile.person.domain.application.PersonPublication;
+import org.dromara.profile.person.domain.application.PersonSubmission;
+
+import java.time.Instant;
+import java.util.Optional;
+
+/** PersonApplicationPublicationPort 业务端口合同，隔离外部适配实现。  Narrow application capability consumed by the person administration workflow. */
+public interface PersonApplicationPublicationPort {
+
+    /**
+     * 处理 findDocumentType 业务步骤。
+     */
+    Optional<PersonDocumentTypeRule> findDocumentType(String documentTypeCode);
+
+    /**
+     * 处理 requireSubmission 业务步骤。
+     */
+    PersonSubmission requireSubmission(long applicationId, int submissionSeq);
+
+    /**
+     * 处理 publishApproved 业务步骤。
+     */
+    PersonPublication publishApproved(long applicationId, int snapshotVersion, Instant finishedTime);
+}

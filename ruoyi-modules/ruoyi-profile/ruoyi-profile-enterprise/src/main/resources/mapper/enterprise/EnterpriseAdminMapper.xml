@@ -13,7 +13,7 @@
         <if test="unifiedCreditCode != null and unifiedCreditCode != ''">and p.unified_credit_code = #{unifiedCreditCode}</if>
     </select>
 
-    <select id="selectProfiles" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$ProfileRow">
+    <select id="selectProfiles" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$ProfileRow">
         select p.enterprise_profile_id profile_id, p.previous_profile_id, p.current_version_id, p.enterprise_name,
                p.unified_credit_code, p.unified_credit_code identity_key, p.enterprise_type,
                p.legal_representative_name, p.legal_document_type_code, p.legal_document_number,
@@ -32,7 +32,7 @@
          order by p.create_time desc, p.enterprise_profile_id desc limit #{limit} offset #{offset}
     </select>
 
-    <select id="selectProfile" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$ProfileRow">
+    <select id="selectProfile" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$ProfileRow">
         select p.enterprise_profile_id profile_id, p.previous_profile_id, p.current_version_id, p.enterprise_name,
                p.unified_credit_code, p.unified_credit_code identity_key, p.enterprise_type,
                p.legal_representative_name, p.legal_document_type_code, p.legal_document_number,
@@ -46,7 +46,7 @@
          where p.enterprise_profile_id = #{profileId} and p.del_flag = '0'
     </select>
 
-    <select id="lockProfile" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$ProfileRow">
+    <select id="lockProfile" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$ProfileRow">
         select p.enterprise_profile_id profile_id, p.previous_profile_id, p.current_version_id, p.enterprise_name,
                p.unified_credit_code, p.unified_credit_code identity_key, p.enterprise_type,
                p.legal_representative_name, p.legal_document_type_code, p.legal_document_number,
@@ -56,7 +56,7 @@
           from profile_enterprise p where p.enterprise_profile_id = #{profileId} and p.del_flag = '0' for update
     </select>
 
-    <select id="selectVersions" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$VersionRow">
+    <select id="selectVersions" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$VersionRow">
         select enterprise_version_id version_id, enterprise_profile_id profile_id, version_no, source_type, source_id,
                enterprise_name, unified_credit_code, unified_credit_code identity_key, enterprise_type,
                legal_representative_name, legal_document_type_code, legal_document_number, established_date,
@@ -66,7 +66,7 @@
          order by version_no desc
     </select>
 
-    <select id="lockCurrentVersion" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$VersionRow">
+    <select id="lockCurrentVersion" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$VersionRow">
         select enterprise_version_id version_id, enterprise_profile_id profile_id, version_no, source_type, source_id,
                enterprise_name, unified_credit_code, unified_credit_code identity_key, enterprise_type,
                legal_representative_name, legal_document_type_code, legal_document_number, established_date,
@@ -76,14 +76,14 @@
            and del_flag = '0' for update
     </select>
 
-    <select id="selectBindings" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$BindingRow">
+    <select id="selectBindings" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$BindingRow">
         select enterprise_binding_id binding_id, enterprise_profile_id profile_id, user_id, status, binding_version,
                source_type, source_id, bound_time, unbound_time
           from profile_enterprise_binding where enterprise_profile_id = #{profileId} and del_flag = '0'
          order by create_time desc, enterprise_binding_id desc
     </select>
 
-    <select id="lockEffectiveBinding" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$BindingRow">
+    <select id="lockEffectiveBinding" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$BindingRow">
         select enterprise_binding_id binding_id, enterprise_profile_id profile_id, user_id, status, binding_version,
                source_type, source_id, bound_time, unbound_time
           from profile_enterprise_binding where enterprise_profile_id = #{profileId}
@@ -95,20 +95,20 @@
          and status in ('ACTIVE','SUSPENDED') and del_flag = '0'
     </select>
 
-    <select id="selectSources" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$SourceRow">
+    <select id="selectSources" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$SourceRow">
         select enterprise_source_id source_id, source_type, operator_user_id, operation_reason reason,
                field_snapshot_json, occurred_time from profile_enterprise_source
          where enterprise_profile_id = #{profileId} and del_flag = '0' order by occurred_time desc
     </select>
 
-    <select id="selectAudits" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$AuditRow">
+    <select id="selectAudits" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$AuditRow">
         select operation_audit_id audit_id, operation_type, operator_user_id, capability, reason,
                before_status, after_status, result, failure_category, occurred_time
           from profile_operation_audit where profile_type = 'ENTERPRISE' and profile_id = #{profileId}
            and del_flag = '0' order by occurred_time desc
     </select>
 
-    <select id="selectReview" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$ReviewRow">
+    <select id="selectReview" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$ReviewRow">
         select a.enterprise_application_id application_id, a.applicant_user_id, a.status, a.submission_seq,
                a.decision_version, a.version, s.enterprise_submission_id submission_id,
                s.field_snapshot_json, s.submitted_time
@@ -118,7 +118,7 @@
          where a.enterprise_application_id = #{applicationId} and a.submission_seq > 0 and a.del_flag = '0'
     </select>
 
-    <select id="lockWaitingApplication" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseAdminRows$ReviewRow">
+    <select id="lockWaitingApplication" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseAdminRows$ReviewRow">
         select a.enterprise_application_id application_id, a.applicant_user_id, a.status, a.submission_seq,
                a.decision_version, a.version, s.enterprise_submission_id submission_id,
                s.field_snapshot_json, s.submitted_time

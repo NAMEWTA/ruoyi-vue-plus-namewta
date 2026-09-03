@@ -6,6 +6,7 @@ import org.dromara.profile.person.domain.application.PersonIdentityFields;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/** PersonApplicationVo 对外返回模型。 */
 public record PersonApplicationVo(
     Long personApplicationId,
     String status,
@@ -23,6 +24,7 @@ public record PersonApplicationVo(
     Instant finishedTime
 ) {
 
+    /** 根据输入创建档案并返回管理结果。 */
     public static PersonApplicationVo from(PersonApplication application) {
         PersonIdentityFields fields = application.fields();
         return new PersonApplicationVo(application.personApplicationId(), application.status(),

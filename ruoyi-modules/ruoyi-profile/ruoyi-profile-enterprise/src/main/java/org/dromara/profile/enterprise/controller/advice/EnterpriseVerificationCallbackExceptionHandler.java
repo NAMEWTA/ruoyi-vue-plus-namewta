@@ -8,9 +8,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/** EnterpriseVerificationCallbackExceptionHandler 控制器，提供本能力的 HTTP 接口。 */
 @RestControllerAdvice(assignableTypes = EnterpriseVerificationAnonymousController.class)
 public class EnterpriseVerificationCallbackExceptionHandler {
 
+    /** 处理业务异常并返回统一响应。 */
     @ExceptionHandler(EnterpriseVerificationException.class)
     public ResponseEntity<R<FailureResponse>> handle(EnterpriseVerificationException failure) {
         HttpStatus status = switch (failure.category()) {
@@ -22,6 +24,7 @@ public class EnterpriseVerificationCallbackExceptionHandler {
             .body(R.fail("Enterprise verification callback rejected", data));
     }
 
+    /** 企业认证回调失败响应模型。 */
     public record FailureResponse(String category) {
     }
 }

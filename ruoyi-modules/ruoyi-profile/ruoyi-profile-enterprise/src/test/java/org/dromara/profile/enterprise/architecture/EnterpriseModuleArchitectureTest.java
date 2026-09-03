@@ -72,16 +72,73 @@ class EnterpriseModuleArchitectureTest {
     );
 
     @Test
-    void serviceTreeContainsOnlyRootInterfacesAndImplDirectory() throws IOException {
+    void enforcesTheFiveLayerDependencyDirection() throws IOException {
         Path serviceRoot = Path.of(System.getProperty("basedir"), "src/main/java/org/dromara/profile/enterprise/service");
-        try (var children = Files.list(serviceRoot)) {
-            assertThat(children.filter(Files::isDirectory).filter(this::containsJavaSource)
-                .map(path -> path.getFileName().toString()))
-                .containsExactly("impl");
-        }
+        Path moduleRoot = serviceRoot.getParent();
+        assertThat(moduleRoot.resolve("usecase")).isDirectory();
+        assertThat(moduleRoot.resolve("dao")).isDirectory();
+        assertThat(moduleRoot.resolve("mapper")).isDirectory();
         try (var files = Files.list(serviceRoot)) {
-            assertThat(files.filter(path -> path.toString().endsWith(".java")))
-                .allSatisfy(path -> assertThat(Files.readString(path)).contains("public interface "));
+            assertThat(files.filter(path -> path.getFileName().toString().endsWith("ServiceImpl.java"))
+                .toList()).as("layered production service must not use ServiceImpl naming").isEmpty();
+        }
+        try (var files = Files.walk(serviceRoot)) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                assertThat(Files.readString(file)).doesNotContain("import org.dromara.profile.enterprise.mapper.",
+                    "IService", "BaseMapper", "QueryWrapper");
+            }
+        }
+        Path usecaseRoot = moduleRoot.resolve("usecase");
+        try (var files = Files.walk(usecaseRoot)) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                assertThat(Files.readString(file)).doesNotContain("import org.dromara.profile.enterprise.dao.",
+                    "import org.dromara.profile.enterprise.mapper.",
+                    "import org.dromara.profile.enterprise.service.impl.");
+            }
+        }
+        try (var files = Files.list(moduleRoot.resolve("dao"))) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                assertThat(Files.readString(file)).contains("import org.dromara.profile.enterprise.mapper.")
+                    .doesNotContain("import org.dromara.profile.enterprise.service.",
+                        "import org.dromara.profile.enterprise.usecase.")
+                    .contains("@Repository");
+            }
+        }
+        Path controllerRoot = moduleRoot.resolve("controller");
+        try (var files = Files.walk(controllerRoot)) {
+            for (Path file : files.filter(path -> path.toString().endsWith("Controller.java")).toList()) {
+                assertThat(Files.readString(file)).contains("import org.dromara.profile.enterprise.usecase.")
+                    .doesNotContain("import org.dromara.profile.enterprise.service.");
+            }
+        }
+    }
+
+    @Test
+    void readModelsHaveDedicatedPackageAndStayOutOfHttpBoundary() throws IOException {
+        Path moduleRoot = Path.of(System.getProperty("basedir"), "src/main/java/org/dromara/profile/enterprise");
+        Path readRoot = moduleRoot.resolve("domain/model/read");
+        assertThat(readRoot).isDirectory();
+        try (var files = Files.walk(readRoot)) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                assertThat(file.getFileName().toString()).matches(".*(Row|AdminRows)\\.java");
+                assertThat(Files.readString(file))
+                    .contains("package org.dromara.profile.enterprise.domain.model.read;");
+            }
+        }
+        for (Path boundary : List.of(moduleRoot.resolve("controller"), moduleRoot.resolve("usecase"))) {
+            try (var files = Files.walk(boundary)) {
+                for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                    assertThat(Files.readString(file))
+                        .doesNotContain("import org.dromara.profile.enterprise.domain.model.read.");
+                }
+            }
+        }
+        Path xmlRoot = Path.of(System.getProperty("basedir"), "src/main/resources/mapper/enterprise");
+        try (var files = Files.list(xmlRoot)) {
+            for (Path xml : files.filter(path -> path.toString().endsWith(".xml")).toList()) {
+                assertThat(Files.readString(xml))
+                    .doesNotMatch("(?s).*org\\.dromara\\.profile\\.enterprise\\.domain\\.vo\\..*(Row|Projection).*");
+            }
         }
     }
 
@@ -124,6 +181,18 @@ class EnterpriseModuleArchitectureTest {
                     .map(Annotation::annotationType)
                     .noneMatch(forbidden::contains)).as(mapper.getSimpleName() + "." + method.getName()).isTrue());
         });
+        Path mapperRoot = Path.of(System.getProperty("basedir"), "src/main/java/org/dromara/profile/enterprise/mapper");
+        try (var files = Files.list(mapperRoot)) {
+            files.filter(path -> path.toString().endsWith("Mapper.java")).forEach(path -> {
+                try {
+                    assertThat(Files.readString(path)).doesNotContain("org.dromara.profile.enterprise.domain.vo.");
+                } catch (IOException exception) {
+                    throw new IllegalStateException("Cannot inspect mapper " + path, exception);
+                }
+            });
+        } catch (IOException exception) {
+            throw new IllegalStateException("Cannot inspect mapper directory " + mapperRoot, exception);
+        }
     }
 
     @Test

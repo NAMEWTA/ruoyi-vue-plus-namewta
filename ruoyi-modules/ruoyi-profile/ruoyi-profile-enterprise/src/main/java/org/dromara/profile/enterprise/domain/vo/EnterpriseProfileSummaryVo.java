@@ -2,6 +2,7 @@ package org.dromara.profile.enterprise.domain.vo;
 
 import java.time.Instant;
 
+/** EnterpriseProfileSummaryVo 对外返回模型。 */
 public record EnterpriseProfileSummaryVo(
     long profileId,
     Long previousProfileId,

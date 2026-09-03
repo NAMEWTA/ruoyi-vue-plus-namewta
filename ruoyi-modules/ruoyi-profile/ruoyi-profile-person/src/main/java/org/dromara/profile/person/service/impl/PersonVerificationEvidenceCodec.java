@@ -3,6 +3,7 @@ package org.dromara.profile.person.service.impl;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 个人认证证据编解码器，保护提供方回调证据的存储格式。 */
 @Component
 public class PersonVerificationEvidenceCodec {
 
@@ -10,15 +11,18 @@ public class PersonVerificationEvidenceCodec {
 
     private final JsonMapper jsonMapper;
 
+    /** 创建个人认证证据编解码器。 */
     public PersonVerificationEvidenceCodec(JsonMapper jsonMapper) {
         this.jsonMapper = jsonMapper;
     }
 
+    /** 编码认证证据。 */
     public String encode(String callbackDigest, String providerEvidenceJson) {
         return jsonMapper.writeValueAsString(
             new StoredEvidence(SCHEMA_VERSION, callbackDigest, providerEvidenceJson));
     }
 
+    /** 解码认证证据。 */
     public DecodedEvidence decode(String storedJson) {
         if (storedJson == null) {
             return new DecodedEvidence(null, null);
@@ -34,6 +38,7 @@ public class PersonVerificationEvidenceCodec {
         return new DecodedEvidence(null, storedJson);
     }
 
+    /** 个人认证证据存储载荷。 */
     private record StoredEvidence(
         int schemaVersion,
         String callbackDigest,
@@ -41,6 +46,7 @@ public class PersonVerificationEvidenceCodec {
     ) {
     }
 
+    /** 解码后的个人认证证据。 */
     public record DecodedEvidence(String callbackDigest, String providerEvidenceJson) {
     }
 }

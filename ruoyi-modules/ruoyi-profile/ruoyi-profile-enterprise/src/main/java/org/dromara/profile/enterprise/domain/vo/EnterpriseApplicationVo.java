@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/** EnterpriseApplicationVo 对外返回模型。 */
 public record EnterpriseApplicationVo(
     Long enterpriseApplicationId,
     String status,
@@ -35,6 +36,7 @@ public record EnterpriseApplicationVo(
     Instant finishedTime
 ) {
 
+    /** 根据输入创建档案并返回管理结果。 */
     public static EnterpriseApplicationVo from(EnterpriseApplication application) {
         EnterpriseIdentityFields fields = application.fields();
         return new EnterpriseApplicationVo(application.enterpriseApplicationId(), application.status(),

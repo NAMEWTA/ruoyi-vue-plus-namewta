@@ -16,7 +16,7 @@
                 )
     </insert>
 
-    <select id="selectRetryable" resultType="org.dromara.profile.person.mapper.PersonNotificationAuditMapper$NotificationAuditRow">
+    <select id="selectRetryable" resultType="org.dromara.profile.person.domain.model.read.PersonNotificationAuditRow">
         select notification_audit_id, notification_type, profile_id, application_id,
                        target_user_id, notify_request_id, status, failure_category, occurred_time, version
                   from profile_notification_audit
@@ -28,7 +28,7 @@
                  limit 1
     </select>
 
-    <select id="lockRetryable" resultType="org.dromara.profile.person.mapper.PersonNotificationAuditMapper$NotificationAuditRow">
+    <select id="lockRetryable" resultType="org.dromara.profile.person.domain.model.read.PersonNotificationAuditRow">
         select notification_audit_id, notification_type, profile_id, application_id,
                        target_user_id, notify_request_id, status, failure_category, occurred_time, version
                   from profile_notification_audit

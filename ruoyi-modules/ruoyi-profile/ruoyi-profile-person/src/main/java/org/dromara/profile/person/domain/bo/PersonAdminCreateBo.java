@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
+/** PersonAdminCreateBo 请求参数模型。 */
 public record PersonAdminCreateBo(
     @Valid @NotNull PersonAdminIdentityBo identity,
     @Positive Long bindUserId,

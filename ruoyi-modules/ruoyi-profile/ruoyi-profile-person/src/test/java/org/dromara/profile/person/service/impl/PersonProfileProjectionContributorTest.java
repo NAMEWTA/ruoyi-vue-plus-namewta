@@ -1,7 +1,8 @@
 package org.dromara.profile.person.service.impl;
 
-import org.dromara.profile.person.domain.vo.PersonActiveProjectionRow;
+import org.dromara.profile.person.domain.model.read.PersonActiveProjectionRow;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
+import org.dromara.profile.person.dao.PersonApplicationDao;
 import org.dromara.profile.api.domain.ProfileType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,8 @@ class PersonProfileProjectionContributorTest {
         row.setVerifiedAt(Instant.parse("2026-09-01T12:00:00Z"));
         when(mapper.selectActiveProjections(Set.of(101L, 102L))).thenReturn(List.of(row));
 
-        PersonProfileProjectionContributor contributor = new PersonProfileProjectionContributor(mapper);
+        PersonProfileProjectionContributor contributor = new PersonProfileProjectionContributor(
+            new PersonApplicationDao(mapper));
 
         assertThat(contributor.profileType()).isEqualTo(ProfileType.PERSON);
         assertThat(contributor.findActiveBindings(Set.of(101L, 102L))).containsOnlyKeys(101L);

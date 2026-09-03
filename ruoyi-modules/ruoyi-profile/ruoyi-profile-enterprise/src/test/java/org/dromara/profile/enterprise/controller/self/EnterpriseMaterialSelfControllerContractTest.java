@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import org.dromara.common.log.annotation.Log;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
+import org.dromara.profile.enterprise.usecase.ProfileMaterialUseCase;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -44,7 +45,7 @@ class EnterpriseMaterialSelfControllerContractTest {
     @Test
     void fixesMaterialOwnersToEnterpriseProfileType() {
         EnterpriseMaterialSelfController controller =
-            new EnterpriseMaterialSelfController(mock(ProfileMaterialPort.class));
+            new EnterpriseMaterialSelfController(mock(ProfileMaterialUseCase.class));
         assertThat(controller.profileType()).isEqualTo(ProfileType.ENTERPRISE);
     }
 }

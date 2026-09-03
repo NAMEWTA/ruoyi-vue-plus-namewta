@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/** 企业认证提供方注册表，按编码解析可用的认证适配器。 */
 @Component
 public class EnterpriseVerificationProviderRegistry {
 
@@ -20,6 +21,7 @@ public class EnterpriseVerificationProviderRegistry {
     private final Map<String, EnterpriseVerificationProvider> providers;
     private final Set<String> enabledProviders;
 
+    /** 创建企业认证提供方注册表。 */
     public EnterpriseVerificationProviderRegistry(List<EnterpriseVerificationProvider> providers,
                                                   EnterpriseVerificationProviderProperties properties) {
         this.providers = index(providers);
@@ -28,6 +30,7 @@ public class EnterpriseVerificationProviderRegistry {
             .collect(Collectors.toUnmodifiableSet());
     }
 
+    /** 校验认证提供方已启用。 */
     public EnterpriseVerificationProvider requireEnabled(String providerCode) {
         String code = validateCode(providerCode);
         EnterpriseVerificationProvider provider = providers.get(code);
@@ -44,6 +47,7 @@ public class EnterpriseVerificationProviderRegistry {
         return provider;
     }
 
+    /** 构建认证提供方索引。 */
     private Map<String, EnterpriseVerificationProvider> index(List<EnterpriseVerificationProvider> candidates) {
         Map<String, EnterpriseVerificationProvider> indexed = new HashMap<>();
         for (EnterpriseVerificationProvider provider : candidates) {
@@ -57,6 +61,7 @@ public class EnterpriseVerificationProviderRegistry {
         return Map.copyOf(indexed);
     }
 
+    /** 校验code。 */
     private String validateCode(String providerCode) {
         if (providerCode == null || !providerCode.matches(PROVIDER_CODE_PATTERN)) {
             throw new EnterpriseVerificationException(

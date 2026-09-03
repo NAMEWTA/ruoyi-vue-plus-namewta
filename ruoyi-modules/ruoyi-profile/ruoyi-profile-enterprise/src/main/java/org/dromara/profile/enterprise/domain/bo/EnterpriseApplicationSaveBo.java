@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/** EnterpriseApplicationSaveBo 请求参数模型。 */
 public record EnterpriseApplicationSaveBo(
     @Size(max = 255) String enterpriseName,
     @Size(max = 64) String unifiedCreditCode,

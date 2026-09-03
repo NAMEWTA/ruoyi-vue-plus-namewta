@@ -6,7 +6,7 @@ import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
 import org.dromara.profile.person.event.PersonReboundEvent;
 import org.dromara.profile.person.domain.application.PersonRebindPublication;
-import org.dromara.profile.person.service.IPersonRebindService;
+import org.dromara.profile.person.usecase.PersonRebindUseCase;
 import org.dromara.profile.person.service.PersonWorkflowGateway;
 import org.dromara.profile.person.service.impl.PersonRebindNotificationService;
 import org.dromara.system.api.ConfigService;
@@ -32,7 +32,7 @@ class PersonRebindProcessListenerTest {
 
     private static final String FLOW_CODE = "person-profile";
 
-    private final IPersonRebindService service = mock(IPersonRebindService.class);
+    private final PersonRebindUseCase service = mock(PersonRebindUseCase.class);
     private final ProfileMaterialPort materials = mock(ProfileMaterialPort.class);
     private final PersonWorkflowGateway workflow = mock(PersonWorkflowGateway.class);
     private final ConfigService configService = mock(ConfigService.class);
@@ -46,12 +46,12 @@ class PersonRebindProcessListenerTest {
         PersonReboundEvent rebound = new PersonReboundEvent(9201L, 9001L, 202L);
         PersonRebindPublication publication = new PersonRebindPublication(9101L, 9402L, rebound);
         when(configService.getConfigValue("profile.person.flowCode")).thenReturn(FLOW_CODE);
-        when(service.publishApprovedRebind(anyLong(), anyInt(), any(Instant.class)))
+        when(service.publishApproved(anyLong(), anyInt(), any(Instant.class)))
             .thenReturn(Optional.of(publication));
 
         listener.handle(event("FINISH", Map.of("snapshotVersion", 1, "profileDecision", "APPROVE")));
 
-        verify(service).publishApprovedRebind(anyLong(), anyInt(), any(Instant.class));
+        verify(service).publishApproved(anyLong(), anyInt(), any(Instant.class));
         verify(materials).snapshotImmutable(
             new MaterialOwnerKey(ProfileType.PERSON, MaterialOwnerType.SUBMISSION, 9101L),
             new MaterialOwnerKey(ProfileType.PERSON, MaterialOwnerType.VERSION, 9402L));
@@ -65,7 +65,7 @@ class PersonRebindProcessListenerTest {
 
         listener.handle(event(" finish ", Map.of("snapshotVersion", 1, "profileDecision", " reject ")));
 
-        verify(service, never()).publishApprovedRebind(anyLong(), anyInt(), any(Instant.class));
+        verify(service, never()).publishApproved(anyLong(), anyInt(), any(Instant.class));
         verifyNoPublicationSideEffects();
     }
 
@@ -75,18 +75,18 @@ class PersonRebindProcessListenerTest {
 
         listener.handle(event("BACK", Map.of("snapshotVersion", 1, "profileDecision", "APPROVE")));
 
-        verify(service, never()).publishApprovedRebind(anyLong(), anyInt(), any(Instant.class));
+        verify(service, never()).publishApproved(anyLong(), anyInt(), any(Instant.class));
         verifyNoPublicationSideEffects();
     }
 
     @Test
     void ordinaryApplicationDoesNotProduceRebindSideEffects() {
         when(configService.getConfigValue("profile.person.flowCode")).thenReturn(FLOW_CODE);
-        when(service.publishApprovedRebind(anyLong(), anyInt(), any(Instant.class))).thenReturn(Optional.empty());
+        when(service.publishApproved(anyLong(), anyInt(), any(Instant.class))).thenReturn(Optional.empty());
 
         listener.handle(event("FINISH", Map.of("snapshotVersion", 1, "profileDecision", "APPROVE")));
 
-        verify(service).publishApprovedRebind(anyLong(), anyInt(), any(Instant.class));
+        verify(service).publishApproved(anyLong(), anyInt(), any(Instant.class));
         verifyNoPublicationSideEffects();
     }
 

@@ -1,5 +1,6 @@
 package org.dromara.profile.enterprise.domain.verification;
 
+/** EnterpriseVerificationFailureCategory 认证领域模型。 */
 public enum EnterpriseVerificationFailureCategory {
     UNKNOWN_PROVIDER,
     DISABLED_PROVIDER,

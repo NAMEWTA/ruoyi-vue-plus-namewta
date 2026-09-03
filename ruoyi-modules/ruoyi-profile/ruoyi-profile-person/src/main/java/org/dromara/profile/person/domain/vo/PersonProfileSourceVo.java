@@ -2,6 +2,7 @@ package org.dromara.profile.person.domain.vo;
 
 import java.time.Instant;
 
+/** PersonProfileSourceVo 对外返回模型。 */
 public record PersonProfileSourceVo(
     long sourceId,
     String sourceType,

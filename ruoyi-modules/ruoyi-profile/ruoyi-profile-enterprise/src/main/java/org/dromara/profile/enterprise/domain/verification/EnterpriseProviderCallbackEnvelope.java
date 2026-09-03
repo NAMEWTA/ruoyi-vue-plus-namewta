@@ -1,5 +1,6 @@
 package org.dromara.profile.enterprise.domain.verification;
 
+/** EnterpriseProviderCallbackEnvelope 认证领域模型。 */
 public record EnterpriseProviderCallbackEnvelope(
     String providerRequestId,
     long timestampEpochSecond,

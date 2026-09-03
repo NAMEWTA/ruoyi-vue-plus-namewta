@@ -6,6 +6,7 @@ import org.dromara.profile.person.domain.exception.PersonApplicationException;
 import java.time.LocalDate;
 import java.util.Locale;
 
+/** PersonIdentityFields 应用层领域模型。 */
 public record PersonIdentityFields(
     String fullName,
     String documentTypeCode,
@@ -17,6 +18,7 @@ public record PersonIdentityFields(
     LocalDate validUntil
 ) {
 
+    /** 规范化身份字段。 */
     public static PersonIdentityFields normalize(PersonApplicationSaveBo command) {
         if (command == null) {
             throw new PersonApplicationException("PERSON_DRAFT_REQUIRED");
@@ -29,11 +31,13 @@ public record PersonIdentityFields(
             upper(command.gender()), command.birthDate(), command.validFrom(), command.validUntil());
     }
 
+    /** 转换为大写文本。 */
     private static String upper(String value) {
         String normalized = text(value);
         return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
 
+    /** 规范化文本内容。 */
     private static String text(String value) {
         if (value == null) {
             return null;

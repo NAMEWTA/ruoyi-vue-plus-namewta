@@ -9,7 +9,8 @@ import org.dromara.common.notify.model.NotifyChannel;
 import org.dromara.common.notify.model.NotifyResult;
 import org.dromara.common.notify.model.NotifyStatus;
 import org.dromara.profile.person.mapper.PersonNotificationAuditMapper;
-import org.dromara.profile.person.mapper.PersonNotificationAuditMapper.NotificationAuditRow;
+import org.dromara.profile.person.dao.PersonNotificationAuditDao;
+import org.dromara.profile.person.domain.model.read.PersonNotificationAuditRow;
 import org.dromara.system.api.MessageService;
 import org.dromara.system.api.UserService;
 import org.junit.jupiter.api.Tag;
@@ -40,17 +41,17 @@ class PersonRebindNotificationTest {
     private final UserService users = mock(UserService.class);
     private final NotifyClient notify = mock(NotifyClient.class);
     private final PersonRebindNotificationService service =
-        new PersonRebindNotificationService(audits, messages, users, notify);
+        new PersonRebindNotificationService(new PersonNotificationAuditDao(audits), messages, users, notify);
 
     @Test
     void stagesRetryableAuditRowsBeforeAnyDelivery() {
-        when(audits.insertNotificationAudit(any(NotificationAuditRow.class))).thenReturn(1);
+        when(audits.insertNotificationAudit(any(PersonNotificationAuditRow.class))).thenReturn(1);
 
         service.stage(new PersonReboundEvent(9201L, 9001L, 202L));
 
-        ArgumentCaptor<NotificationAuditRow> audit = ArgumentCaptor.forClass(NotificationAuditRow.class);
+        ArgumentCaptor<PersonNotificationAuditRow> audit = ArgumentCaptor.forClass(PersonNotificationAuditRow.class);
         verify(audits, org.mockito.Mockito.times(2)).insertNotificationAudit(audit.capture());
-        assertThat(audit.getAllValues()).extracting(NotificationAuditRow::getStatus)
+        assertThat(audit.getAllValues()).extracting(PersonNotificationAuditRow::getStatus)
             .containsExactly("PENDING", "PENDING");
         verifyNoInteractions(messages, users, notify);
     }
@@ -103,9 +104,9 @@ class PersonRebindNotificationTest {
         assertThat(request.getValue().content().contentSnapshot())
             .doesNotContain("张三", "110101", "101");
         assertThat(request.getValue().auditPolicy().name()).isEqualTo("REDACT_SENSITIVE");
-        ArgumentCaptor<NotificationAuditRow> audit = ArgumentCaptor.forClass(NotificationAuditRow.class);
+        ArgumentCaptor<PersonNotificationAuditRow> audit = ArgumentCaptor.forClass(PersonNotificationAuditRow.class);
         verify(audits, org.mockito.Mockito.times(2)).updateDelivery(audit.capture());
-        assertThat(audit.getAllValues()).extracting(NotificationAuditRow::getStatus)
+        assertThat(audit.getAllValues()).extracting(PersonNotificationAuditRow::getStatus)
             .containsExactly("ACCEPTED", "ACCEPTED");
     }
 
@@ -118,17 +119,17 @@ class PersonRebindNotificationTest {
 
         service.notifyOldAccount(new PersonReboundEvent(9201L, 9001L, 202L));
 
-        ArgumentCaptor<NotificationAuditRow> audit = ArgumentCaptor.forClass(NotificationAuditRow.class);
+        ArgumentCaptor<PersonNotificationAuditRow> audit = ArgumentCaptor.forClass(PersonNotificationAuditRow.class);
         verify(audits, org.mockito.Mockito.times(2)).updateDelivery(audit.capture());
-        assertThat(audit.getAllValues()).extracting(NotificationAuditRow::getStatus)
+        assertThat(audit.getAllValues()).extracting(PersonNotificationAuditRow::getStatus)
             .containsExactly("FAILED", "FAILED");
-        assertThat(audit.getAllValues()).extracting(NotificationAuditRow::getFailureCategory)
+        assertThat(audit.getAllValues()).extracting(PersonNotificationAuditRow::getFailureCategory)
             .containsOnly("DELIVERY_FAILED");
     }
 
     @Test
     void failedAuditCanBeRetriedWithoutReplayingTheBindingTransaction() {
-        NotificationAuditRow row = new NotificationAuditRow();
+        PersonNotificationAuditRow row = new PersonNotificationAuditRow();
         row.setNotificationAuditId(9901L);
         row.setNotificationType("PERSON_REBIND_INTERNAL");
         row.setProfileId(9201L);
@@ -150,8 +151,8 @@ class PersonRebindNotificationTest {
         when(audits.updateDelivery(any())).thenReturn(1);
     }
 
-    private NotificationAuditRow pending(String type) {
-        NotificationAuditRow row = new NotificationAuditRow();
+    private PersonNotificationAuditRow pending(String type) {
+        PersonNotificationAuditRow row = new PersonNotificationAuditRow();
         row.setNotificationAuditId("PERSON_REBIND_INTERNAL".equals(type) ? 9901L : 9902L);
         row.setNotificationType(type);
         row.setProfileId(9201L);

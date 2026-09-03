@@ -11,7 +11,7 @@ import org.dromara.profile.enterprise.domain.bo.EnterpriseApplicationSaveBo;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseApplicationSubmitBo;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationProbeVo;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationVo;
-import org.dromara.profile.enterprise.service.IEnterpriseApplicationService;
+import org.dromara.profile.enterprise.usecase.EnterpriseApplicationUseCase;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,36 +20,51 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * EnterpriseApplicationController HTTP 接口，负责参数校验和响应包装。
+ */
 @RestController
 @Validated
 @RequiredArgsConstructor
 @RequestMapping("/profile/enterprise/application")
 public class EnterpriseApplicationController {
 
-    private final IEnterpriseApplicationService service;
+    private final EnterpriseApplicationUseCase service;
 
+    /**
+     * 处理 current HTTP 请求。
+     */
     @GetMapping
     @SaCheckPermission("profile:enterprise:apply")
     public R<EnterpriseApplicationVo> current() {
-        return R.ok(service.current(LoginHelper.getUserId()).orElse(null));
+        return R.ok(service.current());
     }
 
+    /**
+     * 处理 save HTTP 请求。
+     */
     @PostMapping
     @SaCheckPermission("profile:enterprise:apply")
     @Log(title = "保存企业实名认证申请", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseApplicationVo> save(@Valid @RequestBody EnterpriseApplicationSaveBo command) {
-        return R.ok(service.save(LoginHelper.getUserId(), command));
+        return R.ok(service.save(command));
     }
 
+    /**
+     * 处理 submit HTTP 请求。
+     */
     @PostMapping("/submit")
     @SaCheckPermission("profile:enterprise:apply")
     @Log(title = "提交企业实名认证申请", businessType = BusinessType.OTHER,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseApplicationVo> submit(@Valid @RequestBody EnterpriseApplicationSubmitBo command) {
-        return R.ok(service.submit(LoginHelper.getUserId(), command.expectedVersion()));
+        return R.ok(service.submit(command.expectedVersion()));
     }
 
+    /**
+     * 处理 probe HTTP 请求。
+     */
     @PostMapping("/probe")
     @SaCheckPermission("profile:enterprise:apply")
     @Log(title = "探测企业认证状态", businessType = BusinessType.OTHER,

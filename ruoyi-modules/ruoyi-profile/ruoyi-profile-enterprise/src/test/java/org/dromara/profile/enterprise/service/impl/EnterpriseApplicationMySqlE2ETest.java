@@ -16,6 +16,7 @@ import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.enterprise.mapper.EnterpriseApplicationMapper;
 import org.dromara.profile.enterprise.config.EnterpriseVerificationProviderProperties;
 import org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper;
+import org.dromara.profile.enterprise.dao.EnterpriseVerificationAttemptDao;
 import org.dromara.profile.enterprise.support.EnterpriseMapperXmlTestSupport;
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.event.ProcessEvent;
@@ -216,7 +217,8 @@ class EnterpriseApplicationMySqlE2ETest {
         EnterpriseVerificationProviderRegistry providers = new EnterpriseVerificationProviderRegistry(
             List.of(new EnterpriseManualVerificationProvider()), properties);
         EnterpriseVerificationAttemptCoordinator attempts = new EnterpriseVerificationAttemptCoordinator(
-            providers, attemptMapper, evidenceCodec, new EnterpriseVerificationSecurityAuditRecorder(attemptMapper));
+            providers, new EnterpriseVerificationAttemptDao(attemptMapper), evidenceCodec,
+            new EnterpriseVerificationSecurityAuditRecorder(new EnterpriseVerificationAttemptDao(attemptMapper)));
         ConfigService config = mock(ConfigService.class);
         when(config.getConfigValue("profile.enterprise.provider.default")).thenReturn("manual");
         when(config.getConfigValue("profile.enterprise.flowCode")).thenReturn("profile_enterprise_verification");

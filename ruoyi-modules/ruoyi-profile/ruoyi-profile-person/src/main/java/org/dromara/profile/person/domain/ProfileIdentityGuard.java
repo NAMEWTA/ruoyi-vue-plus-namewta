@@ -12,6 +12,7 @@ import org.dromara.common.mybatis.core.domain.BaseEntity;
 
 import java.time.LocalDateTime;
 
+/** ProfileIdentityGuard 持久化实体模型。 */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("profile_identity_guard")

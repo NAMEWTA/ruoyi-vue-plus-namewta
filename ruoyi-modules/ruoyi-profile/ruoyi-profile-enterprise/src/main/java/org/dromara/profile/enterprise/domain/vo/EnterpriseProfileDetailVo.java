@@ -4,6 +4,7 @@ import org.dromara.profile.api.material.ProfileMaterialPort.MaterialReferenceVie
 
 import java.util.List;
 
+/** EnterpriseProfileDetailVo 对外返回模型。 */
 public record EnterpriseProfileDetailVo(
     EnterpriseProfileSummaryVo profile,
     List<EnterpriseProfileVersionVo> versions,

@@ -3,7 +3,8 @@ package org.dromara.profile.person.service.impl;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityLock;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityMatch;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityQuery;
-import org.dromara.profile.person.domain.vo.PersonActiveIdentityMatchRow;
+import org.dromara.profile.person.domain.model.read.PersonActiveIdentityMatchRow;
+import org.dromara.profile.person.dao.PersonApplicationDao;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,8 @@ import static org.mockito.Mockito.when;
 class PersonIdentityLookupServiceImplTest {
 
     private final PersonApplicationMapper mapper = mock(PersonApplicationMapper.class);
-    private final PersonIdentityLookupServiceImpl service = new PersonIdentityLookupServiceImpl(mapper);
+    private final PersonIdentityLookupServiceImpl service = new PersonIdentityLookupServiceImpl(
+        new PersonApplicationDao(mapper));
 
     @Test
     void mapsExactMatchesWithoutExposingIdentityFields() {

@@ -4,7 +4,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.profile.person.mapper.ProfileMaterialMapper">
 
-    <select id="selectNodes" resultType="org.dromara.profile.person.domain.vo.MaterialNodeRow">
+    <select id="selectNodes" resultType="org.dromara.profile.person.domain.model.read.MaterialNodeRow">
         select material_node_id, parent_id, node_type, node_depth, profile_type, material_tag_code,
                        node_name, system_required, status, order_num, version
                   from profile_material_node
@@ -14,14 +14,14 @@
                  order by node_depth, order_num, material_node_id
     </select>
 
-    <select id="selectNode" resultType="org.dromara.profile.person.domain.vo.MaterialNodeRow">
+    <select id="selectNode" resultType="org.dromara.profile.person.domain.model.read.MaterialNodeRow">
         select material_node_id, parent_id, node_type, node_depth, profile_type, material_tag_code,
                        node_name, system_required, status, order_num, version
                   from profile_material_node
                  where material_node_id = #{materialNodeId} and del_flag = '0'
     </select>
 
-    <select id="lockNode" resultType="org.dromara.profile.person.domain.vo.MaterialNodeRow">
+    <select id="lockNode" resultType="org.dromara.profile.person.domain.model.read.MaterialNodeRow">
         select material_node_id, parent_id, node_type, node_depth, profile_type, material_tag_code,
                        node_name, system_required, status, order_num, version
                   from profile_material_node
@@ -91,7 +91,7 @@
                 )
     </insert>
 
-    <select id="lockReference" resultType="org.dromara.profile.person.domain.vo.MaterialReferenceRow">
+    <select id="lockReference" resultType="org.dromara.profile.person.domain.model.read.MaterialReferenceRow">
         select material_ref_id, owner_type, owner_id, profile_type, oss_id, material_node_id,
                        material_tag_code, material_tag_name, file_name, file_size, file_extension, mime_type,
                        status, immutable_flag, attached_time, detached_time, version
@@ -107,7 +107,7 @@
                  where material_ref_id = #{id} and status = 'ATTACHED' and immutable_flag = 'N' and del_flag = '0'
     </update>
 
-    <select id="selectReferences" resultType="org.dromara.profile.person.domain.vo.MaterialReferenceRow">
+    <select id="selectReferences" resultType="org.dromara.profile.person.domain.model.read.MaterialReferenceRow">
         select material_ref_id, owner_type, owner_id, profile_type, oss_id, material_node_id,
                        material_tag_code, material_tag_name, file_name, file_size, file_extension, mime_type,
                        status, immutable_flag, attached_time, detached_time, version
@@ -117,7 +117,7 @@
                  order by attached_time, material_ref_id
     </select>
 
-    <select id="selectRequirements" resultType="org.dromara.profile.person.domain.vo.MaterialRequirementRow">
+    <select id="selectRequirements" resultType="org.dromara.profile.person.domain.model.read.MaterialRequirementRow">
         select material_tag_code, minimum_count
                   from profile_material_requirement
                  where profile_type = #{profileType} and status = '0' and del_flag = '0'
@@ -130,7 +130,7 @@
                  order by material_requirement_id
     </select>
 
-    <select id="selectAttachedCounts" resultType="org.dromara.profile.person.domain.vo.MaterialTagCountRow">
+    <select id="selectAttachedCounts" resultType="org.dromara.profile.person.domain.model.read.MaterialTagCountRow">
         select material_tag_code, count(*) as material_count
                   from profile_material_ref
                  where profile_type = #{profileType} and owner_type = #{ownerType} and owner_id = #{ownerId}

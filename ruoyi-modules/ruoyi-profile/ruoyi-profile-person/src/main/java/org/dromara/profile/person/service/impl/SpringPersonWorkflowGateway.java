@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** 基于 Spring 依赖注入的个人工作流网关适配器。 */
 @Component
 public class SpringPersonWorkflowGateway implements PersonWorkflowGateway {
 
@@ -22,12 +23,14 @@ public class SpringPersonWorkflowGateway implements PersonWorkflowGateway {
     private final ObjectProvider<WorkflowService> workflowProvider;
     private final ConfigService configService;
 
+    /** 创建个人工作流网关适配器。 */
     public SpringPersonWorkflowGateway(ObjectProvider<WorkflowService> workflowProvider,
                                        ConfigService configService) {
         this.workflowProvider = workflowProvider;
         this.configService = configService;
     }
 
+    /** 启动个人档案审批流程，并传递快照版本变量。 */
     @Override
     public void start(long applicationId, long submissionId, int snapshotVersion) {
         WorkflowService workflow = workflowProvider.getIfAvailable();
@@ -54,6 +57,7 @@ public class SpringPersonWorkflowGateway implements PersonWorkflowGateway {
         }
     }
 
+    /** 读取流程事件中的持久化快照版本。 */
     @Override
     public Integer persistedSnapshotVersion(ProcessEvent event) {
         if (event == null || event.getInstanceId() == null || event.getInstanceId() <= 0) {
@@ -85,6 +89,7 @@ public class SpringPersonWorkflowGateway implements PersonWorkflowGateway {
         }
     }
 
+    /** 校验正整数编号。 */
     private Integer positiveInteger(Object value) {
         try {
             int parsed = value instanceof Number number ? number.intValue() : Integer.parseInt(String.valueOf(value));

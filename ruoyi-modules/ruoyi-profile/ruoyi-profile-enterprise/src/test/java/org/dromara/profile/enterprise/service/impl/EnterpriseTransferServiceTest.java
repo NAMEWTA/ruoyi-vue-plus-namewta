@@ -2,7 +2,7 @@ package org.dromara.profile.enterprise.service.impl;
 
 import org.dromara.profile.enterprise.domain.exception.EnterpriseTransferException;
 import org.dromara.profile.enterprise.domain.transfer.EnterpriseTransferChallenge;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseTransferOwnerRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseTransferOwnerRow;
 import org.dromara.profile.enterprise.mapper.EnterpriseTransferMapper;
 import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore;
 import cn.hutool.crypto.digest.BCrypt;

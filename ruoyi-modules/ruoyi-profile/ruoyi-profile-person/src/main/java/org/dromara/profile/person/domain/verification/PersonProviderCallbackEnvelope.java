@@ -1,5 +1,6 @@
 package org.dromara.profile.person.domain.verification;
 
+/** PersonProviderCallbackEnvelope 认证领域模型。 */
 public record PersonProviderCallbackEnvelope(
     String providerRequestId,
     long timestampEpochSecond,

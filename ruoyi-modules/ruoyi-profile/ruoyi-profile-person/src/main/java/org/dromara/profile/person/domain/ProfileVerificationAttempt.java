@@ -11,6 +11,7 @@ import org.dromara.common.mybatis.core.domain.BaseEntity;
 
 import java.time.LocalDateTime;
 
+/** ProfileVerificationAttempt 持久化实体模型。 */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Alias("PersonProfileVerificationAttempt")

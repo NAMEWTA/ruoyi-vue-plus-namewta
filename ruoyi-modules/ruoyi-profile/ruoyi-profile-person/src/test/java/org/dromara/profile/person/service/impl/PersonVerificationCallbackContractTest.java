@@ -5,10 +5,11 @@ import org.dromara.profile.person.domain.verification.PersonApplicationVerificat
 import org.dromara.profile.person.domain.verification.PersonProviderAttemptStatus;
 import org.dromara.profile.person.domain.verification.PersonProviderCallbackEnvelope;
 import org.dromara.profile.person.domain.verification.PersonVerificationAttempt;
+import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.domain.verification.PersonVerificationCallbackOutcome;
 import org.dromara.profile.person.domain.verification.PersonVerificationFailureCategory;
 import org.dromara.profile.person.config.PersonVerificationProviderProperties;
-import org.dromara.profile.person.service.PersonVerificationTimeSource;
+import org.dromara.profile.person.support.PersonVerificationTimeSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -110,9 +111,10 @@ class PersonVerificationCallbackContractTest {
             91L, 41L, 501L, "test-provider", "person-41-1", "fingerprint", null, 1,
             PersonProviderAttemptStatus.PENDING, null, null, null, null));
         PersonVerificationSecurityAuditRecorder recorder =
-            new PersonVerificationSecurityAuditRecorder(mapperFixture.mapper());
+            new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(mapperFixture.mapper()));
         PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
-            new PersonVerificationProviderRegistry(List.of(provider), properties), mapperFixture.mapper(),
+            new PersonVerificationProviderRegistry(List.of(provider), properties),
+            new PersonVerificationAttemptDao(mapperFixture.mapper()),
             mapperFixture.evidenceCodec(), recorder);
         return new Fixture(provider, mapperFixture, coordinator);
     }

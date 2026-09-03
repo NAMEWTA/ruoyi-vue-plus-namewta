@@ -10,8 +10,8 @@ import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseProviderCallbackEnvelope;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationCallbackOutcome;
-import org.dromara.profile.enterprise.service.EnterpriseVerificationTimeSource;
-import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationAttemptCoordinator;
+import org.dromara.profile.enterprise.support.EnterpriseVerificationTimeSource;
+import org.dromara.profile.enterprise.usecase.EnterpriseVerificationUseCase;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,20 +19,29 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * EnterpriseVerificationAnonymousController HTTP 接口，负责参数校验和响应包装。
+ */
 @Validated
 @RestController
 @RequestMapping("/profile/enterprise/verification/providers")
 public class EnterpriseVerificationAnonymousController {
 
-    private final EnterpriseVerificationAttemptCoordinator coordinator;
+    private final EnterpriseVerificationUseCase useCase;
     private final EnterpriseVerificationTimeSource timeSource;
 
-    public EnterpriseVerificationAnonymousController(EnterpriseVerificationAttemptCoordinator coordinator,
+    /**
+     * 处理 EnterpriseVerificationAnonymousController HTTP 请求。
+     */
+    public EnterpriseVerificationAnonymousController(EnterpriseVerificationUseCase useCase,
                                                      EnterpriseVerificationTimeSource timeSource) {
-        this.coordinator = coordinator;
+        this.useCase = useCase;
         this.timeSource = timeSource;
     }
 
+    /**
+     * 处理 callback HTTP 请求。
+     */
     @SaIgnore
     @Log(title = "企业认证供应商回调", businessType = BusinessType.OTHER,
         isSaveRequestData = false, isSaveResponseData = false)
@@ -40,7 +49,7 @@ public class EnterpriseVerificationAnonymousController {
     public R<EnterpriseVerificationCallbackOutcome> callback(
         @PathVariable String providerCode,
         @Valid @RequestBody CallbackRequest request) {
-        EnterpriseVerificationCallbackOutcome outcome = coordinator.handleCallback(
+        EnterpriseVerificationCallbackOutcome outcome = useCase.callback(
             providerCode,
             new EnterpriseProviderCallbackEnvelope(
                 request.providerRequestId(),
@@ -51,6 +60,9 @@ public class EnterpriseVerificationAnonymousController {
         return R.ok(outcome);
     }
 
+    /**
+     * CallbackRequest HTTP 接口，负责参数校验和响应包装。
+     */
     public record CallbackRequest(
         @NotBlank @Size(max = 128) String providerRequestId,
         @Positive long timestampEpochSecond,

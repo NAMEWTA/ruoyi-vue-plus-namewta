@@ -1,10 +1,10 @@
 package org.dromara.profile.enterprise.service.impl;
 
 import org.dromara.profile.enterprise.domain.application.EnterprisePublication;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationRow;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseBindingRow;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseProfileRow;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseSubmissionRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseApplicationRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseBindingRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseProfileRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseSubmissionRow;
 import org.dromara.profile.enterprise.mapper.EnterpriseApplicationMapper;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;

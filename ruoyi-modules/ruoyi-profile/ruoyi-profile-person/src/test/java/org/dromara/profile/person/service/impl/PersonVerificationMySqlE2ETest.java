@@ -2,10 +2,11 @@ package org.dromara.profile.person.service.impl;
 
 import org.dromara.profile.person.controller.anonymous.PersonVerificationCallbackExceptionHandler;
 import org.dromara.profile.person.controller.anonymous.PersonVerificationAnonymousController;
+import org.dromara.profile.person.usecase.impl.PersonVerificationUseCaseImpl;
 import org.dromara.profile.person.domain.verification.PersonVerificationAttempt;
 import org.dromara.profile.person.domain.verification.PersonVerificationStartAttemptCommand;
 import org.dromara.profile.person.config.PersonVerificationProviderProperties;
-import org.dromara.profile.person.service.PersonVerificationTimeSource;
+import org.dromara.profile.person.support.PersonVerificationTimeSource;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -14,6 +15,7 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.dromara.profile.person.mapper.PersonVerificationAttemptMapper;
+import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.support.PersonMapperXmlTestSupport;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -56,14 +58,14 @@ class PersonVerificationMySqlE2ETest {
             properties.setEnabledProviders(Set.of("test-provider"));
             PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
                 new PersonVerificationProviderRegistry(List.of(provider), properties),
-                mapper, evidenceCodec,
-                new PersonVerificationSecurityAuditRecorder(mapper));
+                new PersonVerificationAttemptDao(mapper), evidenceCodec,
+                new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(mapper)));
             PersonVerificationAttempt attempt = coordinator.startAttempt(
                 new PersonVerificationStartAttemptCommand(APPLICATION_ID, SUBMISSION_ID, "person-fingerprint"));
             session.commit();
 
             MockMvc mvc = MockMvcBuilders.standaloneSetup(
-                    new PersonVerificationAnonymousController(coordinator, () -> NOW))
+                    new PersonVerificationAnonymousController(new PersonVerificationUseCaseImpl(coordinator), () -> NOW))
                 .setControllerAdvice(new PersonVerificationCallbackExceptionHandler())
                 .build();
             String accepted = callbackBody(provider, attempt.providerRequestId(), "approved");

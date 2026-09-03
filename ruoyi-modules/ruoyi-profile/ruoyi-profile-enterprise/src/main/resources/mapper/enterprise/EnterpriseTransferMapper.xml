@@ -4,7 +4,7 @@
     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.profile.enterprise.mapper.EnterpriseTransferMapper">
 
-    <select id="selectActiveOwner" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseTransferOwnerRow">
+    <select id="selectActiveOwner" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseTransferOwnerRow">
         select b.enterprise_binding_id as binding_id, b.enterprise_profile_id as profile_id,
                b.user_id, b.binding_version
           from profile_enterprise_binding b
@@ -13,7 +13,7 @@
            and p.status = 'ACTIVE' and p.del_flag = '0'
     </select>
 
-    <select id="lockActiveOwner" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseTransferOwnerRow">
+    <select id="lockActiveOwner" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseTransferOwnerRow">
         select b.enterprise_binding_id as binding_id, b.enterprise_profile_id as profile_id,
                b.user_id, b.binding_version
           from profile_enterprise_binding b

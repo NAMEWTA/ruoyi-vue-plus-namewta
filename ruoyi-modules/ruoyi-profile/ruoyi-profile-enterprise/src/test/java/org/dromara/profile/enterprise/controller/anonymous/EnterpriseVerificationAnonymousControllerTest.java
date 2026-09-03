@@ -3,14 +3,16 @@ package org.dromara.profile.enterprise.controller.anonymous;
 import cn.dev33.satoken.annotation.SaIgnore;
 import org.dromara.profile.enterprise.config.EnterpriseVerificationProviderProperties;
 import org.dromara.profile.enterprise.controller.advice.EnterpriseVerificationCallbackExceptionHandler;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationApplicationRow;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationAttemptRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationApplicationRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationAttemptRow;
 import org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper;
+import org.dromara.profile.enterprise.dao.EnterpriseVerificationAttemptDao;
 import org.dromara.profile.enterprise.service.impl.EnterpriseDeterministicTestProvider;
 import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationAttemptCoordinator;
 import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationEvidenceCodec;
 import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationProviderRegistry;
 import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationSecurityAuditRecorder;
+import org.dromara.profile.enterprise.usecase.impl.EnterpriseVerificationUseCaseImpl;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -47,10 +49,11 @@ class EnterpriseVerificationAnonymousControllerTest {
         EnterpriseVerificationEvidenceCodec codec =
             new EnterpriseVerificationEvidenceCodec(JsonMapper.builder().build());
         EnterpriseVerificationAttemptCoordinator coordinator = new EnterpriseVerificationAttemptCoordinator(
-            new EnterpriseVerificationProviderRegistry(List.of(provider), properties), mapper, codec,
-            new EnterpriseVerificationSecurityAuditRecorder(mapper));
+            new EnterpriseVerificationProviderRegistry(List.of(provider), properties),
+            new EnterpriseVerificationAttemptDao(mapper), codec,
+            new EnterpriseVerificationSecurityAuditRecorder(new EnterpriseVerificationAttemptDao(mapper)));
         EnterpriseVerificationAnonymousController controller =
-            new EnterpriseVerificationAnonymousController(coordinator, () -> NOW);
+            new EnterpriseVerificationAnonymousController(new EnterpriseVerificationUseCaseImpl(coordinator), () -> NOW);
         MockMvc mvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new EnterpriseVerificationCallbackExceptionHandler())
             .build();

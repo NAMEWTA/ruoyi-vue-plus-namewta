@@ -7,9 +7,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/** PersonVerificationCallbackExceptionHandler 控制器，提供本能力的 HTTP 接口。 */
 @RestControllerAdvice(assignableTypes = PersonVerificationAnonymousController.class)
 public class PersonVerificationCallbackExceptionHandler {
 
+    /** 处理业务异常并返回统一响应。 */
     @ExceptionHandler(PersonVerificationException.class)
     public ResponseEntity<R<FailureResponse>> handle(PersonVerificationException failure) {
         HttpStatus status = switch (failure.category()) {
@@ -21,6 +23,7 @@ public class PersonVerificationCallbackExceptionHandler {
             .body(R.fail("Person verification callback rejected", data));
     }
 
+    /** 个人认证回调失败响应模型。 */
     public record FailureResponse(String category) {
     }
 }

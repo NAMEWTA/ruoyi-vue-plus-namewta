@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Locale;
 
+/** EnterpriseIdentityFields 应用层领域模型。 */
 public record EnterpriseIdentityFields(
     String enterpriseName,
     String unifiedCreditCode,
@@ -29,6 +30,7 @@ public record EnterpriseIdentityFields(
     String website
 ) {
 
+    /** 规范化身份字段。 */
     public static EnterpriseIdentityFields normalize(EnterpriseApplicationSaveBo command) {
         if (command == null) {
             throw new EnterpriseApplicationException("ENTERPRISE_DRAFT_REQUIRED");
@@ -43,16 +45,19 @@ public record EnterpriseIdentityFields(
             command.registeredCapital(), upper(command.industryCode()), text(command.website()));
     }
 
+    /** 转换为大写文本。 */
     private static String upper(String value) {
         String normalized = text(value);
         return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
 
+    /** 转换为小写文本。 */
     private static String lower(String value) {
         String normalized = text(value);
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
+    /** 规范化文本内容。 */
     private static String text(String value) {
         if (value == null) {
             return null;

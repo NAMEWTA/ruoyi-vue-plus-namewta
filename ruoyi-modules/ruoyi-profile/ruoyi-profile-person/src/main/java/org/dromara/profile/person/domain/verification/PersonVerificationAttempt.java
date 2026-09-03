@@ -3,6 +3,7 @@ package org.dromara.profile.person.domain.verification;
 import java.time.Instant;
 import java.util.Objects;
 
+/** PersonVerificationAttempt 认证领域模型。 */
 public record PersonVerificationAttempt(
     long verificationAttemptId,
     long applicationId,
@@ -18,6 +19,7 @@ public record PersonVerificationAttempt(
     String errorCode,
     Instant completedAt
 ) {
+    /** 校验个人认证尝试的标识和完成状态。 */
     public PersonVerificationAttempt {
         if (applicationId <= 0 || submissionId <= 0 || attemptNo <= 0) {
             throw new IllegalArgumentException("Attempt identifiers and attemptNo must be positive");
@@ -27,6 +29,7 @@ public record PersonVerificationAttempt(
         Objects.requireNonNull(status, "status");
     }
 
+    /** 根据提供方启动结果创建认证尝试。 */
     public static PersonVerificationAttempt fromStart(PersonApplicationVerificationState application,
                                                       int attemptNo,
                                                       String requestFingerprint,
@@ -47,6 +50,7 @@ public record PersonVerificationAttempt(
             result.completedAt());
     }
 
+    /** 判断回调内容是否重复。 */
     public boolean sameCallback(PersonVerifiedCallback callback) {
         return Objects.equals(callbackDigest, callback.callbackDigest())
             && status == callback.status()

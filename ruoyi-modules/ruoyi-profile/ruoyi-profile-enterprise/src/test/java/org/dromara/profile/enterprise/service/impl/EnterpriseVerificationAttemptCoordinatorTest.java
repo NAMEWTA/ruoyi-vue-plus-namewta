@@ -5,9 +5,10 @@ import org.dromara.profile.enterprise.domain.exception.EnterpriseVerificationExc
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationAttempt;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationFailureCategory;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationStartAttemptCommand;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationApplicationRow;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationAttemptRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationApplicationRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationAttemptRow;
 import org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper;
+import org.dromara.profile.enterprise.dao.EnterpriseVerificationAttemptDao;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -71,7 +72,8 @@ class EnterpriseVerificationAttemptCoordinatorTest {
         return new EnterpriseVerificationAttemptCoordinator(
             new EnterpriseVerificationProviderRegistry(
                 List.of(new EnterpriseManualVerificationProvider()), properties),
-            mapper, codec, mock(EnterpriseVerificationSecurityAuditRecorder.class));
+            new EnterpriseVerificationAttemptDao(mapper), codec,
+            mock(EnterpriseVerificationSecurityAuditRecorder.class));
     }
 
     private EnterpriseVerificationApplicationRow application() {

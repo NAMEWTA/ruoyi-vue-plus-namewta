@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
+/** PersonRebindConfirmBo 请求参数模型。 */
 public record PersonRebindConfirmBo(@Valid @NotNull PersonRebindIdentityBo identity,
                                     @PositiveOrZero int expectedVersion) implements Serializable {
 

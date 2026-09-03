@@ -1,5 +1,6 @@
 package org.dromara.profile.person.domain.verification;
 
+/** PersonVerificationFailureCategory 认证领域模型。 */
 public enum PersonVerificationFailureCategory {
     UNKNOWN_PROVIDER,
     DISABLED_PROVIDER,

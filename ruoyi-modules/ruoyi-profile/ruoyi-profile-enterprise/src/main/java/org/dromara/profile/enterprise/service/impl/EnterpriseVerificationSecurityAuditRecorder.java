@@ -3,26 +3,33 @@ package org.dromara.profile.enterprise.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseVerificationException;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationFailureCategory;
-import org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper;
+import org.dromara.profile.enterprise.dao.EnterpriseVerificationAttemptDao;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.dynamic.datasource.tx.DsPropagation;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 
+/**
+ * 承载EnterpriseVerificationSecurityAuditRecorder业务规则的领域服务。
+ */
 @Service
 public class EnterpriseVerificationSecurityAuditRecorder {
 
-    private final EnterpriseVerificationAttemptMapper mapper;
+    private final EnterpriseVerificationAttemptDao dao;
 
-    public EnterpriseVerificationSecurityAuditRecorder(EnterpriseVerificationAttemptMapper mapper) {
-        this.mapper = mapper;
+    /**
+     * 处理enterpriseverificationsecurityauditrecorder。
+     */
+    public EnterpriseVerificationSecurityAuditRecorder(EnterpriseVerificationAttemptDao dao) {
+        this.dao = dao;
     }
 
+    /** 记录认证安全审计。 */
     @DSTransactional(propagation = DsPropagation.REQUIRES_NEW)
     public void record(Long applicationId, EnterpriseVerificationFailureCategory category, Instant occurredAt) {
         String result = category == EnterpriseVerificationFailureCategory.LATE_CALLBACK ? "IGNORED" : "FAILED";
-        if (mapper.insertSecurityAudit(IdWorker.getId(), applicationId, result, category.name(), occurredAt) != 1) {
+        if (dao.insertSecurityAudit(IdWorker.getId(), applicationId, result, category.name(), occurredAt) != 1) {
             throw new EnterpriseVerificationException(
                 EnterpriseVerificationFailureCategory.PROVIDER_FAILURE,
                 "Enterprise verification security audit could not be appended");

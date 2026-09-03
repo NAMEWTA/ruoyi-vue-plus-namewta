@@ -18,6 +18,7 @@ import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
 import org.dromara.profile.person.mapper.ProfileMaterialMapper;
 import org.dromara.profile.person.support.PersonMapperXmlTestSupport;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
+import org.dromara.profile.person.dao.PersonApplicationDao;
 import org.dromara.system.api.OssService;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -69,7 +70,7 @@ class ProfileMaterialMySqlE2ETest {
             ProfileMaterialServiceImpl service = new ProfileMaterialServiceImpl(
                 mapper, ossService, accessPolicy,
                 java.util.List.of(new PersonProfileMaterialOwnerContributor(
-                    session.getMapper(PersonApplicationMapper.class))), clock);
+                    new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class)))), clock);
             when(ossService.objectMetadata(OSS_ID)).thenReturn(new OssService.OssObjectMetadata(
                 OSS_ID, "profile/e2e/front.jpg", "front.jpg", ".jpg", 1024, "image/jpeg", USER_ID));
 

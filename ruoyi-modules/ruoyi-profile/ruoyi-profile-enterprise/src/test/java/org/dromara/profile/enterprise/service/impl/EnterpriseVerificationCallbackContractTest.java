@@ -5,9 +5,10 @@ import org.dromara.profile.enterprise.domain.exception.EnterpriseVerificationExc
 import org.dromara.profile.enterprise.domain.verification.EnterpriseProviderCallbackEnvelope;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationCallbackOutcome;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationFailureCategory;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationApplicationRow;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationAttemptRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationApplicationRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationAttemptRow;
 import org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper;
+import org.dromara.profile.enterprise.dao.EnterpriseVerificationAttemptDao;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -137,7 +138,8 @@ class EnterpriseVerificationCallbackContractTest {
                 new EnterpriseVerificationEvidenceCodec(JsonMapper.builder().build());
             coordinator = new EnterpriseVerificationAttemptCoordinator(
                 new EnterpriseVerificationProviderRegistry(List.of(provider), properties),
-                mapper, codec, new EnterpriseVerificationSecurityAuditRecorder(mapper));
+                new EnterpriseVerificationAttemptDao(mapper), codec,
+                new EnterpriseVerificationSecurityAuditRecorder(new EnterpriseVerificationAttemptDao(mapper)));
         }
 
         private EnterpriseProviderCallbackEnvelope callback(String payload, Instant timestamp) {

@@ -1,5 +1,6 @@
 package org.dromara.profile.person.domain.verification;
 
+/** PersonVerificationCallbackOutcome 认证领域模型。 */
 public enum PersonVerificationCallbackOutcome {
     ACCEPTED,
     IDEMPOTENT,

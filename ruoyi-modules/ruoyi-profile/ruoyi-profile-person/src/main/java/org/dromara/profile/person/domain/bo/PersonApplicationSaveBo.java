@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+/** PersonApplicationSaveBo 请求参数模型。 */
 public record PersonApplicationSaveBo(
     @Size(max = 100) String fullName,
     @Size(max = 64) String documentTypeCode,

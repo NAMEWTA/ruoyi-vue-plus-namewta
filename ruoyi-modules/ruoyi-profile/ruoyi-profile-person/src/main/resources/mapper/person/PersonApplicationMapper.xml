@@ -5,7 +5,7 @@
 <mapper namespace="org.dromara.profile.person.mapper.PersonApplicationMapper">
 
     <select id="selectActiveIdentityMatches"
-            resultType="org.dromara.profile.person.domain.vo.PersonActiveIdentityMatchRow">
+            resultType="org.dromara.profile.person.domain.model.read.PersonActiveIdentityMatchRow">
         select b.user_id, p.person_profile_id
           from profile_person p
           join profile_person_binding b on b.person_profile_id = p.person_profile_id
@@ -19,7 +19,7 @@
     </select>
 
     <select id="lockActiveIdentityMatch"
-            resultType="org.dromara.profile.person.domain.vo.PersonActiveIdentityMatchRow">
+            resultType="org.dromara.profile.person.domain.model.read.PersonActiveIdentityMatchRow">
         select b.user_id, p.person_profile_id
           from profile_person p
           join profile_person_binding b on b.person_profile_id = p.person_profile_id
@@ -110,7 +110,7 @@
         ) snapshot_relationship
     </select>
 
-    <select id="selectOpenByUserId" resultType="org.dromara.profile.person.domain.vo.PersonApplicationRow">
+    <select id="selectOpenByUserId" resultType="org.dromara.profile.person.domain.model.read.PersonApplicationRow">
         select
                 person_application_id, applicant_user_id, target_profile_id, status, full_name,
                 document_type_code, document_number, identity_key, gender, birth_date, valid_from,
@@ -119,7 +119,7 @@
                  from profile_person_application where applicant_user_id = #{userId} and status in ('DRAFT','BACK','CANCEL','WAITING') and del_flag = '0'
     </select>
 
-    <select id="lockOpenByUserId" resultType="org.dromara.profile.person.domain.vo.PersonApplicationRow">
+    <select id="lockOpenByUserId" resultType="org.dromara.profile.person.domain.model.read.PersonApplicationRow">
         select
                 person_application_id, applicant_user_id, target_profile_id, status, full_name,
                 document_type_code, document_number, identity_key, gender, birth_date, valid_from,
@@ -128,7 +128,7 @@
                  from profile_person_application where applicant_user_id = #{userId} and status in ('DRAFT','BACK','CANCEL','WAITING') and del_flag = '0' for update
     </select>
 
-    <select id="lockApplicationById" resultType="org.dromara.profile.person.domain.vo.PersonApplicationRow">
+    <select id="lockApplicationById" resultType="org.dromara.profile.person.domain.model.read.PersonApplicationRow">
         select
                 person_application_id, applicant_user_id, target_profile_id, status, full_name,
                 document_type_code, document_number, identity_key, gender, birth_date, valid_from,
@@ -137,7 +137,7 @@
                  from profile_person_application where person_application_id = #{applicationId} and del_flag = '0' for update
     </select>
 
-    <select id="selectDocumentType" resultType="org.dromara.profile.person.domain.vo.PersonDocumentTypeRow">
+    <select id="selectDocumentType" resultType="org.dromara.profile.person.domain.model.read.PersonDocumentTypeRow">
         select document_type_code, number_pattern, validity_required
                   from profile_document_type
                  where document_type_code = #{code} and status = '0' and del_flag = '0'
@@ -198,7 +198,7 @@
                 )
     </insert>
 
-    <select id="selectSubmission" resultType="org.dromara.profile.person.domain.vo.PersonSubmissionRow">
+    <select id="selectSubmission" resultType="org.dromara.profile.person.domain.model.read.PersonSubmissionRow">
         select s.person_submission_id, s.person_application_id, s.submission_seq,
                        a.applicant_user_id, s.full_name, s.document_type_code, s.document_number,
                        s.identity_key, s.gender, s.birth_date, s.valid_from, s.valid_until,
@@ -219,7 +219,7 @@
                    and status in ('DRAFT','BACK','CANCEL') and version = #{expectedVersion} and del_flag = '0'
     </update>
 
-    <select id="lockActiveProfileByIdentity" resultType="org.dromara.profile.person.domain.vo.PersonProfileRow">
+    <select id="lockActiveProfileByIdentity" resultType="org.dromara.profile.person.domain.model.read.PersonProfileRow">
         select
                 person_profile_id, previous_profile_id, current_version_id, full_name,
                 document_type_code, document_number, identity_key, gender, birth_date,
@@ -227,7 +227,7 @@
                  from profile_person where identity_key = #{identityKey} and status = 'ACTIVE' and del_flag = '0' for update
     </select>
 
-    <select id="lockActiveProfileById" resultType="org.dromara.profile.person.domain.vo.PersonProfileRow">
+    <select id="lockActiveProfileById" resultType="org.dromara.profile.person.domain.model.read.PersonProfileRow">
         select
                 person_profile_id, previous_profile_id, current_version_id, full_name,
                 document_type_code, document_number, identity_key, gender, birth_date,
@@ -243,7 +243,7 @@
                    and status = 'ACTIVE' and del_flag = '0'
     </update>
 
-    <select id="lockLatestRevokedProfileByIdentity" resultType="org.dromara.profile.person.domain.vo.PersonProfileRow">
+    <select id="lockLatestRevokedProfileByIdentity" resultType="org.dromara.profile.person.domain.model.read.PersonProfileRow">
         select
                 person_profile_id, previous_profile_id, current_version_id, full_name,
                 document_type_code, document_number, identity_key, gender, birth_date,
@@ -275,7 +275,7 @@
                 )
     </insert>
 
-    <select id="selectCurrentVersionForUpdate" resultType="org.dromara.profile.person.domain.vo.PersonVersionRow">
+    <select id="selectCurrentVersionForUpdate" resultType="org.dromara.profile.person.domain.model.read.PersonVersionRow">
         select person_version_id, person_profile_id, version_no, source_type, source_id,
                        full_name, document_type_code, document_number, identity_key, gender,
                        birth_date, valid_from, valid_until, status, published_time
@@ -316,7 +316,7 @@
                    and version = #{version} and del_flag = '0'
     </update>
 
-    <select id="lockEffectiveBindingByUser" resultType="org.dromara.profile.person.domain.vo.PersonBindingRow">
+    <select id="lockEffectiveBindingByUser" resultType="org.dromara.profile.person.domain.model.read.PersonBindingRow">
         select person_binding_id, person_profile_id, user_id, status, binding_version,
                        source_type, source_id, bound_time
                   from profile_person_binding
@@ -324,7 +324,7 @@
                  for update
     </select>
 
-    <select id="lockEffectiveBindingByProfile" resultType="org.dromara.profile.person.domain.vo.PersonBindingRow">
+    <select id="lockEffectiveBindingByProfile" resultType="org.dromara.profile.person.domain.model.read.PersonBindingRow">
         select person_binding_id, person_profile_id, user_id, status, binding_version,
                        source_type, source_id, bound_time
                   from profile_person_binding
@@ -376,7 +376,7 @@
                    and status = 'WAITING' and version = #{expectedVersion} and del_flag = '0'
     </update>
 
-    <select id="selectActiveProjections" resultType="org.dromara.profile.person.domain.vo.PersonActiveProjectionRow">
+    <select id="selectActiveProjections" resultType="org.dromara.profile.person.domain.model.read.PersonActiveProjectionRow">
         select b.user_id, b.person_profile_id, v.published_time as verified_at
                   from profile_person_binding b
                   join profile_person p on p.person_profile_id = b.person_profile_id

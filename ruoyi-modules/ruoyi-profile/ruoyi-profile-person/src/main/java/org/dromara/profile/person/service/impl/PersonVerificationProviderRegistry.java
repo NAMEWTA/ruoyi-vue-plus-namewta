@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/** 个人认证提供方注册表，按编码解析可用的认证适配器。 */
 @Component
 public class PersonVerificationProviderRegistry {
 
@@ -21,6 +22,7 @@ public class PersonVerificationProviderRegistry {
     private final Map<String, PersonVerificationProvider> providers;
     private final Set<String> enabledProviders;
 
+    /** 创建个人认证提供方注册表。 */
     public PersonVerificationProviderRegistry(List<PersonVerificationProvider> providers,
                                               PersonVerificationProviderProperties properties) {
         this.providers = index(providers);
@@ -29,6 +31,7 @@ public class PersonVerificationProviderRegistry {
             .collect(Collectors.toUnmodifiableSet());
     }
 
+    /** 校验认证提供方已启用。 */
     public PersonVerificationProvider requireEnabled(String providerCode) {
         String code = validateCode(providerCode);
         PersonVerificationProvider provider = providers.get(code);
@@ -43,6 +46,7 @@ public class PersonVerificationProviderRegistry {
         return provider;
     }
 
+    /** 构建认证提供方索引。 */
     private Map<String, PersonVerificationProvider> index(List<PersonVerificationProvider> candidates) {
         Map<String, PersonVerificationProvider> indexed = new HashMap<>();
         for (PersonVerificationProvider provider : candidates) {
@@ -56,6 +60,7 @@ public class PersonVerificationProviderRegistry {
         return Map.copyOf(indexed);
     }
 
+    /** 校验code。 */
     private String validateCode(String providerCode) {
         if (providerCode == null || !providerCode.matches(PROVIDER_CODE_PATTERN)) {
             throw new PersonVerificationException(

@@ -7,7 +7,7 @@ import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
 import org.dromara.profile.person.service.PersonWorkflowGateway;
-import org.dromara.profile.person.service.IPersonRebindService;
+import org.dromara.profile.person.usecase.PersonRebindUseCase;
 import org.dromara.profile.person.service.impl.PersonRebindNotificationService;
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.event.ProcessEvent;
@@ -21,13 +21,16 @@ import java.time.Clock;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * PersonRebindProcessListener Profile 业务组件。
+ */
 @Service
 @RequiredArgsConstructor
 public class PersonRebindProcessListener {
 
     private static final String FLOW_CODE_KEY = "profile.person.flowCode";
 
-    private final IPersonRebindService service;
+    private final PersonRebindUseCase useCase;
     private final ProfileMaterialPort materials;
     private final PersonWorkflowGateway workflow;
     private final ConfigService configService;
@@ -35,6 +38,9 @@ public class PersonRebindProcessListener {
     private final ApplicationEventPublisher events;
     private final Clock clock = Clock.systemUTC();
 
+    /**
+     * 处理 handle 业务步骤。
+     */
     @EventListener
     @Order(Ordered.HIGHEST_PRECEDENCE)
     @DSTransactional
@@ -57,7 +63,7 @@ public class PersonRebindProcessListener {
         if (snapshotVersion == null) {
             return;
         }
-        service.publishApprovedRebind(applicationId, snapshotVersion, clock.instant()).ifPresent(publication -> {
+        useCase.publishApproved(applicationId, snapshotVersion, clock.instant()).ifPresent(publication -> {
             materials.snapshotImmutable(owner(MaterialOwnerType.SUBMISSION, publication.personSubmissionId()),
                 owner(MaterialOwnerType.VERSION, publication.personVersionId()));
             notifications.stage(publication.event());
@@ -65,15 +71,24 @@ public class PersonRebindProcessListener {
         });
     }
 
+    /**
+     * 处理 expectedFlowCode 业务步骤。
+     */
     private String expectedFlowCode() {
         String flowCode = configService.getConfigValue(FLOW_CODE_KEY);
         return flowCode == null ? "" : flowCode.strip();
     }
 
+    /**
+     * 处理 owner 业务步骤。
+     */
     private MaterialOwnerKey owner(MaterialOwnerType type, long ownerId) {
         return new MaterialOwnerKey(ProfileType.PERSON, type, ownerId);
     }
 
+    /**
+     * 处理 snapshotVersion 业务步骤。
+     */
     private Integer snapshotVersion(Map<String, Object> params) {
         if (params == null) {
             return null;
@@ -89,6 +104,9 @@ public class PersonRebindProcessListener {
         }
     }
 
+    /**
+     * 处理 positiveLong 业务步骤。
+     */
     private Long positiveLong(String value) {
         try {
             long parsed = Long.parseLong(value);
@@ -98,10 +116,16 @@ public class PersonRebindProcessListener {
         }
     }
 
+    /**
+     * 处理 normalizeStatus 业务步骤。
+     */
     private String normalizeStatus(String status) {
         return status == null ? "" : status.strip().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * 处理 normalizeDecision 业务步骤。
+     */
     private String normalizeDecision(Map<String, Object> params) {
         Object value = params == null ? null : params.get("profileDecision");
         return value == null ? "" : value.toString().strip().toUpperCase(Locale.ROOT);

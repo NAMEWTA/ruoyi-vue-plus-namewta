@@ -3,6 +3,7 @@ package org.dromara.profile.enterprise.domain.verification;
 import java.time.Instant;
 import java.util.Objects;
 
+/** EnterpriseVerificationAttempt 认证领域模型。 */
 public record EnterpriseVerificationAttempt(
     long verificationAttemptId,
     long applicationId,
@@ -18,6 +19,7 @@ public record EnterpriseVerificationAttempt(
     String errorCode,
     Instant completedAt
 ) {
+    /** 校验企业认证尝试的标识和完成状态。 */
     public EnterpriseVerificationAttempt {
         if (applicationId <= 0 || submissionId <= 0 || attemptNo <= 0) {
             throw new IllegalArgumentException("Attempt identifiers and attemptNo must be positive");
@@ -27,6 +29,7 @@ public record EnterpriseVerificationAttempt(
         Objects.requireNonNull(status, "status");
     }
 
+    /** 根据提供方启动结果创建认证尝试。 */
     public static EnterpriseVerificationAttempt fromStart(EnterpriseApplicationVerificationState application,
                                                           int attemptNo,
                                                           String requestFingerprint,
@@ -47,6 +50,7 @@ public record EnterpriseVerificationAttempt(
             result.completedAt());
     }
 
+    /** 判断回调内容是否重复。 */
     public boolean sameCallback(EnterpriseVerifiedCallback callback) {
         return Objects.equals(callbackDigest, callback.callbackDigest())
             && status == callback.status()

@@ -10,19 +10,29 @@ import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationProbeVo;
 
 import java.util.Optional;
 
-public interface IEnterpriseApplicationService {
+/**
+ * 承载IEnterpriseApplicationService业务规则的领域服务。
+ */
+public interface IEnterpriseApplicationService extends org.dromara.profile.enterprise.port.EnterpriseApplicationPublicationPort {
 
+    /**
+     * 查询当前用户的进行中申请
+     */
     Optional<EnterpriseApplicationVo> current(long userId);
 
+    /**
+     * 校验申请身份并返回探测结果
+     */
     EnterpriseApplicationProbeVo probe(EnterpriseApplicationProbeBo command);
 
+    /**
+     * 保存业务申请数据
+     */
     EnterpriseApplicationVo save(long userId, EnterpriseApplicationSaveBo command);
 
+    /**
+     * 提交申请并启动后续流程
+     */
     EnterpriseApplicationVo submit(long userId, int expectedVersion);
 
-    Optional<EnterpriseDocumentTypeRule> findDocumentType(String documentTypeCode);
-
-    EnterpriseSubmission requireSubmission(long applicationId, int submissionSeq);
-
-    EnterprisePublication publishApproved(long applicationId, int snapshotVersion, java.time.Instant finishedTime);
 }

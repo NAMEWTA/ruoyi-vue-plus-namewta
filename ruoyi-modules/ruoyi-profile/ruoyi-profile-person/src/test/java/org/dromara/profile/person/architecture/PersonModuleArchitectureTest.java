@@ -58,19 +58,75 @@ class PersonModuleArchitectureTest {
         }
         assertThat(JAVA.resolve("domain/entity")).doesNotExist();
         assertThat(JAVA.resolve("domain/row")).doesNotExist();
+        assertThat(JAVA.resolve("domain/model/read")).isDirectory();
         assertThat(JAVA.resolve("service/persistence")).doesNotExist();
     }
 
     @Test
-    void serviceUsesOnlyDirectInterfacesAndTheStandardImplementationPackage() throws Exception {
-        Path service = JAVA.resolve("service");
-        try (Stream<Path> entries = Files.list(service)) {
-            for (Path entry : entries.toList()) {
-                if (Files.isDirectory(entry)) {
-                    assertThat(entry.getFileName().toString()).isEqualTo("impl");
-                } else if (entry.toString().endsWith(".java")) {
-                    assertThat(Files.readString(entry)).contains("public interface ");
+    void readModelsHaveDedicatedPackageAndStayOutOfHttpBoundary() throws Exception {
+        Path readRoot = JAVA.resolve("domain/model/read");
+        try (Stream<Path> files = Files.walk(readRoot)) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                assertThat(file.getFileName().toString()).matches(".*(Row|AdminRows)\\.java");
+                assertThat(Files.readString(file))
+                    .contains("package org.dromara.profile.person.domain.model.read;");
+            }
+        }
+        for (Path boundary : List.of(JAVA.resolve("controller"), JAVA.resolve("usecase"))) {
+            try (Stream<Path> files = Files.walk(boundary)) {
+                for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                    assertThat(Files.readString(file))
+                        .doesNotContain("import org.dromara.profile.person.domain.model.read.");
                 }
+            }
+        }
+        try (Stream<Path> files = Files.list(XML)) {
+            for (Path xml : files.filter(path -> path.toString().endsWith(".xml")).toList()) {
+                assertThat(Files.readString(xml))
+                    .doesNotMatch("(?s).*org\\.dromara\\.profile\\.person\\.domain\\.vo\\..*(Row|Projection).*");
+            }
+        }
+    }
+
+    @Test
+    void enforcesTheFiveLayerDependencyDirection() throws Exception {
+        assertThat(JAVA.resolve("usecase")).isDirectory();
+        assertThat(JAVA.resolve("service")).isDirectory();
+        assertThat(JAVA.resolve("dao")).isDirectory();
+        assertThat(JAVA.resolve("mapper")).isDirectory();
+
+        try (Stream<Path> files = Files.list(JAVA.resolve("service"))) {
+            assertThat(files.filter(path -> path.getFileName().toString().endsWith("ServiceImpl.java")))
+                .as("layered production service must not use ServiceImpl naming")
+                .isEmpty();
+        }
+        try (Stream<Path> files = Files.walk(JAVA.resolve("service"))) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                String source = Files.readString(file);
+                assertThat(source).doesNotContain("import org.dromara.profile.person.mapper.",
+                    "IService", "BaseMapper", "QueryWrapper");
+            }
+        }
+        try (Stream<Path> files = Files.walk(JAVA.resolve("usecase"))) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                assertThat(Files.readString(file)).doesNotContain("import org.dromara.profile.person.dao.",
+                    "import org.dromara.profile.person.mapper.",
+                    "import org.dromara.profile.person.service.impl.");
+            }
+        }
+        try (Stream<Path> files = Files.list(JAVA.resolve("dao"))) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                String source = Files.readString(file);
+                assertThat(source).contains("import org.dromara.profile.person.mapper.")
+                    .doesNotContain("import org.dromara.profile.person.service.",
+                        "import org.dromara.profile.person.usecase.");
+                assertThat(source).contains("@Repository");
+            }
+        }
+        try (Stream<Path> files = Files.walk(JAVA.resolve("controller"))) {
+            for (Path file : files.filter(path -> path.toString().endsWith("Controller.java")).toList()) {
+                assertThat(Files.readString(file)).contains("import org.dromara.profile.person.usecase.")
+                    .doesNotContain("import org.dromara.profile.person.service.");
             }
         }
         try (Stream<Path> files = Files.walk(JAVA)) {
@@ -85,6 +141,7 @@ class PersonModuleArchitectureTest {
             for (Path mapper : files.filter(path -> path.toString().endsWith("Mapper.java")).toList()) {
                 String source = Files.readString(mapper);
                 assertThat(source).contains("extends BaseMapperPlus<");
+                assertThat(source).doesNotContain("org.dromara.profile.person.domain.vo.");
                 assertThat(source).doesNotContain("@Select", "@Insert", "@Update", "@Delete", "Provider.class");
                 assertThat(source).doesNotMatch("(?s).*static\\s+final\\s+String\\s+\\w*SQL\\w*.*");
 

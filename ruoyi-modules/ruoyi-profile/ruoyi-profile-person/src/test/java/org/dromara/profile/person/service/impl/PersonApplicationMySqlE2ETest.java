@@ -15,6 +15,8 @@ import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
 import org.dromara.profile.person.config.PersonVerificationProviderProperties;
 import org.dromara.profile.person.mapper.PersonVerificationAttemptMapper;
+import org.dromara.profile.person.dao.PersonApplicationDao;
+import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.support.PersonMapperXmlTestSupport;
 import org.dromara.profile.person.controller.self.PersonMaterialSelfController;
 import org.dromara.profile.person.service.ProfileMaterialAccessPolicy;
@@ -333,7 +335,7 @@ class PersonApplicationMySqlE2ETest {
             session.getMapper(ProfileMaterialMapper.class),
             oss, accessPolicy,
             List.of(new PersonProfileMaterialOwnerContributor(
-                session.getMapper(PersonApplicationMapper.class))));
+                new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class)))));
 
         PersonVerificationAttemptMapper attemptMapper = session.getMapper(PersonVerificationAttemptMapper.class);
         PersonVerificationEvidenceCodec evidenceCodec = new PersonVerificationEvidenceCodec(json);
@@ -341,7 +343,8 @@ class PersonApplicationMySqlE2ETest {
         properties.setEnabledProviders(java.util.Set.of("manual"));
         PersonVerificationAttemptCoordinator attempts = new PersonVerificationAttemptCoordinator(
             new PersonVerificationProviderRegistry(List.of(new PersonManualVerificationProvider()), properties),
-            attemptMapper, evidenceCodec, new PersonVerificationSecurityAuditRecorder(attemptMapper));
+            new PersonVerificationAttemptDao(attemptMapper), evidenceCodec,
+            new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(attemptMapper)));
         ConfigService config = mock(ConfigService.class);
         when(config.getConfigValue("profile.person.provider.default")).thenReturn("manual");
         when(config.getConfigValue("profile.person.flowCode")).thenReturn("profile_person_verification");

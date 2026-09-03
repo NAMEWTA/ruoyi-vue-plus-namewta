@@ -4,7 +4,7 @@
     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.profile.enterprise.mapper.EnterpriseApplicationMapper">
 
-    <select id="selectOpenByUserId" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationRow">
+    <select id="selectOpenByUserId" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseApplicationRow">
         select enterprise_application_id, applicant_user_id, target_profile_id, status,
         enterprise_name, unified_credit_code, identity_key, enterprise_type,
         legal_representative_name, legal_document_type_code, legal_document_number,
@@ -14,7 +14,7 @@
         submitted_time, finished_time from profile_enterprise_application where applicant_user_id = #{userId} and status in ('DRAFT','BACK','CANCEL','WAITING') and del_flag = '0'
     </select>
 
-    <select id="lockOpenByUserId" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationRow">
+    <select id="lockOpenByUserId" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseApplicationRow">
         select enterprise_application_id, applicant_user_id, target_profile_id, status,
         enterprise_name, unified_credit_code, identity_key, enterprise_type,
         legal_representative_name, legal_document_type_code, legal_document_number,
@@ -24,7 +24,7 @@
         submitted_time, finished_time from profile_enterprise_application where applicant_user_id = #{userId} and status in ('DRAFT','BACK','CANCEL','WAITING') and del_flag = '0' for update
     </select>
 
-    <select id="lockApplicationById" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationRow">
+    <select id="lockApplicationById" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseApplicationRow">
         select enterprise_application_id, applicant_user_id, target_profile_id, status,
         enterprise_name, unified_credit_code, identity_key, enterprise_type,
         legal_representative_name, legal_document_type_code, legal_document_number,
@@ -34,7 +34,7 @@
         submitted_time, finished_time from profile_enterprise_application where enterprise_application_id = #{applicationId} and del_flag = '0' for update
     </select>
 
-    <select id="selectDocumentType" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseDocumentTypeRow">
+    <select id="selectDocumentType" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseDocumentTypeRow">
         select document_type_code, number_pattern, validity_required
           from profile_document_type
          where document_type_code = #{code} and status = '0' and del_flag = '0'
@@ -137,7 +137,7 @@
         )
     </insert>
 
-    <select id="selectSubmission" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseSubmissionRow">
+    <select id="selectSubmission" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseSubmissionRow">
         select s.enterprise_submission_id, s.enterprise_application_id, s.submission_seq,
                a.applicant_user_id, a.target_profile_id, s.enterprise_name, s.unified_credit_code,
                s.identity_key, s.enterprise_type, s.legal_representative_name,
@@ -161,7 +161,7 @@
            and status in ('DRAFT','BACK','CANCEL') and version = #{expectedVersion} and del_flag = '0'
     </update>
 
-    <select id="lockActiveProfileByIdentity" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseProfileRow">
+    <select id="lockActiveProfileByIdentity" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseProfileRow">
         select enterprise_profile_id, previous_profile_id, current_version_id,
         enterprise_name, unified_credit_code, enterprise_type, legal_representative_name,
         legal_document_type_code, legal_document_number, established_date, business_term_from,
@@ -169,7 +169,7 @@
         email, registered_capital, industry_code, website, status, version from profile_enterprise where upper(trim(unified_credit_code)) = #{identityKey} and status = 'ACTIVE' and del_flag = '0' for update
     </select>
 
-    <select id="lockLatestRevokedProfileByIdentity" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseProfileRow">
+    <select id="lockLatestRevokedProfileByIdentity" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseProfileRow">
         select enterprise_profile_id, previous_profile_id, current_version_id,
         enterprise_name, unified_credit_code, enterprise_type, legal_representative_name,
         legal_document_type_code, legal_document_number, established_date, business_term_from,
@@ -195,7 +195,7 @@
         )
     </insert>
 
-    <select id="selectCurrentVersionForUpdate" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseVersionRow">
+    <select id="selectCurrentVersionForUpdate" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseVersionRow">
         select enterprise_version_id, enterprise_profile_id, version_no, source_type, source_id,
                enterprise_name, unified_credit_code, enterprise_type, legal_representative_name,
                legal_document_type_code, legal_document_number, established_date, business_term_from,
@@ -247,7 +247,7 @@
            and version = #{version} and del_flag = '0'
     </update>
 
-    <select id="lockEffectiveBindingByUser" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseBindingRow">
+    <select id="lockEffectiveBindingByUser" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseBindingRow">
         select enterprise_binding_id, enterprise_profile_id, user_id, status, binding_version,
                source_type, source_id, bound_time
           from profile_enterprise_binding
@@ -255,7 +255,7 @@
          for update
     </select>
 
-    <select id="lockEffectiveBindingByProfile" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseBindingRow">
+    <select id="lockEffectiveBindingByProfile" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseBindingRow">
         select enterprise_binding_id, enterprise_profile_id, user_id, status, binding_version,
                source_type, source_id, bound_time
           from profile_enterprise_binding
@@ -307,7 +307,7 @@
            and status = 'WAITING' and version = #{expectedVersion} and del_flag = '0'
     </update>
 
-    <select id="selectActiveProjections" resultType="org.dromara.profile.enterprise.domain.vo.EnterpriseActiveProjectionRow">
+    <select id="selectActiveProjections" resultType="org.dromara.profile.enterprise.domain.model.read.EnterpriseActiveProjectionRow">
         select b.user_id, b.enterprise_profile_id, v.published_time as verified_at
           from profile_enterprise_binding b
           join profile_enterprise p on p.enterprise_profile_id = b.enterprise_profile_id

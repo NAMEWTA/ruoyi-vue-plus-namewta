@@ -1,8 +1,9 @@
 package org.dromara.profile.enterprise.service.impl;
 
 import org.dromara.profile.api.domain.ProfileType;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseActiveProjectionRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseActiveProjectionRow;
 import org.dromara.profile.enterprise.mapper.EnterpriseApplicationMapper;
+import org.dromara.profile.enterprise.dao.EnterpriseApplicationDao;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +27,8 @@ class EnterpriseProfileProjectionContributorTest {
         row.setVerifiedAt(Instant.parse("2026-09-01T12:00:00Z"));
         when(mapper.selectActiveProjections(Set.of(101L, 102L))).thenReturn(List.of(row));
 
-        EnterpriseProfileProjectionContributor contributor = new EnterpriseProfileProjectionContributor(mapper);
+        EnterpriseProfileProjectionContributor contributor = new EnterpriseProfileProjectionContributor(
+            new EnterpriseApplicationDao(mapper));
 
         assertThat(contributor.profileType()).isEqualTo(ProfileType.ENTERPRISE);
         assertThat(contributor.findActiveBindings(Set.of(101L, 102L))).containsOnlyKeys(101L);

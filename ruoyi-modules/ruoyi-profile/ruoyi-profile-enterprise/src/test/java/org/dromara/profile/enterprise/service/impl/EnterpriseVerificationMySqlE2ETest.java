@@ -2,6 +2,7 @@ package org.dromara.profile.enterprise.service.impl;
 
 import org.dromara.profile.enterprise.controller.advice.EnterpriseVerificationCallbackExceptionHandler;
 import org.dromara.profile.enterprise.controller.anonymous.EnterpriseVerificationAnonymousController;
+import org.dromara.profile.enterprise.usecase.impl.EnterpriseVerificationUseCaseImpl;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationAttempt;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationStartAttemptCommand;
 import org.dromara.profile.enterprise.config.EnterpriseVerificationProviderProperties;
@@ -13,6 +14,7 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper;
+import org.dromara.profile.enterprise.dao.EnterpriseVerificationAttemptDao;
 import org.dromara.profile.enterprise.support.EnterpriseMapperXmlTestSupport;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -56,16 +58,16 @@ class EnterpriseVerificationMySqlE2ETest {
             properties.setEnabledProviders(Set.of("test-provider"));
             EnterpriseVerificationAttemptCoordinator coordinator = new EnterpriseVerificationAttemptCoordinator(
                 new EnterpriseVerificationProviderRegistry(List.of(provider), properties),
-                mapper,
+                new EnterpriseVerificationAttemptDao(mapper),
                 codec,
-                new EnterpriseVerificationSecurityAuditRecorder(mapper));
+                new EnterpriseVerificationSecurityAuditRecorder(new EnterpriseVerificationAttemptDao(mapper)));
             EnterpriseVerificationAttempt attempt = coordinator.startAttempt(
                 new EnterpriseVerificationStartAttemptCommand(
                     APPLICATION_ID, SUBMISSION_ID, "enterprise-fingerprint"));
             session.commit();
 
             MockMvc mvc = MockMvcBuilders.standaloneSetup(
-                    new EnterpriseVerificationAnonymousController(coordinator, () -> NOW))
+                    new EnterpriseVerificationAnonymousController(new EnterpriseVerificationUseCaseImpl(coordinator), () -> NOW))
                 .setControllerAdvice(new EnterpriseVerificationCallbackExceptionHandler())
                 .build();
             String accepted = callbackBody(provider, attempt.providerRequestId(), "approved");

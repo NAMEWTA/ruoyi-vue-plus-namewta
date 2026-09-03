@@ -5,6 +5,7 @@ import org.dromara.profile.api.material.ProfileMaterialOwnerContributor.Snapshot
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
 import org.dromara.profile.enterprise.mapper.EnterpriseApplicationMapper;
+import org.dromara.profile.enterprise.dao.EnterpriseApplicationDao;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +20,7 @@ class EnterpriseMaterialOwnerContributorTest {
 
     private final EnterpriseApplicationMapper mapper = mock(EnterpriseApplicationMapper.class);
     private final EnterpriseMaterialOwnerContributor contributor =
-        new EnterpriseMaterialOwnerContributor(mapper);
+        new EnterpriseMaterialOwnerContributor(new EnterpriseApplicationDao(mapper));
 
     @Test
     void resolvesMutableAndImmutableEnterpriseOwnersWithoutLeakingSnapshotData() {

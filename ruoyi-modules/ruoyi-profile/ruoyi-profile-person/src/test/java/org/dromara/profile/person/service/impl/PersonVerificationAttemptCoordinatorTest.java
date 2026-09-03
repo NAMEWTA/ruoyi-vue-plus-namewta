@@ -1,12 +1,13 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.domain.exception.PersonVerificationException;
 import org.dromara.profile.person.domain.verification.PersonApplicationVerificationState;
 import org.dromara.profile.person.domain.verification.PersonVerificationAttempt;
 import org.dromara.profile.person.domain.verification.PersonVerificationFailureCategory;
 import org.dromara.profile.person.domain.verification.PersonVerificationStartAttemptCommand;
 import org.dromara.profile.person.config.PersonVerificationProviderProperties;
-import org.dromara.profile.person.service.PersonVerificationTimeSource;
+import org.dromara.profile.person.support.PersonVerificationTimeSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -27,8 +28,8 @@ class PersonVerificationAttemptCoordinatorTest {
         properties.setEnabledProviders(Set.of("manual"));
         PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
             new PersonVerificationProviderRegistry(List.of(new PersonManualVerificationProvider()), properties),
-            fixture.mapper(), fixture.evidenceCodec(),
-            new PersonVerificationSecurityAuditRecorder(fixture.mapper()));
+            new PersonVerificationAttemptDao(fixture.mapper()), fixture.evidenceCodec(),
+            new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(fixture.mapper())));
 
         PersonVerificationAttempt first = coordinator.startAttempt(
             new PersonVerificationStartAttemptCommand(41L, 501L, "fingerprint-1"));
@@ -48,8 +49,8 @@ class PersonVerificationAttemptCoordinatorTest {
         PersonVerificationProviderProperties properties = new PersonVerificationProviderProperties();
         PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
             new PersonVerificationProviderRegistry(List.of(new PersonManualVerificationProvider()), properties),
-            fixture.mapper(), fixture.evidenceCodec(),
-            new PersonVerificationSecurityAuditRecorder(fixture.mapper()));
+            new PersonVerificationAttemptDao(fixture.mapper()), fixture.evidenceCodec(),
+            new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(fixture.mapper())));
 
         PersonVerificationException failure = assertThrows(PersonVerificationException.class,
             () -> coordinator.startAttempt(

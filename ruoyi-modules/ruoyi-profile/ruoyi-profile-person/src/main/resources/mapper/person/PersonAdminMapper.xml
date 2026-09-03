@@ -13,7 +13,7 @@
                 <if test="documentNumber != null and documentNumber != ''">and p.document_number = #{documentNumber}</if>
     </select>
 
-    <select id="selectProfiles" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$ProfileRow">
+    <select id="selectProfiles" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$ProfileRow">
         select p.person_profile_id profile_id, p.previous_profile_id, p.current_version_id, p.full_name,
                        p.document_type_code, p.document_number, p.identity_key, p.gender, p.birth_date,
                        p.valid_from, p.valid_until, p.status, p.version, p.create_time,
@@ -29,7 +29,7 @@
                  order by p.create_time desc, p.person_profile_id desc limit #{limit} offset #{offset}
     </select>
 
-    <select id="selectProfile" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$ProfileRow">
+    <select id="selectProfile" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$ProfileRow">
         select p.person_profile_id profile_id, p.previous_profile_id, p.current_version_id, p.full_name,
                        p.document_type_code, p.document_number, p.identity_key, p.gender, p.birth_date,
                        p.valid_from, p.valid_until, p.status, p.version, p.create_time,
@@ -40,14 +40,14 @@
                  where p.person_profile_id = #{profileId} and p.del_flag = '0'
     </select>
 
-    <select id="lockProfile" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$ProfileRow">
+    <select id="lockProfile" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$ProfileRow">
         select p.person_profile_id profile_id, p.previous_profile_id, p.current_version_id, p.full_name,
                        p.document_type_code, p.document_number, p.identity_key, p.gender, p.birth_date,
                        p.valid_from, p.valid_until, p.status, p.version, p.create_time
                   from profile_person p where p.person_profile_id = #{profileId} and p.del_flag = '0' for update
     </select>
 
-    <select id="selectVersions" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$VersionRow">
+    <select id="selectVersions" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$VersionRow">
         select person_version_id version_id, person_profile_id profile_id, version_no, source_type, source_id,
                        full_name, document_type_code, document_number, identity_key, gender, birth_date,
                        valid_from, valid_until, status, published_time
@@ -55,7 +55,7 @@
                  order by version_no desc
     </select>
 
-    <select id="lockCurrentVersion" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$VersionRow">
+    <select id="lockCurrentVersion" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$VersionRow">
         select person_version_id version_id, person_profile_id profile_id, version_no, source_type, source_id,
                        full_name, document_type_code, document_number, identity_key, gender, birth_date,
                        valid_from, valid_until, status, published_time
@@ -63,14 +63,14 @@
                    and del_flag = '0' for update
     </select>
 
-    <select id="selectBindings" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$BindingRow">
+    <select id="selectBindings" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$BindingRow">
         select person_binding_id binding_id, person_profile_id profile_id, user_id, status, binding_version,
                        source_type, source_id, bound_time, unbound_time
                   from profile_person_binding where person_profile_id = #{profileId} and del_flag = '0'
                  order by create_time desc, person_binding_id desc
     </select>
 
-    <select id="lockEffectiveBinding" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$BindingRow">
+    <select id="lockEffectiveBinding" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$BindingRow">
         select person_binding_id binding_id, person_profile_id profile_id, user_id, status, binding_version,
                        source_type, source_id, bound_time, unbound_time
                   from profile_person_binding where person_profile_id = #{profileId}
@@ -82,20 +82,20 @@
                  and status in ('ACTIVE','SUSPENDED') and del_flag = '0'
     </select>
 
-    <select id="selectSources" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$SourceRow">
+    <select id="selectSources" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$SourceRow">
         select person_source_id source_id, source_type, operator_user_id, operation_reason reason,
                        field_snapshot_json, occurred_time from profile_person_source
                  where person_profile_id = #{profileId} and del_flag = '0' order by occurred_time desc
     </select>
 
-    <select id="selectAudits" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$AuditRow">
+    <select id="selectAudits" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$AuditRow">
         select operation_audit_id audit_id, operation_type, operator_user_id, capability, reason,
                        before_status, after_status, result, failure_category, occurred_time
                   from profile_operation_audit where profile_type = 'PERSON' and profile_id = #{profileId}
                    and del_flag = '0' order by occurred_time desc
     </select>
 
-    <select id="selectReview" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$ReviewRow">
+    <select id="selectReview" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$ReviewRow">
         select a.person_application_id application_id, a.applicant_user_id, a.status, a.submission_seq,
                        a.decision_version, a.version, s.person_submission_id submission_id,
                        s.field_snapshot_json, s.submitted_time
@@ -105,7 +105,7 @@
                  where a.person_application_id = #{applicationId} and a.submission_seq > 0 and a.del_flag = '0'
     </select>
 
-    <select id="lockWaitingApplication" resultType="org.dromara.profile.person.domain.vo.PersonAdminRows$ReviewRow">
+    <select id="lockWaitingApplication" resultType="org.dromara.profile.person.domain.model.read.PersonAdminRows$ReviewRow">
         select a.person_application_id application_id, a.applicant_user_id, a.status, a.submission_seq,
                        a.decision_version, a.version, s.person_submission_id submission_id,
                        s.field_snapshot_json, s.submitted_time

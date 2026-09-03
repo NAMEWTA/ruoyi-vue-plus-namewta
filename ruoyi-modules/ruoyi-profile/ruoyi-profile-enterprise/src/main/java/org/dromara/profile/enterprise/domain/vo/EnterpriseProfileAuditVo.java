@@ -2,6 +2,7 @@ package org.dromara.profile.enterprise.domain.vo;
 
 import java.time.Instant;
 
+/** EnterpriseProfileAuditVo 对外返回模型。 */
 public record EnterpriseProfileAuditVo(
     long auditId,
     String operationType,

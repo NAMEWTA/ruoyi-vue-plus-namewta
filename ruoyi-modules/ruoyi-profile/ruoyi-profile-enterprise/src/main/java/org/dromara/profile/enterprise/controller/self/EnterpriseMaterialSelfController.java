@@ -6,7 +6,7 @@ import org.dromara.common.core.domain.R;
 import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
 import org.dromara.profile.api.domain.ProfileType;
-import org.dromara.profile.api.material.ProfileMaterialPort;
+import org.dromara.profile.enterprise.usecase.ProfileMaterialUseCase;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialAttachCommand;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
@@ -20,14 +20,20 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * EnterpriseMaterialSelfController HTTP 接口，负责参数校验和响应包装。
+ */
 @RestController
 @Validated
 @RequiredArgsConstructor
 @RequestMapping("/profile/enterprise/materials")
 public class EnterpriseMaterialSelfController {
 
-    private final ProfileMaterialPort materialPort;
+    private final ProfileMaterialUseCase materialPort;
 
+    /**
+     * 处理 attach HTTP 请求。
+     */
     @PostMapping("/{ownerType}/{ownerId}")
     @SaCheckPermission("profile:enterprise:material")
     @Log(title = "挂接企业认证材料", businessType = BusinessType.INSERT,
@@ -39,6 +45,9 @@ public class EnterpriseMaterialSelfController {
             request.ossId(), request.materialNodeId())));
     }
 
+    /**
+     * 处理 detach HTTP 请求。
+     */
     @PostMapping("/{ownerType}/{ownerId}/{materialRefId}/detach")
     @SaCheckPermission("profile:enterprise:material")
     @Log(title = "解除企业认证材料", businessType = BusinessType.UPDATE,
@@ -49,14 +58,23 @@ public class EnterpriseMaterialSelfController {
         return R.ok();
     }
 
+    /**
+     * 处理 profileType HTTP 请求。
+     */
     ProfileType profileType() {
         return ProfileType.ENTERPRISE;
     }
 
+    /**
+     * 处理 owner HTTP 请求。
+     */
     private MaterialOwnerKey owner(MaterialOwnerType ownerType, Long ownerId) {
         return new MaterialOwnerKey(profileType(), ownerType, ownerId);
     }
 
+    /**
+     * AttachRequest HTTP 接口，负责参数校验和响应包装。
+     */
     public record AttachRequest(@Positive Long ossId, @Positive Long materialNodeId) {
     }
 }

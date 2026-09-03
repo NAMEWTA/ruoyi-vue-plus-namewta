@@ -2,6 +2,7 @@ package org.dromara.profile.enterprise.domain.application;
 
 import java.time.Instant;
 
+/** EnterpriseSubmission 应用层领域模型。 */
 public record EnterpriseSubmission(
     long enterpriseSubmissionId,
     long enterpriseApplicationId,

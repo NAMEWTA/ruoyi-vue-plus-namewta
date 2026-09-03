@@ -18,6 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.time.Duration;
 import java.util.UUID;
 
+/** 基于 Redis 的企业转移挑战存储，实现 TTL、限流和分布式锁约束。 */
 @Component
 public class RedisEnterpriseTransferChallengeStore implements EnterpriseTransferChallengeStore {
 
@@ -31,10 +32,12 @@ public class RedisEnterpriseTransferChallengeStore implements EnterpriseTransfer
 
     private final RedissonClient client;
 
+    /** 创建企业转移挑战 Redis 存储。 */
     public RedisEnterpriseTransferChallengeStore(RedissonClient client) {
         this.client = client;
     }
 
+    /** 暂存转移挑战并返回暂存结果。 */
     @Override
     public StageResult stage(EnterpriseTransferChallenge challenge) {
         String rateKey = rateKey(challenge.sourceUserId(), challenge.targetUserId());
@@ -56,6 +59,7 @@ public class RedisEnterpriseTransferChallengeStore implements EnterpriseTransfer
         }
     }
 
+    /** 激活转移挑战。 */
     @Override
     public boolean activate(String challengeId) {
         return locked(challengeId, () -> {
@@ -68,6 +72,7 @@ public class RedisEnterpriseTransferChallengeStore implements EnterpriseTransfer
         });
     }
 
+    /** 核验转移挑战并返回验证结果。 */
     @Override
     public Verification verify(String challengeId, long sourceUserId, String code) {
         return locked(challengeId, () -> {
@@ -94,6 +99,7 @@ public class RedisEnterpriseTransferChallengeStore implements EnterpriseTransfer
         });
     }
 
+    /** 消费并移除已验证的转移挑战。 */
     @Override
     public boolean consume(VerifiedChallenge verifiedChallenge) {
         String challengeId = verifiedChallenge.challenge().challengeId();
@@ -107,11 +113,13 @@ public class RedisEnterpriseTransferChallengeStore implements EnterpriseTransfer
         });
     }
 
+    /** 撤销转移挑战或档案绑定。 */
     @Override
     public void revoke(String challengeId) {
         locked(challengeId, () -> bucket(challengeId).delete());
     }
 
+    /** 保存转移挑战数据。 */
     private void save(String challengeId, StoredChallenge stored) {
         long remaining = bucket(challengeId).remainTimeToLive();
         if (remaining <= 0) {
@@ -121,19 +129,23 @@ public class RedisEnterpriseTransferChallengeStore implements EnterpriseTransfer
         bucket(challengeId).set(write(stored), Duration.ofMillis(remaining));
     }
 
+    /** 读取转移挑战存储数据。 */
     private StoredChallenge read(String challengeId) {
         String value = bucket(challengeId).get();
         return value == null ? null : JSON.readValue(value, StoredChallenge.class);
     }
 
+    /** 写入转移挑战存储数据。 */
     private String write(StoredChallenge stored) {
         return JSON.writeValueAsString(stored);
     }
 
+    /** 获取转移挑战 Redis 存储桶。 */
     private RBucket<String> bucket(String challengeId) {
         return client.getBucket(challengeKey(challengeId), StringCodec.INSTANCE);
     }
 
+    /** 在分布式锁保护下执行挑战操作。 */
     private <T> T locked(String challengeId, java.util.function.Supplier<T> action) {
         RLock lock = client.getLock(LOCK_PREFIX + challengeId);
         lock.lock();
@@ -144,24 +156,29 @@ public class RedisEnterpriseTransferChallengeStore implements EnterpriseTransfer
         }
     }
 
+    /** 释放转移挑战分布式锁。 */
     private void unlock(RLock lock) {
         if (lock.isHeldByCurrentThread()) {
             lock.unlock();
         }
     }
 
+    /** 返回无效挑战结果。 */
     private Verification invalid() {
         return new Verification(VerificationStatus.INVALID, null);
     }
 
+    /** 生成挑战 Redis 键。 */
     public static String challengeKey(String challengeId) {
         return CHALLENGE_PREFIX + challengeId;
     }
 
+    /** 生成验证码限流 Redis 键。 */
     public static String rateKey(long sourceUserId, long targetUserId) {
         return RATE_PREFIX + sourceUserId + ":" + targetUserId;
     }
 
+    /** Redis 中保存的企业转移挑战载荷。 */
     private record StoredChallenge(EnterpriseTransferChallenge challenge, String storageToken) {
     }
 }

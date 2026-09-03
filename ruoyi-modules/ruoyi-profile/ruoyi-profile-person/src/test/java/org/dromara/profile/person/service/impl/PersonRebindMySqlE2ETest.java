@@ -19,6 +19,7 @@ import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.person.service.PersonWorkflowGateway;
 import org.dromara.profile.person.mapper.PersonNotificationAuditMapper;
+import org.dromara.profile.person.dao.PersonNotificationAuditDao;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
 import org.dromara.system.api.ConfigService;
 import org.dromara.system.api.MessageService;
@@ -202,7 +203,8 @@ class PersonRebindMySqlE2ETest {
         NotifyClient notifyClient = mock(NotifyClient.class);
         when(notifyClient.send(any())).thenThrow(new IllegalStateException("offline"));
         PersonRebindNotificationService notifications = new PersonRebindNotificationService(
-            session.getMapper(PersonNotificationAuditMapper.class), messages, users, notifyClient);
+            new PersonNotificationAuditDao(session.getMapper(PersonNotificationAuditMapper.class)),
+            messages, users, notifyClient);
         PersonRebindProcessListener listener = new PersonRebindProcessListener(service, materials, workflow,
             config, notifications, events);
         return new Fixture(service, listener, notifications, events, mvc);

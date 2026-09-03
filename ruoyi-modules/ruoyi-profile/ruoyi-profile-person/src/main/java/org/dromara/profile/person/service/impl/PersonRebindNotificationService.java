@@ -1,10 +1,9 @@
 package org.dromara.profile.person.service.impl;
 
-import org.dromara.profile.person.mapper.PersonNotificationAuditMapper;
+import org.dromara.profile.person.dao.PersonNotificationAuditDao;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.dynamic.datasource.annotation.DsTxEventListener;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.notify.model.NotifyAuditPolicy;
@@ -14,7 +13,7 @@ import org.dromara.common.notify.model.NotifyResult;
 import org.dromara.common.notify.model.NotifyStatus;
 import org.dromara.common.notify.model.NotifyTarget;
 import org.dromara.common.notify.model.NotifyTextContent;
-import org.dromara.profile.person.mapper.PersonNotificationAuditMapper.NotificationAuditRow;
+import org.dromara.profile.person.domain.model.read.PersonNotificationAuditRow;
 import org.dromara.profile.person.event.PersonReboundEvent;
 import org.dromara.system.api.MessageService;
 import org.dromara.system.api.UserService;
@@ -24,20 +23,36 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * 创建个人换绑通知服务。
+ */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PersonRebindNotificationService {
 
     static final String INTERNAL_TYPE = "PERSON_REBIND_INTERNAL";
     static final String SMS_TYPE = "PERSON_REBIND_SMS";
     static final String SAFE_TEXT = "您的个人实名认证绑定已变更。如非本人操作，请联系平台。";
 
-    private final PersonNotificationAuditMapper audits;
+    private final PersonNotificationAuditDao audits;
     private final MessageService messages;
     private final UserService users;
     private final NotifyClient notifyClient;
 
+    /**
+     * 处理personrebindnotificationservice。
+     */
+    public PersonRebindNotificationService(PersonNotificationAuditDao audits, MessageService messages,
+                                            UserService users, NotifyClient notifyClient) {
+        this.audits = audits;
+        this.messages = messages;
+        this.users = users;
+        this.notifyClient = notifyClient;
+    }
+
+    /**
+     * 暂存通知消息
+     */
     public void stage(PersonReboundEvent event) {
         if (event == null) {
             return;
@@ -46,6 +61,9 @@ public class PersonRebindNotificationService {
         stageOne(SMS_TYPE, event.personProfileId(), event.personApplicationId(), event.oldUserId());
     }
 
+    /**
+     * 通知原账户绑定变更
+     */
     @DsTxEventListener
     public void notifyOldAccount(PersonReboundEvent event) {
         if (event == null) {
@@ -55,12 +73,15 @@ public class PersonRebindNotificationService {
         deliverStaged(SMS_TYPE, event.personProfileId(), event.personApplicationId(), event.oldUserId());
     }
 
+    /**
+     * 重试失败的认证尝试
+     */
     @DSTransactional
     public boolean retryFailed(long auditId) {
         if (auditId <= 0) {
             return false;
         }
-        NotificationAuditRow row = audits.lockRetryable(auditId);
+        PersonNotificationAuditRow row = audits.lockRetryable(auditId);
         if (row == null || !isKnownType(row.getNotificationType())) {
             return false;
         }
@@ -73,8 +94,11 @@ public class PersonRebindNotificationService {
         return audits.updateDelivery(row) == 1 && !"FAILED".equals(delivery.status());
     }
 
+    /**
+     * 执行第一阶段处理
+     */
     private void stageOne(String type, long profileId, long applicationId, long userId) {
-        NotificationAuditRow row = new NotificationAuditRow();
+        PersonNotificationAuditRow row = new PersonNotificationAuditRow();
         row.setNotificationAuditId(IdWorker.getId());
         row.setNotificationType(type);
         row.setProfileId(profileId);
@@ -88,9 +112,12 @@ public class PersonRebindNotificationService {
         }
     }
 
+    /**
+     * 投递暂存通知消息
+     */
     private void deliverStaged(String type, long profileId, long applicationId, long userId) {
         try {
-            NotificationAuditRow row = audits.selectRetryable(type, profileId, applicationId, userId);
+            PersonNotificationAuditRow row = audits.selectRetryable(type, profileId, applicationId, userId);
             if (row == null) {
                 log.error("个人换绑通知待办不存在，channel={}，category=PENDING_AUDIT_MISSING", type);
                 return;
@@ -108,6 +135,9 @@ public class PersonRebindNotificationService {
         }
     }
 
+    /**
+     * 投递通知消息
+     */
     private Delivery deliver(String type, long profileId, long applicationId, long userId) {
         try {
             if (INTERNAL_TYPE.equals(type)) {
@@ -124,6 +154,9 @@ public class PersonRebindNotificationService {
         }
     }
 
+    /**
+     * 发送短信通知
+     */
     private Delivery sendSms(long profileId, long applicationId, long userId) {
         String phone = text(users.selectPhonenumberById(userId));
         String requestId = requestId(SMS_TYPE, applicationId);
@@ -153,18 +186,30 @@ public class PersonRebindNotificationService {
         return new Delivery(result.requestId(), "FAILED", "NOTIFY_" + result.status().name());
     }
 
+    /**
+     * 生成内部请求编号
+     */
     private String internalRequestId(long applicationId) {
         return "internal-person-rebind-" + applicationId;
     }
 
+    /**
+     * 生成外部请求编号
+     */
     private String requestId(String type, long applicationId) {
         return (SMS_TYPE.equals(type) ? "sms" : "notify") + "-person-rebind-" + applicationId;
     }
 
+    /**
+     * 判断证件类型是否已知
+     */
     private boolean isKnownType(String type) {
         return INTERNAL_TYPE.equals(type) || SMS_TYPE.equals(type);
     }
 
+    /**
+     * 规范化文本内容
+     */
     private String text(String value) {
         if (value == null) {
             return null;
@@ -173,6 +218,9 @@ public class PersonRebindNotificationService {
         return normalized.isEmpty() ? null : normalized;
     }
 
+    /**
+     * 承载Delivery业务规则的领域服务。
+     */
     private record Delivery(String requestId, String status, String failureCategory) {
     }
 }

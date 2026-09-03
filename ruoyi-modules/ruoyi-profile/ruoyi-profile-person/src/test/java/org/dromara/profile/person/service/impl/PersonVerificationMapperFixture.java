@@ -5,8 +5,8 @@ import org.dromara.profile.person.domain.verification.PersonProviderAttemptStatu
 import org.dromara.profile.person.domain.verification.PersonVerificationAttempt;
 import org.dromara.profile.person.domain.verification.PersonVerificationFailureCategory;
 import org.dromara.profile.person.domain.verification.PersonVerificationSecurityAudit;
-import org.dromara.profile.person.domain.vo.PersonVerificationApplicationRow;
-import org.dromara.profile.person.domain.vo.PersonVerificationAttemptRow;
+import org.dromara.profile.person.domain.model.read.PersonVerificationApplicationRow;
+import org.dromara.profile.person.domain.model.read.PersonVerificationAttemptRow;
 import org.dromara.profile.person.mapper.PersonVerificationAttemptMapper;
 import tools.jackson.databind.json.JsonMapper;
 

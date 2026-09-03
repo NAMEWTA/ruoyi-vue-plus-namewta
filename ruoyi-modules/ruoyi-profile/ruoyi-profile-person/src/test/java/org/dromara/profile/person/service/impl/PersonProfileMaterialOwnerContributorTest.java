@@ -6,6 +6,7 @@ import org.dromara.profile.api.material.ProfileMaterialOwnerContributor.Snapshot
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
+import org.dromara.profile.person.dao.PersonApplicationDao;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +21,7 @@ class PersonProfileMaterialOwnerContributorTest {
 
     private final PersonApplicationMapper mapper = mock(PersonApplicationMapper.class);
     private final PersonProfileMaterialOwnerContributor contributor =
-        new PersonProfileMaterialOwnerContributor(mapper);
+        new PersonProfileMaterialOwnerContributor(new PersonApplicationDao(mapper));
 
     @Test
     void resolvesEditableAndImmutablePersonOwnersThroughPersonMapper() {

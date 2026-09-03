@@ -11,10 +11,11 @@ import org.dromara.profile.enterprise.domain.verification.EnterpriseVerification
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationFailureCategory;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationStartAttemptCommand;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerifiedCallback;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationApplicationRow;
-import org.dromara.profile.enterprise.domain.vo.EnterpriseVerificationAttemptRow;
-import org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationApplicationRow;
+import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationAttemptRow;
+import org.dromara.profile.enterprise.dao.EnterpriseVerificationAttemptDao;
 import org.dromara.profile.enterprise.service.EnterpriseVerificationProvider;
+import org.dromara.profile.enterprise.service.EnterpriseVerificationService;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import org.springframework.dao.DuplicateKeyException;
@@ -22,25 +23,35 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
+/**
+ * 创建企业认证尝试协调器。
+ */
 @Service
-public class EnterpriseVerificationAttemptCoordinator {
+public class EnterpriseVerificationAttemptCoordinator implements EnterpriseVerificationService {
 
     private final EnterpriseVerificationProviderRegistry providerRegistry;
-    private final EnterpriseVerificationAttemptMapper mapper;
+    private final EnterpriseVerificationAttemptDao dao;
     private final EnterpriseVerificationEvidenceCodec evidenceCodec;
     private final EnterpriseVerificationSecurityAuditRecorder auditRecorder;
 
+    /**
+     * 处理enterpriseverificationattemptcoordinator。
+     */
     public EnterpriseVerificationAttemptCoordinator(EnterpriseVerificationProviderRegistry providerRegistry,
-                                                     EnterpriseVerificationAttemptMapper mapper,
+                                                     EnterpriseVerificationAttemptDao dao,
                                                      EnterpriseVerificationEvidenceCodec evidenceCodec,
                                                      EnterpriseVerificationSecurityAuditRecorder auditRecorder) {
         this.providerRegistry = providerRegistry;
-        this.mapper = mapper;
+        this.dao = dao;
         this.evidenceCodec = evidenceCodec;
         this.auditRecorder = auditRecorder;
     }
 
+    /**
+     * 启动认证尝试
+     */
     @DSTransactional
+    @Override
     public EnterpriseVerificationAttempt startAttempt(EnterpriseVerificationStartAttemptCommand command) {
         EnterpriseApplicationVerificationState application = lockApplication(command.applicationId());
         if (application.submissionId() != command.submissionId()) {
@@ -54,14 +65,18 @@ public class EnterpriseVerificationAttemptCoordinator {
                 "Enterprise verification application is terminal");
         }
         EnterpriseVerificationProvider provider = providerRegistry.requireEnabled(application.providerCode());
-        int attemptNo = mapper.nextAttemptNo(application.applicationId());
+        int attemptNo = dao.nextAttemptNo(application.applicationId());
         EnterpriseProviderStartResult result = provider.start(new EnterpriseProviderStartCommand(
             application.applicationId(), application.submissionId(), attemptNo, command.requestFingerprint()));
         return append(EnterpriseVerificationAttempt.fromStart(
             application, attemptNo, command.requestFingerprint(), result));
     }
 
+    /**
+     * 处理认证回调并更新尝试状态
+     */
     @DSTransactional
+    @Override
     public EnterpriseVerificationCallbackOutcome handleCallback(String providerCode,
                                                                 EnterpriseProviderCallbackEnvelope envelope,
                                                                 java.time.Instant receivedAt) {
@@ -108,8 +123,11 @@ public class EnterpriseVerificationAttemptCoordinator {
         return EnterpriseVerificationCallbackOutcome.ACCEPTED;
     }
 
+    /**
+     * 锁定申请记录
+     */
     private EnterpriseApplicationVerificationState lockApplication(long applicationId) {
-        EnterpriseVerificationApplicationRow row = mapper.lockApplication(applicationId);
+        EnterpriseVerificationApplicationRow row = dao.lockApplication(applicationId);
         if (row == null) {
             throw new EnterpriseVerificationException(
                 EnterpriseVerificationFailureCategory.APPLICATION_NOT_FOUND,
@@ -119,11 +137,14 @@ public class EnterpriseVerificationAttemptCoordinator {
             row.getApplicationId(), row.getSubmissionId(), row.getProviderCode(), row.getStatus());
     }
 
+    /**
+     * 追加认证尝试记录
+     */
     private EnterpriseVerificationAttempt append(EnterpriseVerificationAttempt attempt) {
         EnterpriseVerificationAttemptRow row = toRow(attempt);
         row.setVerificationAttemptId(IdWorker.getId());
         try {
-            if (mapper.insertAttempt(row) != 1) {
+            if (dao.insertAttempt(row) != 1) {
                 throw providerFailure("Enterprise verification attempt could not be appended");
             }
         } catch (DuplicateKeyException failure) {
@@ -135,16 +156,22 @@ public class EnterpriseVerificationAttemptCoordinator {
         return toDomain(row);
     }
 
+    /**
+     * 按提供方请求编号锁定认证尝试
+     */
     private Optional<EnterpriseVerificationAttempt> lockByProviderRequest(String providerCode,
                                                                           String providerRequestId) {
-        return Optional.ofNullable(mapper.lockByProviderRequest(providerCode, providerRequestId))
+        return Optional.ofNullable(dao.lockByProviderRequest(providerCode, providerRequestId))
             .map(this::toDomain);
     }
 
+    /**
+     * 完成认证尝试
+     */
     private void complete(long verificationAttemptId, EnterpriseVerifiedCallback callback) {
         String storedEvidence = evidenceCodec.encode(
             callback.callbackDigest(), callback.providerEvidenceJson());
-        int updated = mapper.completeAttempt(
+        int updated = dao.completeAttempt(
             verificationAttemptId,
             callback.status().name(),
             callback.normalizedResultJson(),
@@ -156,6 +183,9 @@ public class EnterpriseVerificationAttemptCoordinator {
         }
     }
 
+    /**
+     * 转换领域对象为持久化读模型
+     */
     private EnterpriseVerificationAttemptRow toRow(EnterpriseVerificationAttempt attempt) {
         EnterpriseVerificationAttemptRow row = new EnterpriseVerificationAttemptRow();
         row.setVerificationAttemptId(attempt.verificationAttemptId());
@@ -174,6 +204,9 @@ public class EnterpriseVerificationAttemptCoordinator {
         return row;
     }
 
+    /**
+     * 转换读模型为领域对象
+     */
     private EnterpriseVerificationAttempt toDomain(EnterpriseVerificationAttemptRow row) {
         EnterpriseVerificationEvidenceCodec.DecodedEvidence evidence =
             evidenceCodec.decode(row.getProviderEvidenceJson());
@@ -193,10 +226,16 @@ public class EnterpriseVerificationAttemptCoordinator {
             row.getCompletedTime());
     }
 
+    /**
+     * 构造认证提供方失败结果
+     */
     private EnterpriseVerificationException providerFailure(String message) {
         return new EnterpriseVerificationException(EnterpriseVerificationFailureCategory.PROVIDER_FAILURE, message);
     }
 
+    /**
+     * 记录已审计的认证失败结果
+     */
     private EnterpriseVerificationException auditedFailure(Long applicationId,
                                                            EnterpriseVerificationFailureCategory category,
                                                            String message,

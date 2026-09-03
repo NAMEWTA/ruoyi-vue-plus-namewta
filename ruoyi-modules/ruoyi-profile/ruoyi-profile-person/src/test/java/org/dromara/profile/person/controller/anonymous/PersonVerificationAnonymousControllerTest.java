@@ -3,12 +3,14 @@ package org.dromara.profile.person.controller.anonymous;
 import org.dromara.profile.person.domain.verification.PersonApplicationVerificationState;
 import org.dromara.profile.person.domain.verification.PersonProviderAttemptStatus;
 import org.dromara.profile.person.domain.verification.PersonVerificationAttempt;
+import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.config.PersonVerificationProviderProperties;
 import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
 import org.dromara.profile.person.service.impl.PersonDeterministicTestProvider;
 import org.dromara.profile.person.service.impl.PersonVerificationAttemptCoordinator;
 import org.dromara.profile.person.service.impl.PersonVerificationMapperFixture;
 import org.dromara.profile.person.service.impl.PersonVerificationProviderRegistry;
+import org.dromara.profile.person.usecase.impl.PersonVerificationUseCaseImpl;
 import cn.dev33.satoken.annotation.SaIgnore;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -42,10 +44,10 @@ class PersonVerificationAnonymousControllerTest {
         properties.setEnabledProviders(Set.of("test-provider"));
         PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
             new PersonVerificationProviderRegistry(List.of(provider), properties),
-            fixture.mapper(), fixture.evidenceCodec(),
-            new PersonVerificationSecurityAuditRecorder(fixture.mapper()));
+            new PersonVerificationAttemptDao(fixture.mapper()), fixture.evidenceCodec(),
+            new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(fixture.mapper())));
         PersonVerificationAnonymousController controller =
-            new PersonVerificationAnonymousController(coordinator, () -> NOW);
+            new PersonVerificationAnonymousController(new PersonVerificationUseCaseImpl(coordinator), () -> NOW);
         MockMvc mvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new PersonVerificationCallbackExceptionHandler())
             .build();

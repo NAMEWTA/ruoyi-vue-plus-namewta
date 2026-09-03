@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ProfileApiConfiguration {
 
+    /** 创建档案服务组合器。 */
     @Bean
     @ConditionalOnMissingBean(ProfileService.class)
     public ProfileService profileService(ObjectProvider<ProfileProjectionContributor> contributors) {

@@ -11,11 +11,11 @@ import org.dromara.profile.person.domain.verification.PersonVerificationCallback
 import org.dromara.profile.person.domain.verification.PersonVerificationFailureCategory;
 import org.dromara.profile.person.domain.verification.PersonVerificationStartAttemptCommand;
 import org.dromara.profile.person.domain.verification.PersonVerifiedCallback;
-import org.dromara.profile.person.domain.vo.PersonVerificationApplicationRow;
-import org.dromara.profile.person.domain.vo.PersonVerificationAttemptRow;
-import org.dromara.profile.person.mapper.PersonVerificationAttemptMapper;
+import org.dromara.profile.person.domain.model.read.PersonVerificationApplicationRow;
+import org.dromara.profile.person.domain.model.read.PersonVerificationAttemptRow;
+import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.service.PersonVerificationProvider;
-import org.dromara.profile.person.service.PersonVerificationTimeSource;
+import org.dromara.profile.person.service.PersonVerificationService;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import org.springframework.dao.DuplicateKeyException;
@@ -23,25 +23,35 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
+/**
+ * 创建个人认证尝试协调器。
+ */
 @Service
-public class PersonVerificationAttemptCoordinator {
+public class PersonVerificationAttemptCoordinator implements PersonVerificationService {
 
     private final PersonVerificationProviderRegistry providerRegistry;
-    private final PersonVerificationAttemptMapper mapper;
+    private final PersonVerificationAttemptDao dao;
     private final PersonVerificationEvidenceCodec evidenceCodec;
     private final PersonVerificationSecurityAuditRecorder auditRecorder;
 
+    /**
+     * 处理personverificationattemptcoordinator。
+     */
     public PersonVerificationAttemptCoordinator(PersonVerificationProviderRegistry providerRegistry,
-                                                PersonVerificationAttemptMapper mapper,
+                                                PersonVerificationAttemptDao dao,
                                                 PersonVerificationEvidenceCodec evidenceCodec,
                                                 PersonVerificationSecurityAuditRecorder auditRecorder) {
         this.providerRegistry = providerRegistry;
-        this.mapper = mapper;
+        this.dao = dao;
         this.evidenceCodec = evidenceCodec;
         this.auditRecorder = auditRecorder;
     }
 
+    /**
+     * 启动认证尝试
+     */
     @DSTransactional
+    @Override
     public PersonVerificationAttempt startAttempt(PersonVerificationStartAttemptCommand command) {
         PersonApplicationVerificationState application = lockApplication(command.applicationId());
         if (application.submissionId() != command.submissionId()) {
@@ -55,14 +65,18 @@ public class PersonVerificationAttemptCoordinator {
                 "Person verification application is terminal");
         }
         PersonVerificationProvider provider = providerRegistry.requireEnabled(application.providerCode());
-        int attemptNo = mapper.nextAttemptNo(application.applicationId());
+        int attemptNo = dao.nextAttemptNo(application.applicationId());
         PersonProviderStartResult result = provider.start(new PersonProviderStartCommand(
             application.applicationId(), application.submissionId(), attemptNo, command.requestFingerprint()));
         return append(PersonVerificationAttempt.fromStart(
             application, attemptNo, command.requestFingerprint(), result));
     }
 
+    /**
+     * 处理认证回调并更新尝试状态
+     */
     @DSTransactional
+    @Override
     public PersonVerificationCallbackOutcome handleCallback(String providerCode,
                                                             PersonProviderCallbackEnvelope envelope,
                                                             java.time.Instant receivedAt) {
@@ -109,8 +123,11 @@ public class PersonVerificationAttemptCoordinator {
         return PersonVerificationCallbackOutcome.ACCEPTED;
     }
 
+    /**
+     * 锁定申请记录
+     */
     private PersonApplicationVerificationState lockApplication(long applicationId) {
-        PersonVerificationApplicationRow row = mapper.lockApplication(applicationId);
+        PersonVerificationApplicationRow row = dao.lockApplication(applicationId);
         if (row == null) {
             throw new PersonVerificationException(
                 PersonVerificationFailureCategory.APPLICATION_NOT_FOUND,
@@ -120,11 +137,14 @@ public class PersonVerificationAttemptCoordinator {
             row.getApplicationId(), row.getSubmissionId(), row.getProviderCode(), row.getStatus());
     }
 
+    /**
+     * 追加认证尝试记录
+     */
     private PersonVerificationAttempt append(PersonVerificationAttempt attempt) {
         PersonVerificationAttemptRow row = toRow(attempt);
         row.setVerificationAttemptId(IdWorker.getId());
         try {
-            if (mapper.insertAttempt(row) != 1) {
+            if (dao.insertAttempt(row) != 1) {
                 throw providerFailure("Person verification attempt could not be appended");
             }
         } catch (DuplicateKeyException failure) {
@@ -136,16 +156,22 @@ public class PersonVerificationAttemptCoordinator {
         return toDomain(row);
     }
 
+    /**
+     * 按提供方请求编号锁定认证尝试
+     */
     private Optional<PersonVerificationAttempt> lockByProviderRequest(String providerCode,
                                                                        String providerRequestId) {
-        return Optional.ofNullable(mapper.lockByProviderRequest(providerCode, providerRequestId))
+        return Optional.ofNullable(dao.lockByProviderRequest(providerCode, providerRequestId))
             .map(this::toDomain);
     }
 
+    /**
+     * 完成认证尝试
+     */
     private void complete(long verificationAttemptId, PersonVerifiedCallback callback) {
         String storedEvidence = evidenceCodec.encode(
             callback.callbackDigest(), callback.providerEvidenceJson());
-        int updated = mapper.completeAttempt(
+        int updated = dao.completeAttempt(
             verificationAttemptId,
             callback.status().name(),
             callback.normalizedResultJson(),
@@ -157,6 +183,9 @@ public class PersonVerificationAttemptCoordinator {
         }
     }
 
+    /**
+     * 转换领域对象为持久化读模型
+     */
     private PersonVerificationAttemptRow toRow(PersonVerificationAttempt attempt) {
         PersonVerificationAttemptRow row = new PersonVerificationAttemptRow();
         row.setVerificationAttemptId(attempt.verificationAttemptId());
@@ -175,6 +204,9 @@ public class PersonVerificationAttemptCoordinator {
         return row;
     }
 
+    /**
+     * 转换读模型为领域对象
+     */
     private PersonVerificationAttempt toDomain(PersonVerificationAttemptRow row) {
         PersonVerificationEvidenceCodec.DecodedEvidence evidence =
             evidenceCodec.decode(row.getProviderEvidenceJson());
@@ -186,10 +218,16 @@ public class PersonVerificationAttemptCoordinator {
             row.getCompletedTime());
     }
 
+    /**
+     * 构造认证提供方失败结果
+     */
     private PersonVerificationException providerFailure(String message) {
         return new PersonVerificationException(PersonVerificationFailureCategory.PROVIDER_FAILURE, message);
     }
 
+    /**
+     * 记录已审计的认证失败结果
+     */
     private PersonVerificationException auditedFailure(Long applicationId,
                                                        PersonVerificationFailureCategory category,
                                                        String message,

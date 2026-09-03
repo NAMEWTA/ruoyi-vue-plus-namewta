@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+/** PersonAdminIdentityBo 请求参数模型。 */
 public record PersonAdminIdentityBo(
     @NotBlank @Size(max = 100) String fullName,
     @NotBlank @Size(max = 64) String documentTypeCode,

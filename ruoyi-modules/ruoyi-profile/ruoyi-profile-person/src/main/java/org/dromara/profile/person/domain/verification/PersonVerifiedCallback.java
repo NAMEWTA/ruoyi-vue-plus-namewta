@@ -3,6 +3,7 @@ package org.dromara.profile.person.domain.verification;
 import java.time.Instant;
 import java.util.Objects;
 
+/** PersonVerifiedCallback 认证领域模型。 */
 public record PersonVerifiedCallback(
     String providerRequestId,
     String callbackDigest,
@@ -12,6 +13,7 @@ public record PersonVerifiedCallback(
     String errorCode,
     Instant completedAt
 ) {
+    /** 校验个人认证回调的关键字段。 */
     public PersonVerifiedCallback {
         Objects.requireNonNull(providerRequestId, "providerRequestId");
         Objects.requireNonNull(callbackDigest, "callbackDigest");

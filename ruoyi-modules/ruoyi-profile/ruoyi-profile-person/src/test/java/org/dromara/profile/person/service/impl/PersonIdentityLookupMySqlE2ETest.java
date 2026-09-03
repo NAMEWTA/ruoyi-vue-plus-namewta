@@ -11,6 +11,7 @@ import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentity
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityMatch;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityQuery;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
+import org.dromara.profile.person.dao.PersonApplicationDao;
 import org.dromara.profile.person.support.PersonMapperXmlTestSupport;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,7 @@ class PersonIdentityLookupMySqlE2ETest {
                 insertBinding(session, 975100000004L, SUSPENDED_PROFILE_ID, SUSPENDED_USER_ID, "SUSPENDED");
 
                 PersonIdentityLookupServiceImpl service = new PersonIdentityLookupServiceImpl(
-                    session.getMapper(PersonApplicationMapper.class));
+                    new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class)));
 
                 assertThat(service.findActiveExactMatches(new ActiveIdentityQuery("  " + FULL_NAME + "  ", "abcd")))
                     .containsExactly(

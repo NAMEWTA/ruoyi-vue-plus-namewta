@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
-import org.dromara.profile.api.material.ProfileMaterialPort;
+import org.dromara.profile.person.usecase.ProfileMaterialUseCase;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialNodeCommand;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialNodeView;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialScope;
@@ -23,14 +23,20 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * MaterialTagController HTTP 接口，负责参数校验和响应包装。
+ */
 @Validated
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/profile/material-tags")
 public class MaterialTagController {
 
-    private final ProfileMaterialPort materialPort;
+    private final ProfileMaterialUseCase materialPort;
 
+    /**
+     * 处理 tree HTTP 请求。
+     */
     @GetMapping("/tree")
     @SaCheckPermission(value = {"profile:material-tag:query", "profile:person:material",
         "profile:enterprise:material", "profile:person:override", "profile:enterprise:override"}, mode = SaMode.OR)
@@ -39,6 +45,9 @@ public class MaterialTagController {
         return R.ok(materialPort.tree(scope, includeDisabled));
     }
 
+    /**
+     * 处理 create HTTP 请求。
+     */
     @PostMapping
     @SaCheckPermission("profile:material-tag:manage")
     @Log(title = "新增档案材料节点", businessType = BusinessType.INSERT,
@@ -47,6 +56,9 @@ public class MaterialTagController {
         return R.ok(materialPort.createNode(command));
     }
 
+    /**
+     * 处理 update HTTP 请求。
+     */
     @PostMapping("/{materialNodeId}")
     @SaCheckPermission("profile:material-tag:manage")
     @Log(title = "修改档案材料节点", businessType = BusinessType.UPDATE,
@@ -56,6 +68,9 @@ public class MaterialTagController {
         return R.ok(materialPort.updateNode(materialNodeId, command));
     }
 
+    /**
+     * 处理 status HTTP 请求。
+     */
     @PostMapping("/{materialNodeId}/status")
     @SaCheckPermission("profile:material-tag:manage")
     @Log(title = "变更档案材料节点状态", businessType = BusinessType.UPDATE,
@@ -65,6 +80,9 @@ public class MaterialTagController {
         return R.ok();
     }
 
+    /**
+     * 处理 archive HTTP 请求。
+     */
     @PostMapping("/{materialNodeId}/archive")
     @SaCheckPermission("profile:material-tag:manage")
     @Log(title = "归档档案材料节点", businessType = BusinessType.UPDATE,
@@ -74,9 +92,11 @@ public class MaterialTagController {
         return R.ok();
     }
 
+    /** 材料节点状态变更请求。 */
     public record StatusCommand(boolean enabled, int expectedVersion) {
     }
 
+    /** 材料节点版本变更请求。 */
     public record VersionCommand(int expectedVersion) {
     }
 }

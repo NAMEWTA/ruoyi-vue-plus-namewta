@@ -3,6 +3,7 @@ package org.dromara.profile.person.domain.vo;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/** PersonProfileVersionVo 对外返回模型。 */
 public record PersonProfileVersionVo(
     long versionId,
     int versionNo,
