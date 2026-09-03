@@ -1,10 +1,11 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.adapter.security.EnterpriseTransferCodeGenerator;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseTransferException;
 import org.dromara.profile.enterprise.domain.transfer.EnterpriseTransferChallenge;
 import org.dromara.profile.enterprise.domain.model.read.EnterpriseTransferOwnerRow;
 import org.dromara.profile.enterprise.mapper.EnterpriseTransferMapper;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore;
 import cn.hutool.crypto.digest.BCrypt;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.notify.model.NotifyAuditPolicy;
@@ -15,10 +16,10 @@ import org.dromara.common.notify.model.NotifyStatus;
 import org.dromara.profile.api.person.PersonIdentityLookupService;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityLock;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityMatch;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.StageResult;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.Verification;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.VerificationStatus;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.VerifiedChallenge;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.StageResult;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.Verification;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.VerificationStatus;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.VerifiedChallenge;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseTransferConfirmBo;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseTransferSendBo;
 import org.dromara.system.api.UserService;

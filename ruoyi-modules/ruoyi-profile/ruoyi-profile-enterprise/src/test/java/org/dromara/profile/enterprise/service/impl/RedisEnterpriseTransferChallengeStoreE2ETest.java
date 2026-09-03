@@ -1,10 +1,11 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.adapter.store.RedisEnterpriseTransferChallengeStore;
 import org.dromara.profile.enterprise.domain.transfer.EnterpriseTransferChallenge;
 import cn.hutool.crypto.digest.BCrypt;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.StageResult;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.VerificationStatus;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.StageResult;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.VerificationStatus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;

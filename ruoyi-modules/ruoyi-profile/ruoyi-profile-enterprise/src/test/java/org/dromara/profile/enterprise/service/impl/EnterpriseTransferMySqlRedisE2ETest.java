@@ -1,5 +1,7 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.adapter.store.RedisEnterpriseTransferChallengeStore;
+import org.dromara.profile.enterprise.adapter.security.EnterpriseTransferCodeGenerator;
 import org.dromara.profile.enterprise.controller.advice.EnterpriseTransferExceptionHandler;
 import org.dromara.profile.enterprise.controller.self.EnterpriseTransferController;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;

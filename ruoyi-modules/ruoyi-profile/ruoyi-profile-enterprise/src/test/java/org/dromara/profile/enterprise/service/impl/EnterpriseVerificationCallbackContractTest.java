@@ -1,5 +1,13 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationSecurityAuditRecorder;
+
+import org.dromara.profile.enterprise.adapter.codec.EnterpriseVerificationEvidenceCodec;
+
+import org.dromara.profile.enterprise.service.EnterpriseVerificationAttemptService;
+
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseVerificationProviderRegistry;
+
 import org.dromara.profile.enterprise.config.EnterpriseVerificationProviderProperties;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseVerificationException;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseProviderCallbackEnvelope;
@@ -105,7 +113,7 @@ class EnterpriseVerificationCallbackContractTest {
             new AtomicReference<>(attempt());
         private final AtomicInteger completeCount = new AtomicInteger();
         private final List<EnterpriseVerificationFailureCategory> audits = new ArrayList<>();
-        private final EnterpriseVerificationAttemptCoordinator coordinator;
+        private final EnterpriseVerificationAttemptService coordinator;
 
         private Fixture(String applicationStatus, String applicationProviderCode) {
             EnterpriseVerificationAttemptMapper mapper = mock(EnterpriseVerificationAttemptMapper.class);
@@ -136,7 +144,7 @@ class EnterpriseVerificationCallbackContractTest {
             properties.setEnabledProviders(Set.of("test-provider"));
             EnterpriseVerificationEvidenceCodec codec =
                 new EnterpriseVerificationEvidenceCodec(JsonMapper.builder().build());
-            coordinator = new EnterpriseVerificationAttemptCoordinator(
+            coordinator = new EnterpriseVerificationAttemptService(
                 new EnterpriseVerificationProviderRegistry(List.of(provider), properties),
                 new EnterpriseVerificationAttemptDao(mapper), codec,
                 new EnterpriseVerificationSecurityAuditRecorder(new EnterpriseVerificationAttemptDao(mapper)));

@@ -1,13 +1,11 @@
 package org.dromara.profile.enterprise.service;
-
-import org.dromara.profile.enterprise.service.IEnterpriseTransferService;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore;
+import org.dromara.profile.enterprise.port.security.EnterpriseTransferCodePort;
 import org.dromara.profile.enterprise.dao.EnterpriseTransferDao;
-import org.dromara.profile.enterprise.service.impl.EnterpriseTransferCodeGenerator;
 import org.dromara.profile.enterprise.domain.model.read.EnterpriseTransferOwnerRow;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseTransferException;
 import org.dromara.profile.enterprise.domain.transfer.EnterpriseTransferChallenge;
-import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import org.dromara.common.mybatis.utils.IdGeneratorUtil;
 import cn.hutool.crypto.digest.BCrypt;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.notify.model.NotifyAuditPolicy;
@@ -21,9 +19,9 @@ import org.dromara.profile.api.person.PersonIdentityLookupService;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityLock;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityMatch;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityQuery;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.StageResult;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.Verification;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore.VerificationStatus;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.StageResult;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.Verification;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore.VerificationStatus;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseTransferConfirmBo;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseTransferSendBo;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseTransferVo;
@@ -32,8 +30,6 @@ import org.dromara.system.api.domain.UserDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -47,38 +43,33 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
 /**
  * 创建企业转移业务服务。
  */
 @Service
-public class EnterpriseTransferService implements IEnterpriseTransferService {
-
+public class EnterpriseTransferService {
     private static final Duration CHALLENGE_TTL = Duration.ofMinutes(5);
-
     private final EnterpriseTransferDao dao;
     private final EnterpriseTransferChallengeStore challenges;
-    private final EnterpriseTransferCodeGenerator codes;
+    private final EnterpriseTransferCodePort codes;
     private final PersonIdentityLookupService personIdentities;
     private final UserService users;
     private final NotifyClient notify;
     private final Clock clock;
-
     /** 创建企业转移业务服务。 */
     @Autowired
     public EnterpriseTransferService(EnterpriseTransferDao dao,
                                      EnterpriseTransferChallengeStore challenges,
-                                     EnterpriseTransferCodeGenerator codes,
+                                     EnterpriseTransferCodePort codes,
                                      PersonIdentityLookupService personIdentities,
                                      UserService users,
                                      NotifyClient notify) {
         this(dao, challenges, codes, personIdentities, users, notify, Clock.systemUTC());
     }
-
     /** 创建可注入时钟的企业转移业务服务，测试场景据此固定过期时间。 */
     public EnterpriseTransferService(EnterpriseTransferDao dao,
                               EnterpriseTransferChallengeStore challenges,
-                              EnterpriseTransferCodeGenerator codes,
+                              EnterpriseTransferCodePort codes,
                               PersonIdentityLookupService personIdentities,
                               UserService users,
                               NotifyClient notify,
@@ -91,12 +82,19 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
         this.notify = notify;
         this.clock = clock;
     }
-
+    /** 兼容存量测试适配器使用的具体验证码生成器构造方法。 */
+    @Deprecated
+    public EnterpriseTransferService(EnterpriseTransferDao dao,
+                              EnterpriseTransferChallengeStore challenges,
+                              org.dromara.profile.enterprise.adapter.security.EnterpriseTransferCodeGenerator codes,
+                              PersonIdentityLookupService personIdentities, UserService users,
+                              NotifyClient notify, Clock clock) {
+        this(dao, challenges, (EnterpriseTransferCodePort) codes, personIdentities, users, notify, clock);
+    }
     /**
      * 发起企业档案转移
      */
-    @DSTransactional
-    @Override
+
     public EnterpriseTransferVo send(long sourceUserId, EnterpriseTransferSendBo command) {
         OwnerBinding owner = currentActiveOwner(sourceUserId).orElse(null);
         String fullName = command.fullName().trim();
@@ -110,7 +108,6 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
         if (hasEffectiveEnterpriseBinding(target.userId())) {
             return EnterpriseTransferVo.status("NOT_AVAILABLE");
         }
-
         String challengeId = UUID.randomUUID().toString();
         String code = codes.generate();
         Instant expiresAt = clock.instant().plus(CHALLENGE_TTL);
@@ -121,7 +118,6 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
         if (challenges.stage(challenge) != StageResult.STAGED) {
             throw failure("ENTERPRISE_TRANSFER_RATE_LIMITED");
         }
-
         NotifyResult result;
         try {
             result = notify.send(NotifyRequest.builder()
@@ -155,12 +151,10 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
         }
         return EnterpriseTransferVo.sent(challengeId);
     }
-
     /**
      * 确认当前业务操作
      */
-    @DSTransactional
-    @Override
+
     public EnterpriseTransferVo confirm(long sourceUserId, EnterpriseTransferConfirmBo command) {
         Verification verification = challenges.verify(command.challengeId(), sourceUserId, command.code());
         if (verification.status() != VerificationStatus.VERIFIED || verification.verified() == null) {
@@ -180,37 +174,32 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
         }
         return EnterpriseTransferVo.status("TRANSFERRED");
     }
-
     /**
      * 解除档案绑定
      */
-    @DSTransactional
-    @Override
+
     public EnterpriseTransferVo unbind(long userId) {
         unbindBinding(userId, clock.instant());
         return EnterpriseTransferVo.status("UNBOUND");
     }
-
     /**
      * 查询当前生效的企业所有者
      */
     public Optional<OwnerBinding> currentActiveOwner(long userId) {
         return Optional.ofNullable(dao.selectActiveOwner(userId)).map(this::owner);
     }
-
     /**
      * 判断用户是否存在生效企业绑定
      */
     public boolean hasEffectiveEnterpriseBinding(long userId) {
         return dao.countEffectiveBinding(userId) > 0;
     }
-
     /**
      * 记录转移挑战信息
      */
     public void recordChallenge(EnterpriseTransferChallenge challenge, Instant occurredTime) {
         try {
-            changed(dao.insertTransferRecord(IdWorker.getId(), challenge.enterpriseProfileId(),
+            changed(dao.insertTransferRecord(IdGeneratorUtil.nextLongId(), challenge.enterpriseProfileId(),
                 challenge.sourceBindingId(), challenge.sourceUserId(), challenge.targetUserId(),
                 challenge.challengeId(), challenge.sourceBindingVersion(),
                 Instant.ofEpochMilli(challenge.expiresAtEpochMilli()), occurredTime),
@@ -219,7 +208,6 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
             throw new EnterpriseTransferException("ENTERPRISE_TRANSFER_RECORD_CONFLICT", exception);
         }
     }
-
     /**
      * 转移档案绑定关系
      */
@@ -233,7 +221,6 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
         if (dao.lockEffectiveBindingId(challenge.targetUserId()) != null) {
             throw failure("ENTERPRISE_TRANSFER_TARGET_INELIGIBLE");
         }
-
         try {
             changed(dao.unbindSource(source.getBindingId(), source.getProfileId(), source.getUserId(),
                 source.getBindingVersion(), occurredTime, challenge.sourceUserId()),
@@ -241,8 +228,7 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
             event(source.getBindingId(), source.getProfileId(), source.getUserId(), "UNBOUND",
                 source.getBindingVersion() + 1, "SELF_TRANSFER", source.getBindingId(),
                 "TRANSFER_CHALLENGE:" + challenge.challengeId(), occurredTime, challenge.sourceUserId());
-
-            long newBindingId = IdWorker.getId();
+            long newBindingId = IdGeneratorUtil.nextLongId();
             changed(dao.insertBinding(newBindingId, source.getProfileId(), challenge.targetUserId(),
                 "SELF_TRANSFER", source.getBindingId(), occurredTime, challenge.sourceUserId()),
                 "ENTERPRISE_TRANSFER_BINDING_CONFLICT");
@@ -256,7 +242,6 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
             throw new EnterpriseTransferException("ENTERPRISE_TRANSFER_BINDING_CONFLICT", exception);
         }
     }
-
     /**
      * 解除指定绑定关系
      */
@@ -272,7 +257,6 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
             "RESPONSIBLE_SELF_UNBIND", occurredTime, userId);
         return source.getProfileId();
     }
-
     /**
      * 按身份条件查询唯一目标
      */
@@ -291,7 +275,6 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
             .map(identity -> new TargetIdentity(identity.userId(), identity.personProfileId(), phone))
             .toList();
     }
-
     /**
      * 查询符合条件且已锁定的账户
      */
@@ -300,21 +283,18 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
         return user != null && Objects.equals(identity.userId(), user.getUserId())
             && activeWithPhone(user, phone);
     }
-
     /**
      * 安全查询用户信息
      */
     private Collection<UserDTO> safeUsers(List<UserDTO> accounts) {
         return accounts == null ? List.of() : accounts;
     }
-
     /**
      * 按手机号查询生效身份
      */
     private boolean activeWithPhone(UserDTO user, String phone) {
         return user != null && "0".equals(user.getStatus()) && phone.equals(user.getPhoneNumber());
     }
-
     /**
      * 判断通知是否已送达
      */
@@ -322,23 +302,20 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
         return result != null && (result.status() == NotifyStatus.ACCEPTED
             || result.status() == NotifyStatus.SKIPPED_DUPLICATE);
     }
-
     /**
      * 构造流程事件数据
      */
     private void event(long bindingId, long profileId, long userId, String eventType, int bindingVersion,
                        String sourceType, long sourceId, String reason, Instant occurredTime, long operatorId) {
-        changed(dao.insertEvent(IdWorker.getId(), bindingId, profileId, userId, eventType, bindingVersion,
+        changed(dao.insertEvent(IdGeneratorUtil.nextLongId(), bindingId, profileId, userId, eventType, bindingVersion,
             sourceType, sourceId, reason, occurredTime, operatorId), "ENTERPRISE_TRANSFER_EVENT_CONFLICT");
     }
-
     /**
      * 解析材料所有者
      */
     private OwnerBinding owner(EnterpriseTransferOwnerRow row) {
         return new OwnerBinding(row.getBindingId(), row.getProfileId(), row.getUserId(), row.getBindingVersion());
     }
-
     /**
      * 处理changed。
      */
@@ -347,20 +324,17 @@ public class EnterpriseTransferService implements IEnterpriseTransferService {
             throw failure(category);
         }
     }
-
     /**
      * 构造业务失败异常
      */
     private EnterpriseTransferException failure(String category) {
         return new EnterpriseTransferException(category);
     }
-
     /**
      * 承载TargetIdentity业务规则的领域服务。
      */
     private record TargetIdentity(long userId, long personProfileId, String phone) {
     }
-
     /**
      * 承载OwnerBinding业务规则的领域服务。
      */

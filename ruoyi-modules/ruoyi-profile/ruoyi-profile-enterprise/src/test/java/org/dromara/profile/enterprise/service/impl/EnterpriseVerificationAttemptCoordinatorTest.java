@@ -1,5 +1,14 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationSecurityAuditRecorder;
+
+import org.dromara.profile.enterprise.adapter.codec.EnterpriseVerificationEvidenceCodec;
+
+import org.dromara.profile.enterprise.service.EnterpriseVerificationAttemptService;
+
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseVerificationProviderRegistry;
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseManualVerificationProvider;
+
 import org.dromara.profile.enterprise.config.EnterpriseVerificationProviderProperties;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseVerificationException;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationAttempt;
@@ -25,7 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @Tag("dev")
-class EnterpriseVerificationAttemptCoordinatorTest {
+class EnterpriseVerificationAttemptServiceTest {
 
     @Test
     void explicitRetryAppendsAnAttemptUsingTheProviderFixedOnTheApplication() {
@@ -33,7 +42,7 @@ class EnterpriseVerificationAttemptCoordinatorTest {
         when(mapper.lockApplication(71L)).thenReturn(application());
         when(mapper.nextAttemptNo(71L)).thenReturn(1, 2);
         when(mapper.insertAttempt(any())).thenReturn(1);
-        EnterpriseVerificationAttemptCoordinator coordinator = coordinator(mapper, Set.of("manual"));
+        EnterpriseVerificationAttemptService coordinator = coordinator(mapper, Set.of("manual"));
 
         EnterpriseVerificationAttempt first = coordinator.startAttempt(
             new EnterpriseVerificationStartAttemptCommand(71L, 801L, "fingerprint-1"));
@@ -53,7 +62,7 @@ class EnterpriseVerificationAttemptCoordinatorTest {
     void retryRejectsAStaleSubmissionBeforeCallingAnyProvider() {
         EnterpriseVerificationAttemptMapper mapper = mock(EnterpriseVerificationAttemptMapper.class);
         when(mapper.lockApplication(71L)).thenReturn(application());
-        EnterpriseVerificationAttemptCoordinator coordinator = coordinator(mapper, Set.of());
+        EnterpriseVerificationAttemptService coordinator = coordinator(mapper, Set.of());
 
         assertThatThrownBy(() -> coordinator.startAttempt(
             new EnterpriseVerificationStartAttemptCommand(71L, 800L, "stale-fingerprint")))
@@ -63,13 +72,13 @@ class EnterpriseVerificationAttemptCoordinatorTest {
         verify(mapper, never()).insertAttempt(any());
     }
 
-    private EnterpriseVerificationAttemptCoordinator coordinator(EnterpriseVerificationAttemptMapper mapper,
+    private EnterpriseVerificationAttemptService coordinator(EnterpriseVerificationAttemptMapper mapper,
                                                                  Set<String> enabledProviders) {
         EnterpriseVerificationProviderProperties properties = new EnterpriseVerificationProviderProperties();
         properties.setEnabledProviders(enabledProviders);
         EnterpriseVerificationEvidenceCodec codec =
             new EnterpriseVerificationEvidenceCodec(tools.jackson.databind.json.JsonMapper.builder().build());
-        return new EnterpriseVerificationAttemptCoordinator(
+        return new EnterpriseVerificationAttemptService(
             new EnterpriseVerificationProviderRegistry(
                 List.of(new EnterpriseManualVerificationProvider()), properties),
             new EnterpriseVerificationAttemptDao(mapper), codec,

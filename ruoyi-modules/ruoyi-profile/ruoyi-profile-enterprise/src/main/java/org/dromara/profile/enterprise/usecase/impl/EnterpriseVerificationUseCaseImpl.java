@@ -1,9 +1,11 @@
 package org.dromara.profile.enterprise.usecase.impl;
 
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+
 import lombok.RequiredArgsConstructor;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseProviderCallbackEnvelope;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationCallbackOutcome;
-import org.dromara.profile.enterprise.service.EnterpriseVerificationService;
+import org.dromara.profile.enterprise.port.verification.EnterpriseVerificationService;
 import org.dromara.profile.enterprise.usecase.EnterpriseVerificationUseCase;
 import org.springframework.stereotype.Service;
 
@@ -14,12 +16,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class EnterpriseVerificationUseCaseImpl implements EnterpriseVerificationUseCase {
     private final EnterpriseVerificationService coordinator;
-    /**
-     * 编排 callback 应用用例。
-     */
-    @Override public EnterpriseVerificationCallbackOutcome callback(String providerCode,
-                                                                       EnterpriseProviderCallbackEnvelope envelope,
-                                                                       java.time.Instant receivedAt) {
+    /** 处理企业认证提供方回调。 */
+    @DSTransactional
+    @Override
+    public EnterpriseVerificationCallbackOutcome callback(String providerCode,
+                                                           EnterpriseProviderCallbackEnvelope envelope,
+                                                           java.time.Instant receivedAt) {
         return coordinator.handleCallback(providerCode, envelope, receivedAt);
     }
 }

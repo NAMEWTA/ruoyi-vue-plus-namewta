@@ -36,7 +36,7 @@ public class EnterpriseTransferController {
     @Log(title = "发送企业负责人转移验证码", businessType = BusinessType.OTHER,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseTransferVo> send(@Valid @RequestBody EnterpriseTransferSendBo command) {
-        return R.ok(service.send(command));
+        return R.ok(service.send(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -47,7 +47,7 @@ public class EnterpriseTransferController {
     @Log(title = "确认企业负责人转移", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseTransferVo> confirm(@Valid @RequestBody EnterpriseTransferConfirmBo command) {
-        return R.ok(service.confirm(command));
+        return R.ok(service.confirm(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -58,6 +58,6 @@ public class EnterpriseTransferController {
     @Log(title = "企业负责人自行解绑", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseTransferVo> unbind() {
-        return R.ok(service.unbind());
+        return R.ok(service.unbind(LoginHelper.getUserId()));
     }
 }

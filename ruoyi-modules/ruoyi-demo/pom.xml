@@ -23,6 +23,12 @@
             <artifactId>ruoyi-common-core</artifactId>
         </dependency>
 
+        <!-- OpenAPI 机器调用示例 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-openapi</artifactId>
+        </dependency>
+
         <!-- api模块 -->
         <dependency>
             <groupId>org.dromara</groupId>

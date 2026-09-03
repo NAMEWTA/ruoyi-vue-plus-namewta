@@ -1,7 +1,7 @@
 package org.dromara.profile.enterprise.usecase;
 
 import org.dromara.profile.api.material.ProfileMaterialPort;
-import org.dromara.system.api.OssService.OssAccessUrl;
+import org.dromara.profile.enterprise.domain.vo.EnterpriseProfileAccessUrl;
 
 import java.util.List;
 import java.util.Set;
@@ -43,9 +43,11 @@ public interface ProfileMaterialUseCase {
      */
     List<ProfileMaterialPort.MaterialReferenceView> list(ProfileMaterialPort.MaterialOwnerKey owner);
     /**
-     * 编排 accessUrl 应用用例。
+     * 编排 accessUrlView 应用用例。
      */
-    OssAccessUrl accessUrl(ProfileMaterialPort.MaterialOwnerKey owner, Long materialRefId);
+    default EnterpriseProfileAccessUrl accessUrlView(ProfileMaterialPort.MaterialOwnerKey owner, Long materialRefId) {
+        throw new UnsupportedOperationException("旧适配器不支持文件访问地址入口");
+    }
     /**
      * 编排 validateRequired 应用用例。
      */

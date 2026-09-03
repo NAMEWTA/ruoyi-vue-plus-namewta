@@ -1,8 +1,9 @@
 package org.dromara.profile.person.usecase.impl;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 
 import lombok.RequiredArgsConstructor;
-import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.person.domain.bo.PersonApplicationSaveBo;
+import org.dromara.profile.person.domain.application.PersonApplicationProcessCommand;
 import org.dromara.profile.person.domain.vo.PersonApplicationVo;
 import org.dromara.profile.person.service.PersonApplicationService;
 import org.dromara.profile.person.usecase.PersonApplicationUseCase;
@@ -20,24 +21,34 @@ public class PersonApplicationUseCaseImpl implements PersonApplicationUseCase {
     /**
      * 编排 current 应用用例。
      */
+    @DSTransactional
     @Override
-    public PersonApplicationVo current() {
-        return service.current(LoginHelper.getUserId()).orElse(null);
+    public PersonApplicationVo current(long userId) {
+        return service.current(userId);
     }
 
     /**
      * 编排 save 应用用例。
      */
+    @DSTransactional
     @Override
-    public PersonApplicationVo save(PersonApplicationSaveBo command) {
-        return service.save(LoginHelper.getUserId(), command);
+    public PersonApplicationVo save(long userId, PersonApplicationSaveBo command) {
+        return service.save(userId, command);
     }
 
     /**
      * 编排 submit 应用用例。
      */
+    @DSTransactional
     @Override
-    public PersonApplicationVo submit(int expectedVersion) {
-        return service.submit(LoginHelper.getUserId(), expectedVersion);
+    public PersonApplicationVo submit(long userId, int expectedVersion) {
+        return service.submit(userId, expectedVersion);
+    }
+
+    /** 将工作流事件交给 Service 处理。 */
+    @DSTransactional
+    @Override
+    public void handleProcess(PersonApplicationProcessCommand command) {
+        service.handleProcess(command);
     }
 }

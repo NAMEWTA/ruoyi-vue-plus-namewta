@@ -10,7 +10,8 @@ import org.dromara.profile.person.domain.model.read.MaterialReferenceRow;
 import org.dromara.profile.person.domain.model.read.MaterialRequirementRow;
 import org.dromara.profile.person.domain.model.read.MaterialTagCountRow;
 import org.dromara.profile.person.mapper.ProfileMaterialMapper;
-import org.dromara.profile.person.service.ProfileMaterialAccessPolicy;
+import org.dromara.profile.person.port.security.ProfileMaterialAccessPolicy;
+import org.dromara.profile.person.usecase.impl.ProfileMaterialUseCaseImpl;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.api.material.ProfileMaterialOwnerContributor;
@@ -71,7 +72,8 @@ class ProfileMaterialServiceTest {
                 case "accessUrl" -> new Class<?>[]{MaterialOwnerKey.class, Long.class};
                 default -> new Class<?>[]{MaterialOwnerKey.class, String.class, Set.class};
             };
-            assertThat(ProfileMaterialServiceImpl.class.getMethod(method, parameters))
+            String useCaseMethod = "accessUrl".equals(method) ? "accessUrlView" : method;
+            assertThat(ProfileMaterialUseCaseImpl.class.getMethod(useCaseMethod, parameters))
                 .matches(value -> value.isAnnotationPresent(DSTransactional.class));
         }
     }

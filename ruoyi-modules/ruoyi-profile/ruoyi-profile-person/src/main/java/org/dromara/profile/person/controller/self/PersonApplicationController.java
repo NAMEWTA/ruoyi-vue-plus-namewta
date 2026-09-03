@@ -36,7 +36,7 @@ public class PersonApplicationController {
     @GetMapping
     @SaCheckPermission("profile:person:apply")
     public R<PersonApplicationVo> current() {
-        return R.ok(service.current());
+        return R.ok(service.current(LoginHelper.getUserId()));
     }
 
     /**
@@ -47,7 +47,7 @@ public class PersonApplicationController {
     @Log(title = "保存个人实名认证申请", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonApplicationVo> save(@Valid @RequestBody PersonApplicationSaveBo command) {
-        return R.ok(service.save(command));
+        return R.ok(service.save(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -58,6 +58,6 @@ public class PersonApplicationController {
     @Log(title = "提交个人实名认证申请", businessType = BusinessType.OTHER,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonApplicationVo> submit(@Valid @RequestBody PersonApplicationSubmitBo command) {
-        return R.ok(service.submit(command.expectedVersion()));
+        return R.ok(service.submit(LoginHelper.getUserId(), command.expectedVersion()));
     }
 }

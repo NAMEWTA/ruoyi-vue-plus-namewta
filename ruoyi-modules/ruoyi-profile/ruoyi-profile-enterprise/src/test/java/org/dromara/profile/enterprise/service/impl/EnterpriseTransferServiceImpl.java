@@ -1,10 +1,11 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.adapter.security.EnterpriseTransferCodeGenerator;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.profile.api.person.PersonIdentityLookupService;
 import org.dromara.profile.enterprise.dao.EnterpriseTransferDao;
 import org.dromara.profile.enterprise.mapper.EnterpriseTransferMapper;
-import org.dromara.profile.enterprise.service.EnterpriseTransferChallengeStore;
+import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore;
 import org.dromara.profile.enterprise.service.EnterpriseTransferService;
 import org.dromara.profile.enterprise.usecase.EnterpriseTransferUseCase;
 import org.dromara.common.satoken.utils.LoginHelper;

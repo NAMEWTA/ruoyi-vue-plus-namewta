@@ -1,7 +1,9 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseVerificationProviderRegistry;
+
 import org.dromara.profile.enterprise.config.EnterpriseVerificationProviderProperties;
-import org.dromara.profile.enterprise.service.EnterpriseVerificationProvider;
+import org.dromara.profile.enterprise.port.provider.EnterpriseVerificationProvider;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseVerificationException;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseProviderCallbackEnvelope;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseProviderStartCommand;

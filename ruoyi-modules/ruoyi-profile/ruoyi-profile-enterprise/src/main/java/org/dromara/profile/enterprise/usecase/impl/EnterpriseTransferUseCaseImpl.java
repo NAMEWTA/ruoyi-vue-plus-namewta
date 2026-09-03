@@ -1,7 +1,8 @@
 package org.dromara.profile.enterprise.usecase.impl;
 
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+
 import lombok.RequiredArgsConstructor;
-import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseTransferConfirmBo;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseTransferSendBo;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseTransferVo;
@@ -16,20 +17,22 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class EnterpriseTransferUseCaseImpl implements EnterpriseTransferUseCase {
     private final EnterpriseTransferService service;
-    /**
-     * 编排 send 应用用例。
-     */
-    @Override public EnterpriseTransferVo send(EnterpriseTransferSendBo command) {
-        return service.send(LoginHelper.getUserId(), command);
+    /** 发起企业转移申请。 */
+    @DSTransactional
+    @Override
+    public EnterpriseTransferVo send(long userId, EnterpriseTransferSendBo command) {
+        return service.send(userId, command);
     }
-    /**
-     * 编排 confirm 应用用例。
-     */
-    @Override public EnterpriseTransferVo confirm(EnterpriseTransferConfirmBo command) {
-        return service.confirm(LoginHelper.getUserId(), command);
+    /** 确认企业转移申请。 */
+    @DSTransactional
+    @Override
+    public EnterpriseTransferVo confirm(long userId, EnterpriseTransferConfirmBo command) {
+        return service.confirm(userId, command);
     }
-    /**
-     * 编排 unbind 应用用例。
-     */
-    @Override public EnterpriseTransferVo unbind() { return service.unbind(LoginHelper.getUserId()); }
+    /** 解除企业当前绑定关系。 */
+    @DSTransactional
+    @Override
+    public EnterpriseTransferVo unbind(long userId) {
+        return service.unbind(userId);
+    }
 }

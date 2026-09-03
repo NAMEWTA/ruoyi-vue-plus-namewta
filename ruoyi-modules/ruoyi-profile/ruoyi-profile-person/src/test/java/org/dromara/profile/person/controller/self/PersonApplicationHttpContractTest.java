@@ -2,7 +2,7 @@ package org.dromara.profile.person.controller.self;
 
 import org.dromara.profile.person.domain.bo.PersonApplicationSaveBo;
 import org.dromara.profile.person.domain.bo.PersonApplicationSubmitBo;
-import org.dromara.profile.person.service.impl.PersonApplicationServiceImpl;
+import org.dromara.profile.person.usecase.impl.PersonApplicationUseCaseImpl;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import org.dromara.common.log.annotation.Log;
@@ -48,11 +48,12 @@ class PersonApplicationHttpContractTest {
             .getAnnotation(PostMapping.class).value()).isEmpty();
         assertThat(PersonApplicationController.class.getMethod("submit", PersonApplicationSubmitBo.class)
             .getAnnotation(PostMapping.class).value()).containsExactly("/submit");
-        assertThat(PersonApplicationServiceImpl.class.getMethod("save", long.class, PersonApplicationSaveBo.class)
+        assertThat(PersonApplicationUseCaseImpl.class.getMethod("save", long.class, PersonApplicationSaveBo.class)
             .isAnnotationPresent(DSTransactional.class)).isTrue();
-        assertThat(PersonApplicationServiceImpl.class.getMethod("submit", long.class, int.class)
+        assertThat(PersonApplicationUseCaseImpl.class.getMethod("submit", long.class, int.class)
             .isAnnotationPresent(DSTransactional.class)).isTrue();
-        assertThat(PersonApplicationServiceImpl.class.getMethod("handleProcessEvent",
-            org.dromara.workflow.api.event.ProcessEvent.class).isAnnotationPresent(DSTransactional.class)).isTrue();
+        assertThat(PersonApplicationUseCaseImpl.class.getMethod("handleProcess",
+            org.dromara.profile.person.domain.application.PersonApplicationProcessCommand.class)
+            .isAnnotationPresent(DSTransactional.class)).isTrue();
     }
 }

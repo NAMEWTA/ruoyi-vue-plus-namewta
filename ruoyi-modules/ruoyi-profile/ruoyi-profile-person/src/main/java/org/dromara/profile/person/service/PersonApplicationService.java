@@ -1,11 +1,11 @@
 package org.dromara.profile.person.service;
-
 import org.dromara.profile.person.domain.application.PersonDocumentTypeRule;
 import org.dromara.profile.person.domain.application.PersonApplication;
 import org.dromara.profile.person.domain.vo.PersonApplicationVo;
 import org.dromara.profile.person.domain.bo.PersonApplicationSaveBo;
 import org.dromara.profile.person.domain.application.PersonDraftUpdate;
 import org.dromara.profile.person.domain.application.PersonIdentityFields;
+import org.dromara.profile.person.domain.application.PersonApplicationProcessCommand;
 import org.dromara.profile.person.domain.application.PersonPublication;
 import org.dromara.profile.person.domain.application.PersonSubmission;
 import org.dromara.profile.person.domain.application.PersonActiveProjection;
@@ -17,12 +17,12 @@ import org.dromara.profile.person.domain.model.read.PersonProfileRow;
 import org.dromara.profile.person.domain.model.read.PersonSubmissionRow;
 import org.dromara.profile.person.domain.model.read.PersonVersionRow;
 import org.dromara.profile.person.dao.PersonApplicationDao;
-import org.dromara.profile.person.service.impl.PersonVerificationProviderRegistry;
+import org.dromara.profile.person.port.provider.PersonVerificationProviderRegistryPort;
+import org.dromara.profile.person.port.verification.PersonVerificationService;
 import org.dromara.profile.person.domain.exception.PersonApplicationException;
 import org.dromara.profile.person.port.PersonApplicationPublicationPort;
-import org.dromara.profile.person.service.PersonWorkflowGateway;
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
-import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
+import org.dromara.common.mybatis.utils.IdGeneratorUtil;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
@@ -32,11 +32,9 @@ import org.dromara.profile.person.domain.verification.PersonVerificationStartAtt
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.event.ProcessEvent;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.json.JsonMapper;
-
+import org.dromara.common.json.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -50,66 +48,67 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
-
 /**
  * 创建个人申请业务服务。
  */
 @Service
 public class PersonApplicationService implements PersonApplicationPublicationPort {
-
     private static final String DEFAULT_PROVIDER_KEY = "profile.person.provider.default";
     private static final String FLOW_CODE_KEY = "profile.person.flowCode";
     private static final Set<String> EDITABLE_STATUSES = Set.of("DRAFT", "BACK", "CANCEL");
     private static final Set<String> EVENT_STATUSES = Set.of("BACK", "CANCEL", "INVALID", "TERMINATION");
     private static final Set<String> GENDERS = Set.of("MALE", "FEMALE", "UNKNOWN");
-
     private final PersonApplicationDao dao;
-    private final JsonMapper jsonMapper;
     private final ProfileMaterialPort materials;
-    private final PersonVerificationProviderRegistry providers;
+    private final PersonVerificationProviderRegistryPort providers;
     private final PersonVerificationService attempts;
     private final PersonWorkflowGateway workflow;
     private final ConfigService configService;
     private final Clock clock;
-
     /** 创建个人申请业务服务。 */
     @Autowired
-    public PersonApplicationService(PersonApplicationDao dao, JsonMapper jsonMapper,
+    public PersonApplicationService(PersonApplicationDao dao,
                                     ProfileMaterialPort materials,
-                                    PersonVerificationProviderRegistry providers,
+                                    PersonVerificationProviderRegistryPort providers,
                                     PersonVerificationService attempts,
                                     PersonWorkflowGateway workflow, ConfigService configService) {
-        this(dao, jsonMapper, materials, providers, attempts, workflow, configService, Clock.systemUTC());
+        this(dao, null, materials, providers, attempts, workflow, configService, Clock.systemUTC());
     }
-
     /** 创建可注入时钟的个人申请业务服务，测试场景据此固定时间。 */
-    public PersonApplicationService(PersonApplicationDao dao, JsonMapper jsonMapper,
+    public PersonApplicationService(PersonApplicationDao dao, Object jsonMapper,
                              ProfileMaterialPort materials,
-                             PersonVerificationProviderRegistry providers,
+                             PersonVerificationProviderRegistryPort providers,
                              PersonVerificationService attempts,
                              PersonWorkflowGateway workflow, ConfigService configService, Clock clock) {
         this.dao = dao;
-        this.jsonMapper = jsonMapper;
-        this.materials = materials;
+                this.materials = materials;
         this.providers = providers;
         this.attempts = attempts;
         this.workflow = workflow;
         this.configService = configService;
         this.clock = clock;
     }
-
+    /** 兼容存量测试适配器使用的具体注册表构造方法。 */
+    @Deprecated
+    public PersonApplicationService(PersonApplicationDao dao, Object jsonMapper,
+                             ProfileMaterialPort materials,
+                             org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry providers,
+                             PersonVerificationService attempts, PersonWorkflowGateway workflow,
+                             ConfigService configService, Clock clock) {
+        this(dao, jsonMapper, materials, (PersonVerificationProviderRegistryPort) providers,
+            attempts, workflow, configService, clock);
+    }
     /**
      * 查询当前用户的进行中申请
      */
-    public Optional<PersonApplicationVo> current(long userId) {
+    public PersonApplicationVo current(long userId) {
         requireUserId(userId);
-        return findOpenByUserId(userId).map(PersonApplicationVo::from);
+        return findOpenByUserId(userId).map(PersonApplicationVo::from).orElse(null);
     }
-
     /**
      * 保存业务申请数据
      */
-    @DSTransactional
+
     public PersonApplicationVo save(long userId, PersonApplicationSaveBo command) {
         requireUserId(userId);
         PersonIdentityFields fields = PersonIdentityFields.normalize(command);
@@ -128,11 +127,10 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             new PersonDraftUpdate(fields, targetProfileId, command.expectedVersion()));
         return PersonApplicationVo.from(saved);
     }
-
     /**
      * 提交申请并启动后续流程
      */
-    @DSTransactional
+
     public PersonApplicationVo submit(long userId, int expectedVersion) {
         requireUserId(userId);
         PersonApplication application = lockOpenByUserId(userId);
@@ -148,7 +146,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             application.fields().identityKey());
         MaterialOwnerKey working = owner(MaterialOwnerType.WORKING, application.personApplicationId());
         materials.validateRequired(working, application.fields().documentTypeCode(), Set.of("ALWAYS"));
-
         int snapshotVersion = application.submissionSeq() + 1;
         Instant submittedTime = clock.instant();
         PersonSubmission submission = insertSubmission(
@@ -162,23 +159,21 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         workflow.start(application.personApplicationId(), submission.personSubmissionId(), snapshotVersion);
         return PersonApplicationVo.from(waiting);
     }
-
     /**
      * 处理工作流状态事件
      */
-    @EventListener
-    @DSTransactional
-    public void handleProcessEvent(ProcessEvent event) {
-        if (event == null || !expectedFlowCode().equals(event.getFlowCode())) {
+
+    public void handleProcess(PersonApplicationProcessCommand command) {
+        if (command == null || !expectedFlowCode().equals(command.flowCode())) {
             return;
         }
-        Long applicationId = positiveLong(event.getBusinessId());
+        Long applicationId = positiveLong(command.businessId());
         if (applicationId == null) {
             return;
         }
-        Integer snapshotVersion = snapshotVersion(event.getParams());
+        Integer snapshotVersion = command.snapshotVersion();
         if (snapshotVersion == null) {
-            snapshotVersion = workflow.persistedSnapshotVersion(event);
+            snapshotVersion = workflow.persistedSnapshotVersionByInstanceId(command.processInstanceId());
         }
         if (snapshotVersion == null) {
             return;
@@ -187,44 +182,76 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         if (application.submissionSeq() != snapshotVersion || !"WAITING".equals(application.status())) {
             return;
         }
-        String status = normalizeStatus(event.getStatus());
+        String status = normalizeStatus(command.status());
         if ("FINISH".equals(status)) {
-            if ("REJECT".equals(normalizeDecision(event.getParams()))) {
+            if ("REJECT".equals(normalizeDecision(command.decision()))) {
                 updateWorkflowStatus(applicationId, snapshotVersion, "INVALID",
-                    application.version(), clock.instant());
+                    application.version(), occurredTime(command.occurredTime()));
                 return;
             }
             PersonSubmission submission = requireSubmission(applicationId, snapshotVersion);
-            PersonPublication publication = publishApproved(applicationId, snapshotVersion, clock.instant());
+            PersonPublication publication = publishApproved(applicationId, snapshotVersion,
+                occurredTime(command.occurredTime()));
             materials.snapshotImmutable(owner(MaterialOwnerType.SUBMISSION, submission.personSubmissionId()),
                 owner(MaterialOwnerType.VERSION, publication.personVersionId()));
         } else if (EVENT_STATUSES.contains(status)) {
             updateWorkflowStatus(applicationId, snapshotVersion, status,
-                application.version(), clock.instant());
+                application.version(), occurredTime(command.occurredTime()));
         }
     }
-
+    /**
+     * 兼容存量事件调用方；新代码应由 Listener 转换后调用 {@link #handleProcess(PersonApplicationProcessCommand)}。
+     *
+     * @param event 原始工作流事件
+     */
+    @Deprecated
+    public void handleProcessEvent(ProcessEvent event) {
+        if (event == null) {
+            return;
+        }
+        Map<String, Object> params = event.getParams();
+        handleProcess(new PersonApplicationProcessCommand(event.getInstanceId(), event.getBusinessId(),
+            event.getFlowCode(), event.getStatus(), decision(params), snapshotVersion(params), clock.instant()));
+    }
+    /** 提取存量事件中的决定字段。 */
+    private String decision(Map<String, Object> params) {
+        Object value = params == null ? null : params.get("profileDecision");
+        return value == null ? "" : value.toString().strip().toUpperCase(Locale.ROOT);
+    }
+    /** 提取存量事件中的快照版本。 */
+    private Integer snapshotVersion(Map<String, Object> params) {
+        Object value = params == null ? null : params.get("snapshotVersion");
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return value == null ? null : Integer.valueOf(value.toString());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+    /** 取得事件时间并提供当前时间兜底。 */
+    private Instant occurredTime(Instant value) {
+        return value == null ? clock.instant() : value;
+    }
     /**
      * 按用户查询未完成申请
      */
     public Optional<PersonApplication> findOpenByUserId(long userId) {
         return Optional.ofNullable(dao.selectOpenByUserId(userId)).map(this::application);
     }
-
     /**
      * 按用户锁定未完成申请
      */
     public PersonApplication lockOpenByUserId(long userId) {
         return requireApplication(dao.lockOpenByUserId(userId));
     }
-
     /**
      * 按编号锁定申请记录
      */
     public PersonApplication lockById(long applicationId) {
         return requireApplication(dao.lockApplicationById(applicationId));
     }
-
     /**
      * 查询证件类型配置
      */
@@ -234,21 +261,18 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         return Optional.ofNullable(row).map(value -> new PersonDocumentTypeRule(value.getDocumentTypeCode(),
             value.getNumberPattern(), "Y".equals(value.getValidityRequired())));
     }
-
     /**
      * 按身份查询生效档案编号
      */
     public Long findActiveProfileIdByIdentity(String identityKey) {
         return identityKey == null ? null : dao.selectActiveProfileIdByIdentity(identityKey);
     }
-
     /**
      * 按用户查询当前有效档案编号
      */
     public Long findEffectiveProfileIdByUser(long userId) {
         return dao.selectEffectiveProfileIdByUser(userId);
     }
-
     /**
      * 保存申请草稿
      */
@@ -259,7 +283,7 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
                 if (update.expectedVersion() != 0) {
                     throw failure("PERSON_APPLICATION_VERSION_CONFLICT");
                 }
-                PersonApplicationRow inserted = draftRow(IdWorker.getId(), userId, providerCode, update);
+                PersonApplicationRow inserted = draftRow(IdGeneratorUtil.nextLongId(), userId, providerCode, update);
                 requireChanged(dao.insertApplication(inserted), "PERSON_APPLICATION_CREATE_CONFLICT");
             } else {
                 if (!editable(current.getStatus()) || intValue(current.getVersion()) != update.expectedVersion()) {
@@ -275,7 +299,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         }
         return requireApplication(dao.selectOpenByUserId(userId));
     }
-
     /**
      * 校验申请允许提交
      */
@@ -306,7 +329,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             throw failure("PERSON_BINDING_SUSPENDED");
         }
     }
-
     /**
      * 新增申请提交记录
      */
@@ -320,7 +342,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         }
         return submission(row);
     }
-
     /**
      * 校验并获取提交记录
      */
@@ -332,7 +353,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         }
         return submission(row);
     }
-
     /**
      * 标记申请为等待处理
      */
@@ -342,12 +362,11 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             "PERSON_APPLICATION_VERSION_CONFLICT");
         return requireApplication(dao.lockApplicationById(applicationId));
     }
-
     /**
      * 发布已审核通过的档案
      */
     @Override
-    @DSTransactional
+
     public PersonPublication publishApproved(long applicationId, int snapshotVersion, Instant finishedTime) {
         PersonApplicationRow application = dao.lockApplicationById(applicationId);
         if (application == null || !"WAITING".equals(application.getStatus())
@@ -361,7 +380,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         if (submission == null) {
             throw failure("PERSON_SUBMISSION_NOT_FOUND");
         }
-
         try {
             PublicationTarget target = publicationTarget(application.getApplicantUserId(), submission);
             PersonVersionRow currentVersion = dao.selectCurrentVersionForUpdate(target.profile().getPersonProfileId());
@@ -370,7 +388,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
                 requireChanged(dao.supersedeVersion(currentVersion.getPersonVersionId()),
                     "PERSON_PROFILE_VERSION_CONFLICT");
             }
-
             PersonVersionRow version = versionRow(target.profile().getPersonProfileId(), nextVersion,
                 submission, finishedTime);
             requireChanged(dao.insertVersion(version), "PERSON_PROFILE_VERSION_CONFLICT");
@@ -378,7 +395,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
                 target.profile().getPreviousProfileId(), version.getPersonVersionId(), submission,
                 target.profile().getVersion());
             requireChanged(dao.updateProfile(updatedProfile), "PERSON_PROFILE_VERSION_CONFLICT");
-
             PersonBindingRow binding = target.binding();
             if (binding == null) {
                 binding = bindingRow(target.profile().getPersonProfileId(), application.getApplicantUserId(),
@@ -387,7 +403,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
                 requireChanged(dao.insertBindingEvent(bindingEvent(binding, submission.getPersonSubmissionId(),
                     finishedTime)), "PERSON_BINDING_EVENT_CONFLICT");
             }
-
             requireChanged(dao.finishApplication(applicationId, snapshotVersion,
                 intValue(application.getDecisionVersion()), intValue(application.getVersion()), finishedTime),
                 "PERSON_APPLICATION_DECISION_CONFLICT");
@@ -397,7 +412,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             throw failure("PERSON_PUBLICATION_CONFLICT", exception);
         }
     }
-
     /**
      * 更新workflowstatus。
      */
@@ -406,7 +420,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         requireChanged(dao.updateWorkflowStatus(applicationId, snapshotVersion, status,
             expectedVersion, occurredTime), "PERSON_APPLICATION_DECISION_CONFLICT");
     }
-
     /**
      * 查询生效档案投影
      */
@@ -417,7 +430,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         return dao.selectActiveProjections(userIds).stream().map(row -> new PersonActiveProjection(
             row.getUserId(), row.getPersonProfileId(), row.getVerifiedAt())).toList();
     }
-
     /**
      * 解析发布目标
      */
@@ -461,17 +473,15 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         if (profile != null) {
             return new PublicationTarget(profile, profileBinding, false);
         }
-
         PersonProfileRow revoked = dao.lockLatestRevokedProfileByIdentity(submission.getIdentityKey());
-        long profileId = IdWorker.getId();
+        long profileId = IdGeneratorUtil.nextLongId();
         PersonProfileRow created = profileRow(profileId,
             revoked == null ? null : revoked.getPersonProfileId(), null, submission, 0);
-        requireChanged(dao.insertIdentityGuard(IdWorker.getId(), submission.getIdentityKey(), profileId),
+        requireChanged(dao.insertIdentityGuard(IdGeneratorUtil.nextLongId(), submission.getIdentityKey(), profileId),
             "PERSON_IDENTITY_CONFLICT");
         requireChanged(dao.insertProfile(created), "PERSON_IDENTITY_CONFLICT");
         return new PublicationTarget(created, null, revoked != null);
     }
-
     /**
      * 转换申请草稿读模型
      */
@@ -485,14 +495,13 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         copy(row, update.fields());
         return row;
     }
-
     /**
      * 转换申请提交读模型
      */
     private PersonSubmissionRow submissionRow(PersonApplication application, PersonIdentityFields fields,
                                               int submissionSeq, Instant submittedTime) {
         PersonSubmissionRow row = new PersonSubmissionRow();
-        row.setPersonSubmissionId(IdWorker.getId());
+        row.setPersonSubmissionId(IdGeneratorUtil.nextLongId());
         row.setPersonApplicationId(application.personApplicationId());
         row.setSubmissionSeq(submissionSeq);
         row.setApplicantUserId(application.applicantUserId());
@@ -501,12 +510,11 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         row.setTargetProfileId(application.targetProfileId());
         row.setExpectedBindingId(application.expectedBindingId());
         row.setExpectedBindingVersion(application.expectedBindingVersion());
-        row.setFieldSnapshotJson(jsonMapper.writeValueAsString(fields));
+        row.setFieldSnapshotJson(JsonUtils.toJsonString(fields));
         row.setSubmittedTime(submittedTime);
         copy(row, fields);
         return row;
     }
-
     /**
      * 转换档案读模型
      */
@@ -521,14 +529,13 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         copy(row, submission);
         return row;
     }
-
     /**
      * 转换档案版本读模型
      */
     private PersonVersionRow versionRow(long profileId, int versionNo, PersonSubmissionRow submission,
                                         Instant publishedTime) {
         PersonVersionRow row = new PersonVersionRow();
-        row.setPersonVersionId(IdWorker.getId());
+        row.setPersonVersionId(IdGeneratorUtil.nextLongId());
         row.setPersonProfileId(profileId);
         row.setVersionNo(versionNo);
         row.setSourceType("USER_SUBMISSION");
@@ -538,13 +545,12 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         copy(row, submission);
         return row;
     }
-
     /**
      * 转换绑定读模型
      */
     private PersonBindingRow bindingRow(long profileId, long userId, long sourceId, Instant boundTime) {
         PersonBindingRow row = new PersonBindingRow();
-        row.setPersonBindingId(IdWorker.getId());
+        row.setPersonBindingId(IdGeneratorUtil.nextLongId());
         row.setPersonProfileId(profileId);
         row.setUserId(userId);
         row.setStatus("ACTIVE");
@@ -554,13 +560,12 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         row.setBoundTime(boundTime);
         return row;
     }
-
     /**
      * 查询绑定事件记录
      */
     private PersonBindingEventRow bindingEvent(PersonBindingRow binding, long sourceId, Instant occurredTime) {
         PersonBindingEventRow row = new PersonBindingEventRow();
-        row.setPersonBindingEventId(IdWorker.getId());
+        row.setPersonBindingEventId(IdGeneratorUtil.nextLongId());
         row.setPersonBindingId(binding.getPersonBindingId());
         row.setPersonProfileId(binding.getPersonProfileId());
         row.setUserId(binding.getUserId());
@@ -572,7 +577,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         row.setOccurredTime(occurredTime);
         return row;
     }
-
     /**
      * 处理application。
      */
@@ -583,7 +587,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             row.getExpectedBindingVersion(), intValue(row.getDecisionVersion()), intValue(row.getVersion()),
             row.getSubmittedTime(), row.getFinishedTime());
     }
-
     /**
      * 组装申请提交数据
      */
@@ -592,7 +595,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             intValue(row.getSubmissionSeq()), row.getApplicantUserId(), fields(row), row.getProviderCode(),
             row.getSubmittedTime());
     }
-
     /**
      * 提取并规范化申请身份字段
      */
@@ -600,7 +602,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         return new PersonIdentityFields(row.getFullName(), row.getDocumentTypeCode(), row.getDocumentNumber(),
             row.getIdentityKey(), row.getGender(), row.getBirthDate(), row.getValidFrom(), row.getValidUntil());
     }
-
     /**
      * 提取并规范化申请身份字段
      */
@@ -608,7 +609,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         return new PersonIdentityFields(row.getFullName(), row.getDocumentTypeCode(), row.getDocumentNumber(),
             row.getIdentityKey(), row.getGender(), row.getBirthDate(), row.getValidFrom(), row.getValidUntil());
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -622,7 +622,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         target.setValidFrom(fields.validFrom());
         target.setValidUntil(fields.validUntil());
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -636,7 +635,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         target.setValidFrom(fields.validFrom());
         target.setValidUntil(fields.validUntil());
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -650,7 +648,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         target.setValidFrom(source.getValidFrom());
         target.setValidUntil(source.getValidUntil());
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -664,7 +661,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         target.setValidFrom(source.getValidFrom());
         target.setValidUntil(source.getValidUntil());
     }
-
     /**
      * 校验并获取申请记录
      */
@@ -674,7 +670,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         }
         return application(row);
     }
-
     /**
      * 校验申请确实发生变更
      */
@@ -683,29 +678,24 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             throw failure(category);
         }
     }
-
     /**
      * 判断申请是否允许编辑
      */
     private boolean editable(String status) {
         return "DRAFT".equals(status) || "BACK".equals(status) || "CANCEL".equals(status);
     }
-
     /**
      * 解析整数值
      */
     private int intValue(Integer value) {
         return value == null ? 0 : value;
     }
-
     /**
      * 规范化审核决定
      */
-    private String normalizeDecision(Map<String, Object> params) {
-        Object value = params == null ? null : params.get("profileDecision");
-        return value == null ? "" : value.toString().strip().toUpperCase(Locale.ROOT);
+    private String normalizeDecision(String value) {
+        return value == null ? "" : value.strip().toUpperCase(Locale.ROOT);
     }
-
     /**
      * 校验申请草稿字段
      */
@@ -724,7 +714,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         }
         validateDates(fields, false);
     }
-
     /**
      * 校验申请信息完整性
      */
@@ -743,7 +732,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         }
         validateDates(fields, true);
     }
-
     /**
      * 校验日期范围
      */
@@ -761,7 +749,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             throw failure("PERSON_DOCUMENT_EXPIRED");
         }
     }
-
     /**
      * 解析证件类型校验规则
      */
@@ -769,7 +756,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         return findDocumentType(documentTypeCode)
             .orElseThrow(() -> failure("PERSON_DOCUMENT_TYPE_UNAVAILABLE"));
     }
-
     /**
      * 解析默认认证提供方
      */
@@ -780,7 +766,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         }
         return providerCode.strip();
     }
-
     /**
      * 校验认证提供方已启用
      */
@@ -791,7 +776,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             throw new PersonApplicationException("PERSON_PROVIDER_UNAVAILABLE", exception);
         }
     }
-
     /**
      * 启动认证流程并记录尝试
      */
@@ -802,7 +786,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             throw new PersonApplicationException("PERSON_PROVIDER_UNAVAILABLE", exception);
         }
     }
-
     /**
      * 处理expectedflowcode。
      */
@@ -810,7 +793,6 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
         String flowCode = configService.getConfigValue(FLOW_CODE_KEY);
         return flowCode == null ? "" : flowCode.strip();
     }
-
     /**
      * 计算身份字段指纹
      */
@@ -823,32 +805,15 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             throw new IllegalStateException("SHA-256 unavailable", exception);
         }
     }
-
     /**
      * 解析材料所有者
      */
     private MaterialOwnerKey owner(MaterialOwnerType type, long ownerId) {
         return new MaterialOwnerKey(ProfileType.PERSON, type, ownerId);
     }
-
     /**
      * 生成档案版本快照
      */
-    private Integer snapshotVersion(Map<String, Object> params) {
-        if (params == null) {
-            return null;
-        }
-        Object value = params.get("snapshotVersion");
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        try {
-            return value == null ? null : Integer.valueOf(value.toString());
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
     /**
      * 校验正数长整型编号
      */
@@ -860,21 +825,18 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             return null;
         }
     }
-
     /**
      * 规范化业务状态
      */
     private String normalizeStatus(String status) {
         return status == null ? "" : status.strip().toUpperCase(java.util.Locale.ROOT);
     }
-
     /**
      * 校验文本长度
      */
     private int length(String value) {
         return value == null ? 0 : value.length();
     }
-
     /**
      * 校验用户编号有效
      */
@@ -883,21 +845,18 @@ public class PersonApplicationService implements PersonApplicationPublicationPor
             throw failure("PERSON_USER_INVALID");
         }
     }
-
     /**
      * 构造业务失败异常
      */
     private PersonApplicationException failure(String category) {
         return new PersonApplicationException(category);
     }
-
     /**
      * 构造业务失败异常
      */
     private PersonApplicationException failure(String category, Throwable cause) {
         return new PersonApplicationException(category, cause);
     }
-
     /**
      * 承载PublicationTarget业务规则的领域服务。
      */

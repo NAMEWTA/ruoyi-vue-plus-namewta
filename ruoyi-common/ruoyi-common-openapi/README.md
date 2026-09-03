@@ -2,7 +2,8 @@
 
 `ruoyi-common-openapi` provides the shared NAMEWTA v1 signed-request gateway, catalog registry,
 Redis replay/rate controls, and Sa-Token machine-session bridge. Both backend bundles resolve the
-same artifact, but the feature remains completely unassembled unless explicitly enabled.
+same artifact. The admin application enables the feature by default; set `OPENAPI_ENABLED=false`
+to explicitly disable the assembly.
 
 ## Configuration
 
@@ -10,7 +11,7 @@ The admin application maps these environment variables:
 
 | Environment variable | Property | Default |
 | --- | --- | --- |
-| `OPENAPI_ENABLED` | `openapi.enabled` | `false` |
+| `OPENAPI_ENABLED` | `openapi.enabled` | `true` |
 | `OPENAPI_CLOCK_SKEW` | `openapi.clock-skew` | `60s` |
 | `OPENAPI_NONCE_TTL` | `openapi.nonce-ttl` | `60s` |
 | `OPENAPI_APP_RATE_LIMIT_PER_MINUTE` | `openapi.app-rate-limit-per-minute` | `1000` |

@@ -7,9 +7,9 @@ import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.config.PersonVerificationProviderProperties;
 import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
 import org.dromara.profile.person.service.impl.PersonDeterministicTestProvider;
-import org.dromara.profile.person.service.impl.PersonVerificationAttemptCoordinator;
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
 import org.dromara.profile.person.service.impl.PersonVerificationMapperFixture;
-import org.dromara.profile.person.service.impl.PersonVerificationProviderRegistry;
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
 import org.dromara.profile.person.usecase.impl.PersonVerificationUseCaseImpl;
 import cn.dev33.satoken.annotation.SaIgnore;
 import org.junit.jupiter.api.Tag;
@@ -42,7 +42,7 @@ class PersonVerificationAnonymousControllerTest {
             PersonProviderAttemptStatus.PENDING, null, null, null, null));
         PersonVerificationProviderProperties properties = new PersonVerificationProviderProperties();
         properties.setEnabledProviders(Set.of("test-provider"));
-        PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
+        PersonVerificationAttemptService coordinator = new PersonVerificationAttemptService(
             new PersonVerificationProviderRegistry(List.of(provider), properties),
             new PersonVerificationAttemptDao(fixture.mapper()), fixture.evidenceCodec(),
             new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(fixture.mapper())));

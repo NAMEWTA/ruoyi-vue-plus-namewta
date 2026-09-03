@@ -1,5 +1,9 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.adapter.api.PersonIdentityLookupServiceImpl;
+import org.dromara.profile.person.usecase.impl.PersonProfileApiUseCaseImpl;
+import org.dromara.profile.person.service.PersonProfileApiService;
+
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -51,7 +55,8 @@ class PersonIdentityLookupMySqlE2ETest {
                 insertBinding(session, 975100000004L, SUSPENDED_PROFILE_ID, SUSPENDED_USER_ID, "SUSPENDED");
 
                 PersonIdentityLookupServiceImpl service = new PersonIdentityLookupServiceImpl(
-                    new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class)));
+                    new PersonProfileApiUseCaseImpl(new PersonProfileApiService(
+                        new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class)))));
 
                 assertThat(service.findActiveExactMatches(new ActiveIdentityQuery("  " + FULL_NAME + "  ", "abcd")))
                     .containsExactly(

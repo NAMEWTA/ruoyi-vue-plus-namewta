@@ -1,5 +1,15 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
+
+import org.dromara.profile.person.adapter.provider.PersonManualVerificationProvider;
+
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+import org.dromara.profile.person.adapter.provider.PersonManualVerificationProvider;
+import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
+
 import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.domain.exception.PersonVerificationException;
 import org.dromara.profile.person.domain.verification.PersonApplicationVerificationState;
@@ -18,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Tag("dev")
-class PersonVerificationAttemptCoordinatorTest {
+class PersonVerificationAttemptServiceTest {
 
     @Test
     void explicitRetryAppendsAnAttemptUsingTheProviderFixedOnTheApplication() {
@@ -26,7 +36,7 @@ class PersonVerificationAttemptCoordinatorTest {
             new PersonApplicationVerificationState(41L, 501L, "manual", "WAITING"));
         PersonVerificationProviderProperties properties = new PersonVerificationProviderProperties();
         properties.setEnabledProviders(Set.of("manual"));
-        PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
+        PersonVerificationAttemptService coordinator = new PersonVerificationAttemptService(
             new PersonVerificationProviderRegistry(List.of(new PersonManualVerificationProvider()), properties),
             new PersonVerificationAttemptDao(fixture.mapper()), fixture.evidenceCodec(),
             new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(fixture.mapper())));
@@ -47,7 +57,7 @@ class PersonVerificationAttemptCoordinatorTest {
         PersonVerificationMapperFixture fixture = new PersonVerificationMapperFixture(
             new PersonApplicationVerificationState(41L, 501L, "manual", "WAITING"));
         PersonVerificationProviderProperties properties = new PersonVerificationProviderProperties();
-        PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
+        PersonVerificationAttemptService coordinator = new PersonVerificationAttemptService(
             new PersonVerificationProviderRegistry(List.of(new PersonManualVerificationProvider()), properties),
             new PersonVerificationAttemptDao(fixture.mapper()), fixture.evidenceCodec(),
             new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(fixture.mapper())));

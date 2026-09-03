@@ -1,5 +1,6 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.adapter.gateway.SpringEnterpriseWorkflowGateway;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseApplicationException;
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.WorkflowService;

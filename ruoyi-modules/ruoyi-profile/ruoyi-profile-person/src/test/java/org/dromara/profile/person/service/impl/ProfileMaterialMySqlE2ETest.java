@@ -1,10 +1,14 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.adapter.api.PersonProfileMaterialOwnerContributor;
+import org.dromara.profile.person.usecase.impl.PersonProfileApiUseCaseImpl;
+import org.dromara.profile.person.service.PersonProfileApiService;
+
 import org.dromara.profile.person.controller.admin.ProfileMaterialExceptionHandler;
 import org.dromara.profile.person.controller.admin.PersonMaterialAdminController;
 import org.dromara.profile.person.controller.self.PersonMaterialSelfController;
 import org.dromara.profile.person.domain.exception.ProfileMaterialException;
-import org.dromara.profile.person.service.ProfileMaterialAccessPolicy;
+import org.dromara.profile.person.port.security.ProfileMaterialAccessPolicy;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -67,10 +71,11 @@ class ProfileMaterialMySqlE2ETest {
             ProfileMaterialAccessPolicy accessPolicy = mock(ProfileMaterialAccessPolicy.class);
             when(accessPolicy.requireAttach(any())).thenReturn(USER_ID);
             Clock clock = Clock.fixed(Instant.parse("2026-09-01T13:00:00Z"), ZoneOffset.UTC);
+            PersonProfileApiUseCaseImpl apiUseCase = new PersonProfileApiUseCaseImpl(
+                new PersonProfileApiService(new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class))));
+            PersonProfileMaterialOwnerContributor ownerContributor = new PersonProfileMaterialOwnerContributor(apiUseCase);
             ProfileMaterialServiceImpl service = new ProfileMaterialServiceImpl(
-                mapper, ossService, accessPolicy,
-                java.util.List.of(new PersonProfileMaterialOwnerContributor(
-                    new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class)))), clock);
+                mapper, ossService, accessPolicy, java.util.List.of(ownerContributor), clock);
             when(ossService.objectMetadata(OSS_ID)).thenReturn(new OssService.OssObjectMetadata(
                 OSS_ID, "profile/e2e/front.jpg", "front.jpg", ".jpg", 1024, "image/jpeg", USER_ID));
 

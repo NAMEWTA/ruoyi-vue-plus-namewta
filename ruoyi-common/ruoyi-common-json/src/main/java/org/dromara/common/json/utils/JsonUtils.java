@@ -26,7 +26,9 @@ public class JsonUtils {
     /**
      * 全局 JSON 映射器。
      */
-    private static final JsonMapper JSON_MAPPER = SpringUtils.getBean(JsonMapper.class);
+    private static volatile JsonMapper JSON_MAPPER;
+    /** 脱离 Spring 测试环境时使用的默认映射器。 */
+    private static final JsonMapper FALLBACK_MAPPER = JsonMapper.builder().build();
 
     /**
      * 获取全局 JsonMapper 实例。
@@ -34,7 +36,22 @@ public class JsonUtils {
      * @return JsonMapper
      */
     public static JsonMapper getJsonMapper() {
-        return JSON_MAPPER;
+        JsonMapper mapper = JSON_MAPPER;
+        if (mapper != null) {
+            return mapper;
+        }
+        synchronized (JsonUtils.class) {
+            mapper = JSON_MAPPER;
+            if (mapper == null) {
+                try {
+                    mapper = SpringUtils.getBean(JsonMapper.class);
+                } catch (RuntimeException ignored) {
+                    return FALLBACK_MAPPER;
+                }
+                JSON_MAPPER = mapper;
+            }
+            return mapper;
+        }
     }
 
     /**
@@ -48,7 +65,7 @@ public class JsonUtils {
         if (ObjectUtil.isNull(object)) {
             return null;
         }
-        return JSON_MAPPER.writeValueAsString(object);
+        return getJsonMapper().writeValueAsString(object);
     }
 
     /**
@@ -64,7 +81,7 @@ public class JsonUtils {
         if (StringUtils.isEmpty(text)) {
             return null;
         }
-        return JSON_MAPPER.readValue(text, clazz);
+        return getJsonMapper().readValue(text, clazz);
     }
 
     /**
@@ -80,7 +97,7 @@ public class JsonUtils {
         if (ArrayUtil.isEmpty(bytes)) {
             return null;
         }
-        return JSON_MAPPER.readValue(bytes, clazz);
+        return getJsonMapper().readValue(bytes, clazz);
     }
 
     /**
@@ -96,7 +113,7 @@ public class JsonUtils {
         if (StringUtils.isBlank(text)) {
             return null;
         }
-        return JSON_MAPPER.readValue(text, typeReference);
+        return getJsonMapper().readValue(text, typeReference);
     }
 
     /**
@@ -110,7 +127,8 @@ public class JsonUtils {
         if (StringUtils.isBlank(text)) {
             return null;
         }
-        return JSON_MAPPER.readValue(text, JSON_MAPPER.getTypeFactory().constructType(Dict.class));
+        JsonMapper mapper = getJsonMapper();
+        return mapper.readValue(text, mapper.getTypeFactory().constructType(Dict.class));
     }
 
     /**
@@ -124,7 +142,8 @@ public class JsonUtils {
         if (StringUtils.isBlank(text)) {
             return null;
         }
-        return JSON_MAPPER.readValue(text, JSON_MAPPER.getTypeFactory().constructCollectionType(List.class, Dict.class));
+        JsonMapper mapper = getJsonMapper();
+        return mapper.readValue(text, mapper.getTypeFactory().constructCollectionType(List.class, Dict.class));
     }
 
     /**
@@ -140,7 +159,8 @@ public class JsonUtils {
         if (StringUtils.isEmpty(text)) {
             return new ArrayList<>();
         }
-        return JSON_MAPPER.readValue(text, JSON_MAPPER.getTypeFactory().constructCollectionType(List.class, clazz));
+        JsonMapper mapper = getJsonMapper();
+        return mapper.readValue(text, mapper.getTypeFactory().constructCollectionType(List.class, clazz));
     }
 
     /**
@@ -154,7 +174,7 @@ public class JsonUtils {
         if (ObjectUtil.isNull(object)) {
             return null;
         }
-        JsonNode node = JSON_MAPPER.valueToTree(object);
+        JsonNode node = getJsonMapper().valueToTree(object);
         removeFields(node, fieldNames);
         return toJsonString(node);
     }
@@ -230,7 +250,7 @@ public class JsonUtils {
             return null;
         }
         try {
-            return JSON_MAPPER.readTree(str);
+            return getJsonMapper().readTree(str);
         } catch (Exception e) {
             return null;
         }

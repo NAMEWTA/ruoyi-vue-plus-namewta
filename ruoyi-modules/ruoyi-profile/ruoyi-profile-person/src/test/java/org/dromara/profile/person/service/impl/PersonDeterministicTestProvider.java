@@ -1,6 +1,6 @@
 package org.dromara.profile.person.service.impl;
 
-import org.dromara.profile.person.service.PersonVerificationProvider;
+import org.dromara.profile.person.port.provider.PersonVerificationProvider;
 
 import org.dromara.profile.person.domain.exception.PersonVerificationException;
 import org.dromara.profile.person.domain.verification.PersonProviderAttemptStatus;

@@ -54,7 +54,7 @@ public class PersonRebindController {
     @Log(title = "核验个人换绑身份", businessType = BusinessType.OTHER,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonRebindMatchVo> match(@Valid @RequestBody PersonRebindMatchBo command) {
-        return R.ok(service.match(command));
+        return R.ok(service.match(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -65,7 +65,7 @@ public class PersonRebindController {
     @Log(title = "确认个人换绑意图", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonRebindConfirmationVo> confirm(@Valid @RequestBody PersonRebindConfirmBo command) {
-        return R.ok(service.confirm(command));
+        return R.ok(service.confirm(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -76,7 +76,7 @@ public class PersonRebindController {
     @Log(title = "提交个人换绑申请", businessType = BusinessType.OTHER,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonRebindSubmissionVo> submit(@Valid @RequestBody PersonRebindSubmitBo command) {
-        return R.ok(service.submit(command));
+        return R.ok(service.submit(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -87,6 +87,6 @@ public class PersonRebindController {
     @Log(title = "解绑个人实名认证", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonRebindUnbindVo> unbind() {
-        return R.ok(service.unbind());
+        return R.ok(service.unbind(LoginHelper.getUserId()));
     }
 }

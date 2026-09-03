@@ -1,5 +1,7 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.adapter.codec.PersonVerificationEvidenceCodec;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;

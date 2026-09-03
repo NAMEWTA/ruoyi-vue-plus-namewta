@@ -1,11 +1,7 @@
 package org.dromara.profile.person.service;
-
-import org.dromara.profile.person.service.IPersonAdminService;
 import org.dromara.profile.person.port.PersonApplicationPublicationPort;
-
 import org.dromara.profile.person.domain.exception.PersonAdminException;
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
-import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import org.dromara.common.mybatis.utils.IdGeneratorUtil;
 import org.dromara.common.core.domain.PageResult;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
@@ -20,15 +16,15 @@ import org.dromara.profile.person.domain.application.PersonIdentityFields;
 import org.dromara.profile.person.domain.application.PersonPublication;
 import org.dromara.profile.person.domain.application.PersonSubmission;
 import org.dromara.profile.person.dao.PersonAdminDao;
+import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
 import org.dromara.system.api.UserService;
+import org.dromara.system.api.OssService;
 import org.dromara.system.api.domain.UserDTO;
 import org.dromara.workflow.api.WorkflowService;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.json.JsonMapper;
-
+import org.dromara.common.json.utils.JsonUtils;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -36,60 +32,77 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
-
 /**
  * 创建个人管理业务服务。
  */
 @Service
-public class PersonAdminService implements IPersonAdminService {
-
+public class PersonAdminService {
     private static final Set<String> DECISIONS = Set.of("APPROVED", "REJECTED");
     private static final Set<String> BINDING_ACTIONS = Set.of("SUSPEND", "RESUME", "UNBIND");
-
     private final PersonAdminDao dao;
-    private final JsonMapper jsonMapper;
     private final PersonApplicationPublicationPort applications;
     private final ProfileMaterialPort materials;
-    private final WorkflowService workflow;
+    private final PersonWorkflowGateway workflow;
     private final UserService users;
     private final Clock clock;
-
-    /** 创建个人管理业务服务，并解析可选的工作流服务。 */
+    /** 创建个人管理业务服务，并注入工作流网关。 */
     @Autowired
-    public PersonAdminService(PersonAdminDao dao, JsonMapper jsonMapper,
+    public PersonAdminService(PersonAdminDao dao,
                                   PersonApplicationPublicationPort applications, ProfileMaterialPort materials,
-                                  ObjectProvider<WorkflowService> workflowProvider, UserService users) {
-        this(dao, jsonMapper, applications, materials, workflowProvider.getIfAvailable(), users,
-            Clock.systemUTC());
+                                  PersonWorkflowGateway workflow, UserService users) {
+        this(dao, applications, materials, workflow, users, Clock.systemUTC());
     }
-
-    /** 创建使用指定工作流服务的个人管理业务服务。 */
-    public PersonAdminService(PersonAdminDao dao, JsonMapper jsonMapper,
-                           PersonApplicationPublicationPort applications, ProfileMaterialPort materials,
-                           WorkflowService workflow, UserService users) {
-        this(dao, jsonMapper, applications, materials, workflow, users, Clock.systemUTC());
-    }
-
-    /** 创建可注入时钟的个人管理业务服务，测试场景据此固定时间。 */
-    public PersonAdminService(PersonAdminDao dao, JsonMapper jsonMapper,
-                           PersonApplicationPublicationPort applications, ProfileMaterialPort materials,
-                           WorkflowService workflow, UserService users, Clock clock) {
+    /** 创建使用指定工作流网关的个人管理业务服务。 */
+    public PersonAdminService(PersonAdminDao dao, PersonApplicationPublicationPort applications,
+                               ProfileMaterialPort materials, PersonWorkflowGateway workflow,
+                               UserService users, Clock clock) {
         this.dao = dao;
-        this.jsonMapper = jsonMapper;
         this.applications = applications;
         this.materials = materials;
         this.workflow = workflow;
         this.users = users;
         this.clock = clock;
     }
+    /** 兼容存量测试适配器使用的工作流服务构造方法。 */
+    public PersonAdminService(PersonAdminDao dao, Object jsonMapper,
+                           PersonApplicationPublicationPort applications, ProfileMaterialPort materials,
+                           WorkflowService workflow, UserService users) {
+        this(dao, applications, materials, legacyWorkflow(workflow), users, Clock.systemUTC());
+    }
+    /** 兼容存量测试适配器使用的可注入时钟构造方法。 */
+    public PersonAdminService(PersonAdminDao dao, Object jsonMapper,
+                           PersonApplicationPublicationPort applications, ProfileMaterialPort materials,
+                           WorkflowService workflow, UserService users, Clock clock) {
+        this.dao = dao;
+        this.applications = applications;
+        this.materials = materials;
+        this.workflow = legacyWorkflow(workflow);
+        this.users = users;
+        this.clock = clock;
+    }
+    /** 将旧版工作流服务包装为模块端口，保持测试和扩展点兼容。 */
+    private static PersonWorkflowGateway legacyWorkflow(WorkflowService workflow) {
+        if (workflow == null) {
+            return null;
+        }
+        return new PersonWorkflowGateway() {
+            @Override
+            public void start(long applicationId, long submissionId, int snapshotVersion) {
+                throw new UnsupportedOperationException("旧测试工作流桥不支持启动流程");
+            }
 
+            @Override
+            public void terminate(String businessId, String reason) {
+                workflow.terminateInstance(businessId, reason);
+            }
+        };
+    }
     /**
      * 分页查询档案数据
      */
     public PageResult<PersonProfileSummaryVo> page(PersonAdminQueryBo query) {
         return loadPage(query == null ? new PersonAdminQueryBo(null, null, null, 1, 20) : query);
     }
-
     /**
      * 查询可用于绑定的账户候选人
      */
@@ -104,7 +117,6 @@ public class PersonAdminService implements IPersonAdminService {
             .map(user -> new PersonAccountCandidateVo(user.getUserId(), user.getUserName(), user.getNickName()))
             .toList();
     }
-
     /**
      * 查询档案详情
      */
@@ -116,7 +128,6 @@ public class PersonAdminService implements IPersonAdminService {
                 .orElse(detail.versions().getFirst()).versionId()));
         return new PersonProfileDetailVo(detail.profile(), detail.versions(), detail.bindings(), detail.sources(), detail.audits(), current);
     }
-
     /**
      * 处理档案审核决定
      */
@@ -127,28 +138,29 @@ public class PersonAdminService implements IPersonAdminService {
             data.decisionVersion(), data.version(), data.submissionId(), data.fieldSnapshotJson(),
             data.submittedTime(), materials.list(owner));
     }
-
     /**
      * 审核材料内容
      */
-    public org.dromara.system.api.OssService.OssAccessUrl reviewMaterial(long applicationId, long materialRefId) {
-        return materials.accessUrl(owner(MaterialOwnerType.SUBMISSION, review(applicationId).submissionId()), materialRefId);
+    public PersonProfileAccessUrl reviewMaterial(long applicationId, long materialRefId) {
+        return accessUrl(materials.accessUrl(owner(MaterialOwnerType.SUBMISSION, review(applicationId).submissionId()), materialRefId));
     }
-
     /**
      * 组装材料数据
      */
-    public org.dromara.system.api.OssService.OssAccessUrl material(long profileId, long materialRefId) {
+    public PersonProfileAccessUrl material(long profileId, long materialRefId) {
         PersonProfileDetailVo detail = detail(profileId);
         PersonProfileVersionVo current = detail.versions().stream().filter(version -> "CURRENT".equals(version.status()))
             .findFirst().orElseThrow(() -> failure("PERSON_PROFILE_VERSION_NOT_FOUND"));
-        return materials.accessUrl(owner(MaterialOwnerType.VERSION, current.versionId()), materialRefId);
+        return accessUrl(materials.accessUrl(owner(MaterialOwnerType.VERSION, current.versionId()), materialRefId));
     }
-
+    /** 将 system OSS 访问合同转换为 Profile HTTP 输出。 */
+    private PersonProfileAccessUrl accessUrl(OssService.OssAccessUrl value) {
+        return value == null ? null : new PersonProfileAccessUrl(value.accessType(), value.url(), value.expiresAt(), value.fileName());
+    }
     /**
      * 提交档案审核决定。
      */
-    @DSTransactional
+
     public PersonAdminResultVo decide(long operatorId, long applicationId, PersonAdminDecisionBo command) {
         String reason = reason(command == null ? null : command.reason());
         String decision = upper(command == null ? null : command.decision());
@@ -162,7 +174,7 @@ public class PersonAdminService implements IPersonAdminService {
         var state = beginDecision(positive(applicationId, "PERSON_APPLICATION_INVALID"), decision,
             positive(operatorId, "PERSON_OPERATOR_INVALID"), reason, now);
         try {
-            workflow.terminateInstance(Long.toString(applicationId), reason);
+            workflow.terminate(Long.toString(applicationId), reason);
         } catch (RuntimeException exception) {
             throw new PersonAdminException("PERSON_ADMIN_WORKFLOW_TERMINATION_FAILED", exception);
         }
@@ -180,11 +192,10 @@ public class PersonAdminService implements IPersonAdminService {
         return new PersonAdminResultVo("APPROVED", publication.personProfileId(), publication.personVersionId(),
             publication.personBindingId(), state.decisionVersion());
     }
-
     /**
      * 创建业务记录
      */
-    @DSTransactional
+
     public PersonAdminResultVo create(long operatorId, PersonAdminCreateBo command) {
         if (command == null) {
             throw failure("PERSON_ADMIN_CREATE_REQUIRED");
@@ -207,11 +218,10 @@ public class PersonAdminService implements IPersonAdminService {
         materials.snapshotImmutable(source, owner(MaterialOwnerType.VERSION, result.versionId()));
         return result;
     }
-
     /**
      * 修改已退回申请
      */
-    @DSTransactional
+
     public PersonAdminResultVo revise(long operatorId, long profileId, PersonAdminReviseBo command) {
         if (command == null) {
             throw failure("PERSON_ADMIN_REVISION_REQUIRED");
@@ -227,11 +237,10 @@ public class PersonAdminService implements IPersonAdminService {
         materials.snapshotImmutable(source, owner(MaterialOwnerType.VERSION, result.versionId()));
         return result;
     }
-
     /**
      * 管理档案绑定关系
      */
-    @DSTransactional
+
     public PersonAdminResultVo manageBinding(long operatorId, long profileId, PersonAdminBindingBo command) {
         String action = upper(command == null ? null : command.action());
         if (!BINDING_ACTIONS.contains(action)) {
@@ -241,11 +250,10 @@ public class PersonAdminService implements IPersonAdminService {
             command.expectedBindingVersion(), positive(operatorId, "PERSON_OPERATOR_INVALID"),
             reason(command.reason()), clock.instant());
     }
-
     /**
      * 为目标账户分配档案绑定
      */
-    @DSTransactional
+
     public PersonAdminResultVo assign(long operatorId, long profileId, PersonAdminAssignBo command) {
         if (command == null || command.userId() == null) {
             throw failure("PERSON_BINDING_TARGET_REQUIRED");
@@ -254,11 +262,10 @@ public class PersonAdminService implements IPersonAdminService {
         return assignBinding(positive(profileId, "PERSON_PROFILE_INVALID"), command.userId(),
             positive(operatorId, "PERSON_OPERATOR_INVALID"), reason(command.reason()), clock.instant());
     }
-
     /**
      * 撤销档案绑定
      */
-    @DSTransactional
+
     public PersonAdminResultVo revoke(long operatorId, long profileId, PersonAdminRevokeBo command) {
         if (command == null) {
             throw failure("PERSON_REVOKE_REQUIRED");
@@ -266,7 +273,6 @@ public class PersonAdminService implements IPersonAdminService {
         return revokeProfile(positive(profileId, "PERSON_PROFILE_INVALID"), command.expectedVersion(),
             positive(operatorId, "PERSON_OPERATOR_INVALID"), reason(command.reason()), clock.instant());
     }
-
     /**
      * 加载档案分页数据
      */
@@ -285,7 +291,6 @@ public class PersonAdminService implements IPersonAdminService {
             .stream().map(this::summary).toList();
         return PageResult.build(rows, total);
     }
-
     /**
      * 加载档案详情
      */
@@ -298,14 +303,12 @@ public class PersonAdminService implements IPersonAdminService {
             dao.selectSources(profileId).stream().map(this::source).toList(),
             dao.selectAudits(profileId).stream().map(this::audit).toList(), List.of());
     }
-
     /**
      * 加载审核所需数据
      */
     ReviewData loadReview(long applicationId) {
         return reviewData(requireReview(dao.selectReview(applicationId)));
     }
-
     /**
      * 开始处理审核决定
      */
@@ -315,13 +318,12 @@ public class PersonAdminService implements IPersonAdminService {
         int nextDecision = value(row.getDecisionVersion()) + 1;
         changed(dao.markOverridePending(applicationId, decision, reason, value(row.getDecisionVersion()),
             value(row.getVersion()), operatorId, now), "PERSON_ADMIN_DECISION_CONFLICT");
-        changed(dao.insertDecision(IdWorker.getId(), applicationId, row.getSubmissionId(), nextDecision,
+        changed(dao.insertDecision(IdGeneratorUtil.nextLongId(), applicationId, row.getSubmissionId(), nextDecision,
             decision, operatorId, reason, now), "PERSON_ADMIN_DECISION_CONFLICT");
         audit(null, applicationId, null, "ADMIN_DECISION_PENDING", operatorId, "profile:person:override",
             reason, "WAITING", "OVERRIDE_PENDING", now);
         return new DecisionState(applicationId, row.getSubmissionId(), value(row.getSubmissionSeq()), nextDecision);
     }
-
     /**
      * 恢复申请并进入审批流程
      */
@@ -329,7 +331,6 @@ public class PersonAdminService implements IPersonAdminService {
         changed(dao.resumeWaiting(state.applicationId(), state.decisionVersion(), operatorId),
             "PERSON_ADMIN_DECISION_CONFLICT");
     }
-
     /**
      * 处理finalizeapproved。
      */
@@ -342,7 +343,6 @@ public class PersonAdminService implements IPersonAdminService {
         audit(profileId, state.applicationId(), null, "ADMIN_APPROVE", operatorId, "profile:person:override",
             reason, "OVERRIDE_PENDING", "FINISH", now);
     }
-
     /**
      * 处理finalizerejected。
      */
@@ -354,13 +354,12 @@ public class PersonAdminService implements IPersonAdminService {
         audit(null, state.applicationId(), null, "ADMIN_REJECT", operatorId, "profile:person:override",
             reason, "OVERRIDE_PENDING", "INVALID", now);
     }
-
     /**
      * 开始创建申请
      */
     CreateState beginCreate(PersonIdentityFields fields, long operatorId, String reason, Instant now) {
-        long profileId = IdWorker.getId();
-        long sourceId = IdWorker.getId();
+        long profileId = IdGeneratorUtil.nextLongId();
+        long sourceId = IdGeneratorUtil.nextLongId();
         try {
             changed(dao.insertProfile(profileId, fields.fullName(), fields.documentTypeCode(),
                 fields.documentNumber(), fields.identityKey(), fields.gender(), fields.birthDate(), fields.validFrom(),
@@ -371,13 +370,12 @@ public class PersonAdminService implements IPersonAdminService {
         }
         return new CreateState(profileId, sourceId, fields);
     }
-
     /**
      * 完成申请创建流程
      */
     PersonAdminResultVo completeCreate(CreateState state, Long bindUserId, long operatorId, String reason,
                                        Instant now) {
-        long versionId = IdWorker.getId();
+        long versionId = IdGeneratorUtil.nextLongId();
         try {
             insertVersion(versionId, state.profileId(), 1, "ADMIN_CREATE", state.sourceId(), state.fields(),
                 operatorId, now);
@@ -395,7 +393,6 @@ public class PersonAdminService implements IPersonAdminService {
             throw new PersonAdminException("PERSON_ADMIN_CREATE_CONFLICT", exception);
         }
     }
-
     /**
      * 开始修改已退回申请
      */
@@ -409,13 +406,12 @@ public class PersonAdminService implements IPersonAdminService {
         if (current == null) {
             throw failure("PERSON_PROFILE_VERSION_NOT_FOUND");
         }
-        long sourceId = IdWorker.getId();
+        long sourceId = IdGeneratorUtil.nextLongId();
         insertSource(sourceId, profileId, "ADMIN_OVERRIDE", fields, operatorId, reason, now);
-        dao.cloneVersionMaterials(current.getVersionId(), sourceId, IdWorker.getId(), operatorId, now);
+        dao.cloneVersionMaterials(current.getVersionId(), sourceId, IdGeneratorUtil.nextLongId(), operatorId, now);
         return new ReviseState(profileId, sourceId, value(current.getVersionNo()) + 1,
             expectedVersion, fields);
     }
-
     /**
      * 完成申请修改流程
      */
@@ -424,7 +420,7 @@ public class PersonAdminService implements IPersonAdminService {
         if (current == null || value(current.getVersionNo()) + 1 != state.nextVersionNo()) {
             throw failure("PERSON_PROFILE_VERSION_CONFLICT");
         }
-        long versionId = IdWorker.getId();
+        long versionId = IdGeneratorUtil.nextLongId();
         try {
             changed(dao.supersedeVersion(current.getVersionId(), operatorId, now),
                 "PERSON_PROFILE_VERSION_CONFLICT");
@@ -442,7 +438,6 @@ public class PersonAdminService implements IPersonAdminService {
             reason, "ACTIVE", "ACTIVE", now);
         return new PersonAdminResultVo("ACTIVE", state.profileId(), versionId, null, state.profileVersion() + 1);
     }
-
     /**
      * 变更绑定状态
      */
@@ -476,7 +471,6 @@ public class PersonAdminService implements IPersonAdminService {
             "profile:person:manage", reason, source, target, now);
         return new PersonAdminResultVo(target, profileId, null, binding.getBindingId(), nextVersion);
     }
-
     /**
      * 创建账户绑定关系
      */
@@ -494,7 +488,6 @@ public class PersonAdminService implements IPersonAdminService {
             throw new PersonAdminException("PERSON_BINDING_TARGET_INELIGIBLE", exception);
         }
     }
-
     /**
      * 撤销档案
      */
@@ -520,14 +513,12 @@ public class PersonAdminService implements IPersonAdminService {
         return new PersonAdminResultVo("REVOKED", profileId, profile.getCurrentVersionId(), bindingId,
             expectedVersion + 1);
     }
-
     /**
      * 判断用户是否存在生效绑定
      */
     public boolean hasEffectiveBinding(long userId) {
         return dao.countEffectiveBindingByUser(userId) != 0;
     }
-
     /**
      * 新增材料来源记录
      */
@@ -535,10 +526,9 @@ public class PersonAdminService implements IPersonAdminService {
                               long operatorId, String reason, Instant now) {
         changed(dao.insertSource(sourceId, profileId, sourceType, operatorId, reason, fields.fullName(),
             fields.documentTypeCode(), fields.documentNumber(), fields.identityKey(), fields.gender(),
-            fields.birthDate(), fields.validFrom(), fields.validUntil(), jsonMapper.writeValueAsString(fields), now),
+            fields.birthDate(), fields.validFrom(), fields.validUntil(), JsonUtils.toJsonString(fields), now),
             "PERSON_ADMIN_SOURCE_CONFLICT");
     }
-
     /**
      * 新增档案版本记录
      */
@@ -549,37 +539,33 @@ public class PersonAdminService implements IPersonAdminService {
             fields.birthDate(), fields.validFrom(), fields.validUntil(), operatorId, now),
             "PERSON_PROFILE_VERSION_CONFLICT");
     }
-
     /**
      * 新增档案绑定记录
      */
     private long insertBinding(long profileId, long userId, String sourceType, Long sourceId, long operatorId,
                                String reason, Instant now) {
-        long bindingId = IdWorker.getId();
+        long bindingId = IdGeneratorUtil.nextLongId();
         changed(dao.insertBinding(bindingId, profileId, userId, sourceType, sourceId, operatorId, now),
             "PERSON_BINDING_CONFLICT");
         event(bindingId, profileId, userId, "ACTIVE", 1, sourceId, reason, operatorId, now);
         return bindingId;
     }
-
     /**
      * 构造流程事件数据
      */
     private void event(long bindingId, long profileId, long userId, String type, int version, Long sourceId,
                        String reason, long operatorId, Instant now) {
-        changed(dao.insertBindingEvent(IdWorker.getId(), bindingId, profileId, userId, type, version,
+        changed(dao.insertBindingEvent(IdGeneratorUtil.nextLongId(), bindingId, profileId, userId, type, version,
             sourceId, reason, operatorId, now), "PERSON_BINDING_EVENT_CONFLICT");
     }
-
     /**
      * 记录安全审计信息
      */
     private void audit(Long profileId, Long applicationId, Long bindingId, String operation, long operatorId,
                        String capability, String reason, String before, String after, Instant now) {
-        changed(dao.insertAudit(IdWorker.getId(), profileId, applicationId, bindingId, operation, operatorId,
+        changed(dao.insertAudit(IdGeneratorUtil.nextLongId(), profileId, applicationId, bindingId, operation, operatorId,
             capability, reason, before, after, now), "PERSON_AUDIT_CONFLICT");
     }
-
     /**
      * 组装档案摘要数据
      */
@@ -588,7 +574,6 @@ public class PersonAdminService implements IPersonAdminService {
             row.getDocumentTypeCode(), row.getDocumentNumber(), row.getGender(), row.getBirthDate(), row.getStatus(),
             row.getBindingUserId(), row.getBindingStatus(), row.getCreateTime());
     }
-
     /**
      * 查询档案版本信息
      */
@@ -597,7 +582,6 @@ public class PersonAdminService implements IPersonAdminService {
             row.getSourceId(), row.getFullName(), row.getDocumentTypeCode(), row.getDocumentNumber(), row.getGender(),
             row.getBirthDate(), row.getValidFrom(), row.getValidUntil(), row.getStatus(), row.getPublishedTime());
     }
-
     /**
      * 查询档案绑定信息
      */
@@ -606,7 +590,6 @@ public class PersonAdminService implements IPersonAdminService {
             value(row.getBindingVersion()), row.getSourceType(), row.getSourceId(), row.getBoundTime(),
             row.getUnboundTime());
     }
-
     /**
      * 解析材料来源
      */
@@ -614,7 +597,6 @@ public class PersonAdminService implements IPersonAdminService {
         return new PersonProfileSourceVo(row.getSourceId(), row.getSourceType(), row.getOperatorUserId(),
             row.getReason(), row.getFieldSnapshotJson(), row.getOccurredTime());
     }
-
     /**
      * 记录安全审计信息
      */
@@ -623,7 +605,6 @@ public class PersonAdminService implements IPersonAdminService {
             row.getCapability(), row.getReason(), row.getBeforeStatus(), row.getAfterStatus(), row.getResult(),
             row.getFailureCategory(), row.getOccurredTime());
     }
-
     /**
      * 组装审核数据
      */
@@ -632,7 +613,6 @@ public class PersonAdminService implements IPersonAdminService {
             value(row.getSubmissionSeq()), value(row.getDecisionVersion()), value(row.getVersion()),
             row.getSubmissionId(), row.getFieldSnapshotJson(), row.getSubmittedTime());
     }
-
     /**
      * 校验并获取档案记录
      */
@@ -642,7 +622,6 @@ public class PersonAdminService implements IPersonAdminService {
         }
         return row;
     }
-
     /**
      * 校验当前数据允许写入
      */
@@ -653,7 +632,6 @@ public class PersonAdminService implements IPersonAdminService {
         }
         return row;
     }
-
     /**
      * 校验审核请求有效
      */
@@ -663,7 +641,6 @@ public class PersonAdminService implements IPersonAdminService {
         }
         return row;
     }
-
     /**
      * 处理changed。
      */
@@ -672,21 +649,18 @@ public class PersonAdminService implements IPersonAdminService {
             throw failure(category);
         }
     }
-
     /**
      * 解析字段值
      */
     private int value(Integer value) {
         return value == null ? 0 : value;
     }
-
     /**
      * 规范化文本内容
      */
     private String text(String value) {
         return value == null || value.isBlank() ? null : value.strip();
     }
-
     /**
      * 校验账户符合绑定条件
      */
@@ -696,7 +670,6 @@ public class PersonAdminService implements IPersonAdminService {
             throw failure("PERSON_BINDING_TARGET_INELIGIBLE");
         }
     }
-
     /**
      * 提取并规范化申请身份字段
      */
@@ -724,14 +697,12 @@ public class PersonAdminService implements IPersonAdminService {
         }
         return fields;
     }
-
     /**
      * 解析材料所有者
      */
     private MaterialOwnerKey owner(MaterialOwnerType type, long id) {
         return new MaterialOwnerKey(ProfileType.PERSON, type, id);
     }
-
     /**
      * 校验正数编号
      */
@@ -741,7 +712,6 @@ public class PersonAdminService implements IPersonAdminService {
         }
         return value;
     }
-
     /**
      * 处理reason。
      */
@@ -751,21 +721,18 @@ public class PersonAdminService implements IPersonAdminService {
         }
         return value.strip();
     }
-
     /**
      * 转换为大写文本
      */
     private String upper(String value) {
         return value == null ? "" : value.strip().toUpperCase(Locale.ROOT);
     }
-
     /**
      * 构造业务失败异常
      */
     private PersonAdminException failure(String category) {
         return new PersonAdminException(category);
     }
-
     /**
      * 承载ReviewData业务规则的领域服务。
      */
@@ -773,19 +740,16 @@ public class PersonAdminService implements IPersonAdminService {
                       int decisionVersion, int version, long submissionId, String fieldSnapshotJson,
                       Instant submittedTime) {
     }
-
     /**
      * 承载DecisionState业务规则的领域服务。
      */
     public record DecisionState(long applicationId, long submissionId, int snapshotVersion, int decisionVersion) {
     }
-
     /**
      * 承载CreateState业务规则的领域服务。
      */
     record CreateState(long profileId, long sourceId, PersonIdentityFields fields) {
     }
-
     /**
      * 承载ReviseState业务规则的领域服务。
      */

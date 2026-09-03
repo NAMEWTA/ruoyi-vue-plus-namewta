@@ -1,6 +1,7 @@
 package org.dromara.profile.person.usecase;
 
 import org.dromara.profile.person.domain.bo.PersonApplicationSaveBo;
+import org.dromara.profile.person.domain.application.PersonApplicationProcessCommand;
 import org.dromara.profile.person.domain.vo.PersonApplicationVo;
 
 /**
@@ -8,18 +9,35 @@ import org.dromara.profile.person.domain.vo.PersonApplicationVo;
  */
 public interface PersonApplicationUseCase {
 
+    /** @deprecated 新入口必须显式传入操作者编号。 */
+    @Deprecated
+    default PersonApplicationVo current() { throw new UnsupportedOperationException("请传入 userId"); }
+
+    /** @deprecated 新入口必须显式传入操作者编号。 */
+    @Deprecated
+    default PersonApplicationVo save(PersonApplicationSaveBo command) { throw new UnsupportedOperationException("请传入 userId"); }
+
+    /** @deprecated 新入口必须显式传入操作者编号。 */
+    @Deprecated
+    default PersonApplicationVo submit(int expectedVersion) { throw new UnsupportedOperationException("请传入 userId"); }
+
     /**
      * 编排 current 应用用例。
      */
-    PersonApplicationVo current();
+    default PersonApplicationVo current(long userId) { return current(); }
 
     /**
      * 编排 save 应用用例。
      */
-    PersonApplicationVo save(PersonApplicationSaveBo command);
+    default PersonApplicationVo save(long userId, PersonApplicationSaveBo command) { return save(command); }
 
     /**
      * 编排 submit 应用用例。
      */
-    PersonApplicationVo submit(int expectedVersion);
+    default PersonApplicationVo submit(long userId, int expectedVersion) { return submit(expectedVersion); }
+
+    /** 接收工作流事件并编排申请状态回写。 */
+    default void handleProcess(PersonApplicationProcessCommand command) {
+        throw new UnsupportedOperationException("旧适配器不支持工作流事件入口");
+    }
 }

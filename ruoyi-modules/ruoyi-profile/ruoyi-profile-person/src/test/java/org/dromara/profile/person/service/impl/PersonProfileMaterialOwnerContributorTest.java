@@ -1,5 +1,11 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.usecase.impl.PersonProfileApiUseCaseImpl;
+
+import org.dromara.profile.person.service.PersonProfileApiService;
+
+import org.dromara.profile.person.adapter.api.PersonProfileMaterialOwnerContributor;
+
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialOwnerContributor.ResolvedMaterialOwner;
 import org.dromara.profile.api.material.ProfileMaterialOwnerContributor.SnapshotRelationship;
@@ -21,7 +27,7 @@ class PersonProfileMaterialOwnerContributorTest {
 
     private final PersonApplicationMapper mapper = mock(PersonApplicationMapper.class);
     private final PersonProfileMaterialOwnerContributor contributor =
-        new PersonProfileMaterialOwnerContributor(new PersonApplicationDao(mapper));
+        new PersonProfileMaterialOwnerContributor(new PersonProfileApiUseCaseImpl(new PersonProfileApiService(new PersonApplicationDao(mapper))));
 
     @Test
     void resolvesEditableAndImmutablePersonOwnersThroughPersonMapper() {

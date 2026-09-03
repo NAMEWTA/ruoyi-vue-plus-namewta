@@ -1,13 +1,13 @@
 package org.dromara.profile.enterprise.usecase.impl;
 
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.PageResult;
-import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.enterprise.domain.bo.*;
 import org.dromara.profile.enterprise.domain.vo.*;
 import org.dromara.profile.enterprise.service.EnterpriseAdminService;
 import org.dromara.profile.enterprise.usecase.EnterpriseAdminUseCase;
-import org.dromara.system.api.OssService.OssAccessUrl;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,56 +19,83 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EnterpriseAdminUseCaseImpl implements EnterpriseAdminUseCase {
     private final EnterpriseAdminService service;
+
     /**
-     * 编排 page 应用用例。
+     * 分页查询企业档案摘要。
      */
-    @Override public PageResult<EnterpriseProfileSummaryVo> page(EnterpriseAdminQueryBo query) { return service.page(query); }
-    @Override public List<EnterpriseAccountCandidateVo> eligibleUsers(String keyword) { return service.eligibleUsers(keyword); }
-    @Override public EnterpriseProfileDetailVo detail(long profileId) { return service.detail(profileId); }
-    @Override public EnterpriseReviewContextVo review(long applicationId) { return service.review(applicationId); }
-    @Override public OssAccessUrl reviewMaterial(long applicationId, long materialRefId) {
+    @DSTransactional
+    @Override
+    public PageResult<EnterpriseProfileSummaryVo> page(EnterpriseAdminQueryBo query) {
+        return service.page(query);
+    }
+
+    /** 查询可绑定的企业账号。 */
+    @DSTransactional
+    @Override
+    public List<EnterpriseAccountCandidateVo> eligibleUsers(String keyword) {
+        return service.eligibleUsers(keyword);
+    }
+
+    /** 查询企业档案详情。 */
+    @DSTransactional
+    @Override
+    public EnterpriseProfileDetailVo detail(long profileId) {
+        return service.detail(profileId);
+    }
+
+    /** 查询企业申请审核上下文。 */
+    @DSTransactional
+    @Override
+    public EnterpriseReviewContextVo review(long applicationId) {
+        return service.review(applicationId);
+    }
+
+    /** 获取企业申请材料的审核访问地址。 */
+    @DSTransactional
+    @Override
+    public EnterpriseProfileAccessUrl reviewMaterial(long applicationId, long materialRefId) {
         return service.reviewMaterial(applicationId, materialRefId);
     }
-    /**
-     * 编排 material 应用用例。
-     */
-    @Override public OssAccessUrl material(long profileId, long materialRefId) {
+    /** 获取企业档案材料访问地址。 */
+    @DSTransactional
+    @Override
+    public EnterpriseProfileAccessUrl material(long profileId, long materialRefId) {
         return service.material(profileId, materialRefId);
     }
-    /**
-     * 编排 decide 应用用例。
-     */
-    @Override public EnterpriseAdminResultVo decide(long applicationId, EnterpriseAdminDecisionBo command) {
-        return service.decide(LoginHelper.getUserId(), applicationId, command);
+    /** 处理企业档案审核决策。 */
+    @DSTransactional
+    @Override
+    public EnterpriseAdminResultVo decide(long operatorId, long applicationId, EnterpriseAdminDecisionBo command) {
+        return service.decide(operatorId, applicationId, command);
     }
-    /**
-     * 编排 create 应用用例。
-     */
-    @Override public EnterpriseAdminResultVo create(EnterpriseAdminCreateBo command) {
-        return service.create(LoginHelper.getUserId(), command);
+    /** 创建企业档案。 */
+    @DSTransactional
+    @Override
+    public EnterpriseAdminResultVo create(long operatorId, EnterpriseAdminCreateBo command) {
+        return service.create(operatorId, command);
     }
-    /**
-     * 编排 revise 应用用例。
-     */
-    @Override public EnterpriseAdminResultVo revise(long profileId, EnterpriseAdminReviseBo command) {
-        return service.revise(LoginHelper.getUserId(), profileId, command);
+    /** 修改企业档案。 */
+    @DSTransactional
+    @Override
+    public EnterpriseAdminResultVo revise(long operatorId, long profileId, EnterpriseAdminReviseBo command) {
+        return service.revise(operatorId, profileId, command);
     }
-    /**
-     * 编排 manageBinding 应用用例。
-     */
-    @Override public EnterpriseAdminResultVo manageBinding(long profileId, EnterpriseAdminBindingBo command) {
-        return service.manageBinding(LoginHelper.getUserId(), profileId, command);
+    /** 管理企业档案绑定关系。 */
+    @DSTransactional
+    @Override
+    public EnterpriseAdminResultVo manageBinding(long operatorId, long profileId, EnterpriseAdminBindingBo command) {
+        return service.manageBinding(operatorId, profileId, command);
     }
-    /**
-     * 编排 assign 应用用例。
-     */
-    @Override public EnterpriseAdminResultVo assign(long profileId, EnterpriseAdminAssignBo command) {
-        return service.assign(LoginHelper.getUserId(), profileId, command);
+    /** 为企业档案分配账号。 */
+    @DSTransactional
+    @Override
+    public EnterpriseAdminResultVo assign(long operatorId, long profileId, EnterpriseAdminAssignBo command) {
+        return service.assign(operatorId, profileId, command);
     }
-    /**
-     * 编排 revoke 应用用例。
-     */
-    @Override public EnterpriseAdminResultVo revoke(long profileId, EnterpriseAdminRevokeBo command) {
-        return service.revoke(LoginHelper.getUserId(), profileId, command);
+    /** 撤销企业档案账号绑定。 */
+    @DSTransactional
+    @Override
+    public EnterpriseAdminResultVo revoke(long operatorId, long profileId, EnterpriseAdminRevokeBo command) {
+        return service.revoke(operatorId, profileId, command);
     }
 }

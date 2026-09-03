@@ -1,9 +1,25 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
+
+import org.dromara.profile.person.adapter.provider.PersonManualVerificationProvider;
+
+import org.dromara.profile.person.adapter.codec.PersonVerificationEvidenceCodec;
+
+import org.dromara.profile.person.adapter.api.PersonProfileMaterialOwnerContributor;
+import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
+import org.dromara.profile.person.adapter.provider.PersonManualVerificationProvider;
+import org.dromara.profile.person.usecase.impl.PersonProfileApiUseCaseImpl;
+import org.dromara.profile.person.service.PersonProfileApiService;
+
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+
 import org.dromara.profile.person.controller.self.PersonApplicationExceptionHandler;
 import org.dromara.profile.person.controller.self.PersonApplicationController;
 import org.dromara.profile.person.domain.exception.PersonApplicationException;
-import org.dromara.profile.person.service.PersonWorkflowGateway;
+import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -19,7 +35,7 @@ import org.dromara.profile.person.dao.PersonApplicationDao;
 import org.dromara.profile.person.dao.PersonVerificationAttemptDao;
 import org.dromara.profile.person.support.PersonMapperXmlTestSupport;
 import org.dromara.profile.person.controller.self.PersonMaterialSelfController;
-import org.dromara.profile.person.service.ProfileMaterialAccessPolicy;
+import org.dromara.profile.person.port.security.ProfileMaterialAccessPolicy;
 import org.dromara.profile.person.controller.admin.ProfileMaterialExceptionHandler;
 import org.dromara.profile.person.mapper.ProfileMaterialMapper;
 import org.dromara.system.api.ConfigService;
@@ -334,14 +350,14 @@ class PersonApplicationMySqlE2ETest {
         ProfileMaterialServiceImpl materials = new ProfileMaterialServiceImpl(
             session.getMapper(ProfileMaterialMapper.class),
             oss, accessPolicy,
-            List.of(new PersonProfileMaterialOwnerContributor(
-                new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class)))));
+            List.of(new PersonProfileMaterialOwnerContributor(new PersonProfileApiUseCaseImpl(
+                new PersonProfileApiService(new PersonApplicationDao(session.getMapper(PersonApplicationMapper.class)))))));
 
         PersonVerificationAttemptMapper attemptMapper = session.getMapper(PersonVerificationAttemptMapper.class);
         PersonVerificationEvidenceCodec evidenceCodec = new PersonVerificationEvidenceCodec(json);
         PersonVerificationProviderProperties properties = new PersonVerificationProviderProperties();
         properties.setEnabledProviders(java.util.Set.of("manual"));
-        PersonVerificationAttemptCoordinator attempts = new PersonVerificationAttemptCoordinator(
+        PersonVerificationAttemptService attempts = new PersonVerificationAttemptService(
             new PersonVerificationProviderRegistry(List.of(new PersonManualVerificationProvider()), properties),
             new PersonVerificationAttemptDao(attemptMapper), evidenceCodec,
             new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(attemptMapper)));

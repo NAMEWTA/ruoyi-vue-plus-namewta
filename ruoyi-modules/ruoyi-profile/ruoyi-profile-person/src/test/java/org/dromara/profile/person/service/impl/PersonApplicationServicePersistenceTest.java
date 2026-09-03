@@ -1,5 +1,9 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+
 import org.dromara.profile.person.domain.application.PersonPublication;
 import org.dromara.profile.person.domain.exception.PersonApplicationException;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
@@ -31,8 +35,8 @@ class PersonApplicationServicePersistenceTest {
     private final JsonMapper jsonMapper = mock(JsonMapper.class);
     private final PersonApplicationServiceImpl service = new PersonApplicationServiceImpl(
         mapper, jsonMapper, mock(org.dromara.profile.api.material.ProfileMaterialPort.class),
-        mock(PersonVerificationProviderRegistry.class), mock(PersonVerificationAttemptCoordinator.class),
-        mock(org.dromara.profile.person.service.PersonWorkflowGateway.class),
+        mock(PersonVerificationProviderRegistry.class), mock(PersonVerificationAttemptService.class),
+        mock(org.dromara.profile.person.port.gateway.PersonWorkflowGateway.class),
         mock(org.dromara.system.api.ConfigService.class), java.time.Clock.systemUTC());
 
     @Test

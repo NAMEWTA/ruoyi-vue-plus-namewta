@@ -1,5 +1,9 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.adapter.api.PersonIdentityLookupServiceImpl;
+import org.dromara.profile.person.usecase.impl.PersonProfileApiUseCaseImpl;
+import org.dromara.profile.person.service.PersonProfileApiService;
+
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityLock;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityMatch;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityQuery;
@@ -21,7 +25,7 @@ class PersonIdentityLookupServiceImplTest {
 
     private final PersonApplicationMapper mapper = mock(PersonApplicationMapper.class);
     private final PersonIdentityLookupServiceImpl service = new PersonIdentityLookupServiceImpl(
-        new PersonApplicationDao(mapper));
+        new PersonProfileApiUseCaseImpl(new PersonProfileApiService(new PersonApplicationDao(mapper))));
 
     @Test
     void mapsExactMatchesWithoutExposingIdentityFields() {

@@ -1,9 +1,11 @@
 package org.dromara.profile.person.usecase.impl;
 
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+
 import lombok.RequiredArgsConstructor;
 import org.dromara.profile.person.domain.verification.PersonProviderCallbackEnvelope;
 import org.dromara.profile.person.domain.verification.PersonVerificationCallbackOutcome;
-import org.dromara.profile.person.service.PersonVerificationService;
+import org.dromara.profile.person.port.verification.PersonVerificationService;
 import org.dromara.profile.person.usecase.PersonVerificationUseCase;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +24,7 @@ public class PersonVerificationUseCaseImpl implements PersonVerificationUseCase 
      * @param receivedAt 接收时间
      * @return 回调处理结果
      */
+    @DSTransactional
     @Override
     public PersonVerificationCallbackOutcome callback(String providerCode, PersonProviderCallbackEnvelope envelope,
                                                        java.time.Instant receivedAt) {

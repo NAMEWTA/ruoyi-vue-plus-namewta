@@ -1,5 +1,9 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.adapter.api.PersonProfileProjectionContributor;
+import org.dromara.profile.person.usecase.impl.PersonProfileApiUseCaseImpl;
+import org.dromara.profile.person.service.PersonProfileApiService;
+
 import org.dromara.profile.person.domain.model.read.PersonActiveProjectionRow;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
 import org.dromara.profile.person.dao.PersonApplicationDao;
@@ -28,7 +32,7 @@ class PersonProfileProjectionContributorTest {
         when(mapper.selectActiveProjections(Set.of(101L, 102L))).thenReturn(List.of(row));
 
         PersonProfileProjectionContributor contributor = new PersonProfileProjectionContributor(
-            new PersonApplicationDao(mapper));
+            new PersonProfileApiUseCaseImpl(new PersonProfileApiService(new PersonApplicationDao(mapper))));
 
         assertThat(contributor.profileType()).isEqualTo(ProfileType.PERSON);
         assertThat(contributor.findActiveBindings(Set.of(101L, 102L))).containsOnlyKeys(101L);

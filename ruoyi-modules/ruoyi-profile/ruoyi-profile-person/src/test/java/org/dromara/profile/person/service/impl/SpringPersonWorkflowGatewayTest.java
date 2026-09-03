@@ -1,5 +1,7 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.adapter.gateway.SpringPersonWorkflowGateway;
+
 import org.dromara.profile.person.domain.exception.PersonApplicationException;
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.WorkflowService;

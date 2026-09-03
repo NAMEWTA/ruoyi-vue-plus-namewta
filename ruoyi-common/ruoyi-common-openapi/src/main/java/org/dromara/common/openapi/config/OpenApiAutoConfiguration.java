@@ -128,7 +128,7 @@ public class OpenApiAutoConfiguration {
         registration.setName("openApiGatewayFilter");
         registration.addUrlPatterns("/*");
         registration.setDispatcherTypes(DispatcherType.REQUEST);
-        registration.setAsyncSupported(false);
+        registration.setAsyncSupported(true);
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
         return registration;
     }

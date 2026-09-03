@@ -1,5 +1,7 @@
 package org.dromara.profile.person.usecase.impl;
 
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+
 import lombok.RequiredArgsConstructor;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.person.service.ProfileMaterialService;
@@ -15,74 +17,74 @@ public class ProfileMaterialUseCaseImpl implements ProfileMaterialUseCase {
 
     private final ProfileMaterialService service;
 
-    /**
-     * 编排 tree 应用用例。
-     */
-    @Override public java.util.List<ProfileMaterialPort.MaterialNodeView> tree(ProfileMaterialPort.MaterialScope scope,
-                                                                                boolean includeDisabled) {
+    /** 查询个人材料目录树。 */
+    @DSTransactional
+    @Override
+    public java.util.List<ProfileMaterialPort.MaterialNodeView> tree(ProfileMaterialPort.MaterialScope scope,
+                                                                      boolean includeDisabled) {
         return service.tree(scope, includeDisabled);
     }
-    /**
-     * 编排 createNode 应用用例。
-     */
-    @Override public ProfileMaterialPort.MaterialNodeView createNode(ProfileMaterialPort.MaterialNodeCommand command) {
+    /** 创建个人材料目录节点。 */
+    @DSTransactional
+    @Override
+    public ProfileMaterialPort.MaterialNodeView createNode(ProfileMaterialPort.MaterialNodeCommand command) {
         return service.createNode(command);
     }
-    /**
-     * 编排 updateNode 应用用例。
-     */
-    @Override public ProfileMaterialPort.MaterialNodeView updateNode(Long materialNodeId,
-                                                                       ProfileMaterialPort.MaterialNodeCommand command) {
+    /** 修改个人材料目录节点。 */
+    @DSTransactional
+    @Override
+    public ProfileMaterialPort.MaterialNodeView updateNode(Long materialNodeId,
+                                                           ProfileMaterialPort.MaterialNodeCommand command) {
         return service.updateNode(materialNodeId, command);
     }
-    /**
-     * 编排 changeStatus 应用用例。
-     */
-    @Override public void changeStatus(Long materialNodeId, boolean enabled, int expectedVersion) {
+    /** 修改个人材料目录节点状态。 */
+    @DSTransactional
+    @Override
+    public void changeStatus(Long materialNodeId, boolean enabled, int expectedVersion) {
         service.changeStatus(materialNodeId, enabled, expectedVersion);
     }
-    /**
-     * 编排 archiveNode 应用用例。
-     */
-    @Override public void archiveNode(Long materialNodeId, int expectedVersion) {
+    /** 归档个人材料目录节点。 */
+    @DSTransactional
+    @Override
+    public void archiveNode(Long materialNodeId, int expectedVersion) {
         service.archiveNode(materialNodeId, expectedVersion);
     }
-    /**
-     * 编排 attach 应用用例。
-     */
-    @Override public ProfileMaterialPort.MaterialReferenceView attach(ProfileMaterialPort.MaterialAttachCommand command) {
+    /** 为个人档案挂载材料。 */
+    @DSTransactional
+    @Override
+    public ProfileMaterialPort.MaterialReferenceView attach(ProfileMaterialPort.MaterialAttachCommand command) {
         return service.attach(command);
     }
-    /**
-     * 编排 detach 应用用例。
-     */
-    @Override public void detach(ProfileMaterialPort.MaterialOwnerKey owner, Long materialRefId) {
+    /** 解除个人档案材料挂载。 */
+    @DSTransactional
+    @Override
+    public void detach(ProfileMaterialPort.MaterialOwnerKey owner, Long materialRefId) {
         service.detach(owner, materialRefId);
     }
-    /**
-     * 编排 list 应用用例。
-     */
-    @Override public java.util.List<ProfileMaterialPort.MaterialReferenceView> list(ProfileMaterialPort.MaterialOwnerKey owner) {
+    /** 查询个人档案材料列表。 */
+    @DSTransactional
+    @Override
+    public java.util.List<ProfileMaterialPort.MaterialReferenceView> list(ProfileMaterialPort.MaterialOwnerKey owner) {
         return service.list(owner);
     }
-    /**
-     * 编排 accessUrl 应用用例。
-     */
-    @Override public org.dromara.system.api.OssService.OssAccessUrl accessUrl(ProfileMaterialPort.MaterialOwnerKey owner,
-                                                                                Long materialRefId) {
-        return service.accessUrl(owner, materialRefId);
+    /** 获取个人档案材料访问地址。 */
+    @DSTransactional
+    @Override
+    public org.dromara.profile.person.domain.vo.PersonProfileAccessUrl accessUrlView(
+        ProfileMaterialPort.MaterialOwnerKey owner, Long materialRefId) {
+        return service.accessUrlView(owner, materialRefId);
     }
-    /**
-     * 编排 validateRequired 应用用例。
-     */
-    @Override public void validateRequired(ProfileMaterialPort.MaterialOwnerKey owner, String documentTypeCode,
-                                           java.util.Set<String> conditions) {
+    /** 校验个人档案必需材料。 */
+    @DSTransactional
+    @Override
+    public void validateRequired(ProfileMaterialPort.MaterialOwnerKey owner, String documentTypeCode,
+                                 java.util.Set<String> conditions) {
         service.validateRequired(owner, documentTypeCode, conditions);
     }
-    /**
-     * 编排 snapshotImmutable 应用用例。
-     */
-    @Override public java.util.List<ProfileMaterialPort.MaterialReferenceView> snapshotImmutable(
+    /** 创建个人材料不可变快照。 */
+    @DSTransactional
+    @Override
+    public java.util.List<ProfileMaterialPort.MaterialReferenceView> snapshotImmutable(
         ProfileMaterialPort.MaterialOwnerKey source, ProfileMaterialPort.MaterialOwnerKey target) {
         return service.snapshotImmutable(source, target);
     }

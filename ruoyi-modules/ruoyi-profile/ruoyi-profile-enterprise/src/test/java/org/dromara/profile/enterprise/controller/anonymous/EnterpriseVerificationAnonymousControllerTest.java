@@ -8,9 +8,9 @@ import org.dromara.profile.enterprise.domain.model.read.EnterpriseVerificationAt
 import org.dromara.profile.enterprise.mapper.EnterpriseVerificationAttemptMapper;
 import org.dromara.profile.enterprise.dao.EnterpriseVerificationAttemptDao;
 import org.dromara.profile.enterprise.service.impl.EnterpriseDeterministicTestProvider;
-import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationAttemptCoordinator;
-import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationEvidenceCodec;
-import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationProviderRegistry;
+import org.dromara.profile.enterprise.service.EnterpriseVerificationAttemptService;
+import org.dromara.profile.enterprise.adapter.codec.EnterpriseVerificationEvidenceCodec;
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseVerificationProviderRegistry;
 import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationSecurityAuditRecorder;
 import org.dromara.profile.enterprise.usecase.impl.EnterpriseVerificationUseCaseImpl;
 import org.junit.jupiter.api.Tag;
@@ -48,7 +48,7 @@ class EnterpriseVerificationAnonymousControllerTest {
         properties.setEnabledProviders(Set.of("test-provider"));
         EnterpriseVerificationEvidenceCodec codec =
             new EnterpriseVerificationEvidenceCodec(JsonMapper.builder().build());
-        EnterpriseVerificationAttemptCoordinator coordinator = new EnterpriseVerificationAttemptCoordinator(
+        EnterpriseVerificationAttemptService coordinator = new EnterpriseVerificationAttemptService(
             new EnterpriseVerificationProviderRegistry(List.of(provider), properties),
             new EnterpriseVerificationAttemptDao(mapper), codec,
             new EnterpriseVerificationSecurityAuditRecorder(new EnterpriseVerificationAttemptDao(mapper)));

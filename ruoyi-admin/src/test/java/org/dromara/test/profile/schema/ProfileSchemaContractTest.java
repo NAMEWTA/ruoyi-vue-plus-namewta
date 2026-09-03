@@ -124,6 +124,13 @@ class ProfileSchemaContractTest {
             .contains("profile.person.provider.default", "profile.enterprise.provider.default", "manual")
             .contains("profile_subject_status", "profile_application_status", "profile_binding_status");
 
+        assertThat(block)
+            .contains("'100,100|100,100'", "'300,100|300,100'", "'500,100|500,100'")
+            .doesNotContain("'100,100', 'N'", "'300,100', 'Y'", "'500,100', 'N'");
+        assertThat(block)
+            .contains("'提交', 'PASS', '120,100;250,100'", "'完成', 'PASS', '350,100;480,100'")
+            .doesNotContain("'提交', 'PASS', '200,100'", "'完成', 'PASS', '400,100'");
+
         for (String domain : List.of("person", "enterprise")) {
             for (String capability : List.of("apply", "query", "material", "review", "manage", "override")) {
                 assertThat(block).contains("profile:" + domain + ":" + capability);

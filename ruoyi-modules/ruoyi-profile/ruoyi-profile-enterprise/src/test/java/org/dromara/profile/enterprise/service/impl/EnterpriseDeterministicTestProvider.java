@@ -7,7 +7,7 @@ import org.dromara.profile.enterprise.domain.verification.EnterpriseProviderStar
 import org.dromara.profile.enterprise.domain.verification.EnterpriseProviderStartResult;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerificationFailureCategory;
 import org.dromara.profile.enterprise.domain.verification.EnterpriseVerifiedCallback;
-import org.dromara.profile.enterprise.service.EnterpriseVerificationProvider;
+import org.dromara.profile.enterprise.port.provider.EnterpriseVerificationProvider;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;

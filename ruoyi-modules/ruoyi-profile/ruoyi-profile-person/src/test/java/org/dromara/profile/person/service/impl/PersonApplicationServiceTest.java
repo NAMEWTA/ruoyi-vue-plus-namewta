@@ -1,5 +1,9 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+
 import org.dromara.profile.person.domain.application.PersonDocumentTypeRule;
 import org.dromara.profile.person.domain.application.PersonApplication;
 import org.dromara.profile.person.domain.vo.PersonApplicationVo;
@@ -10,7 +14,7 @@ import org.dromara.profile.person.domain.application.PersonPublication;
 import org.dromara.profile.person.domain.application.PersonSubmission;
 import org.dromara.profile.person.domain.exception.PersonApplicationException;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
-import org.dromara.profile.person.service.PersonWorkflowGateway;
+import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.person.domain.exception.PersonVerificationException;
@@ -55,7 +59,7 @@ class PersonApplicationServiceTest {
     private final JsonMapper jsonMapper = mock(JsonMapper.class);
     private final ProfileMaterialPort materials = mock(ProfileMaterialPort.class);
     private final PersonVerificationProviderRegistry providers = mock(PersonVerificationProviderRegistry.class);
-    private final PersonVerificationAttemptCoordinator attempts = mock(PersonVerificationAttemptCoordinator.class);
+    private final PersonVerificationAttemptService attempts = mock(PersonVerificationAttemptService.class);
     private final PersonWorkflowGateway workflow = mock(PersonWorkflowGateway.class);
     private final ConfigService config = mock(ConfigService.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC);
@@ -181,7 +185,7 @@ class PersonApplicationServiceTest {
         PersonApplication waiting = application(9001L, 101L, "WAITING", 2, 3);
         when(config.getConfigValue("profile.person.flowCode")).thenReturn("profile_person_verification");
         doReturn(waiting).when(service).lockById(9001L);
-        when(workflow.persistedSnapshotVersion(any())).thenReturn(3);
+        when(workflow.persistedSnapshotVersionByInstanceId(77L)).thenReturn(3);
         doReturn(new PersonSubmission(
             9101L, 9001L, 3, 101L, waiting.fields(), "manual",
             Instant.parse("2026-09-01T11:00:00Z"))).when(service).requireSubmission(9001L, 3);

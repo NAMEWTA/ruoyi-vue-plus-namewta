@@ -1,5 +1,10 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.adapter.api.EnterpriseMaterialOwnerContributor;
+import org.dromara.profile.enterprise.service.EnterpriseProfileApiService;
+import org.dromara.profile.enterprise.usecase.impl.EnterpriseProfileApiUseCaseImpl;
+import org.dromara.profile.enterprise.adapter.api.EnterpriseMaterialOwnerContributor;
+
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialOwnerContributor.SnapshotRelationship;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
@@ -20,7 +25,8 @@ class EnterpriseMaterialOwnerContributorTest {
 
     private final EnterpriseApplicationMapper mapper = mock(EnterpriseApplicationMapper.class);
     private final EnterpriseMaterialOwnerContributor contributor =
-        new EnterpriseMaterialOwnerContributor(new EnterpriseApplicationDao(mapper));
+        new EnterpriseMaterialOwnerContributor(new EnterpriseProfileApiUseCaseImpl(
+            new EnterpriseProfileApiService(new EnterpriseApplicationDao(mapper))));
 
     @Test
     void resolvesMutableAndImmutableEnterpriseOwnersWithoutLeakingSnapshotData() {

@@ -9,7 +9,7 @@ import org.dromara.profile.enterprise.usecase.ProfileMaterialUseCase;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialReferenceView;
-import org.dromara.system.api.OssService;
+import org.dromara.profile.enterprise.domain.vo.EnterpriseProfileAccessUrl;
 import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -47,10 +47,10 @@ public class EnterpriseMaterialAdminController {
     @GetMapping("/{ownerType}/{ownerId}/{materialRefId}/access-url")
     @SaCheckPermission(value = {"profile:enterprise:material", "profile:enterprise:query",
         "profile:enterprise:review", "profile:enterprise:manage", "profile:enterprise:override"}, mode = SaMode.OR)
-    public R<OssService.OssAccessUrl> accessUrl(@PathVariable MaterialOwnerType ownerType,
+    public R<EnterpriseProfileAccessUrl> accessUrl(@PathVariable MaterialOwnerType ownerType,
                                                 @Positive @PathVariable Long ownerId,
                                                 @Positive @PathVariable Long materialRefId) {
-        return R.ok(materialPort.accessUrl(owner(ownerType, ownerId), materialRefId));
+        return R.ok(materialPort.accessUrlView(owner(ownerType, ownerId), materialRefId));
     }
 
     /**

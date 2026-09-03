@@ -1,5 +1,7 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+
 import org.dromara.profile.person.config.PersonVerificationProviderProperties;
 
 import org.dromara.profile.person.domain.exception.PersonVerificationException;
@@ -8,7 +10,7 @@ import org.dromara.profile.person.domain.verification.PersonProviderStartCommand
 import org.dromara.profile.person.domain.verification.PersonProviderStartResult;
 import org.dromara.profile.person.domain.verification.PersonVerificationFailureCategory;
 import org.dromara.profile.person.domain.verification.PersonVerifiedCallback;
-import org.dromara.profile.person.service.PersonVerificationProvider;
+import org.dromara.profile.person.port.provider.PersonVerificationProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
 

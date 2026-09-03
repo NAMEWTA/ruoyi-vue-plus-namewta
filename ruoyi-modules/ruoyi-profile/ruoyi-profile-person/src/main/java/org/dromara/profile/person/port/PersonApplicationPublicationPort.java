@@ -7,7 +7,7 @@ import org.dromara.profile.person.domain.application.PersonSubmission;
 import java.time.Instant;
 import java.util.Optional;
 
-/** PersonApplicationPublicationPort 业务端口合同，隔离外部适配实现。  Narrow application capability consumed by the person administration workflow. */
+/** PersonApplicationPublicationPort 业务端口合同，隔离个人管理流程与外部适配实现。 */
 public interface PersonApplicationPublicationPort {
 
     /**

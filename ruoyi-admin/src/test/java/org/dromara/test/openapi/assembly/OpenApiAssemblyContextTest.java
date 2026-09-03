@@ -149,7 +149,7 @@ class OpenApiAssemblyContextTest {
                     "openApiGatewayFilterRegistration", FilterRegistrationBean.class);
                 assertThat(registration.getFilter()).isInstanceOf(OpenApiGatewayFilter.class);
                 assertThat(registration.getUrlPatterns()).containsExactly("/*");
-                assertThat(registration.isAsyncSupported()).isFalse();
+                assertThat(registration.isAsyncSupported()).isTrue();
             });
     }
 

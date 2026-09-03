@@ -1,5 +1,9 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.PersonRebindNotificationService;
+import org.dromara.profile.person.listener.PersonRebindNotificationListener;
+import org.dromara.profile.person.usecase.impl.PersonRebindNotificationUseCaseImpl;
+
 import org.dromara.profile.person.event.PersonReboundEvent;
 import com.baomidou.dynamic.datasource.annotation.DsTxEventListener;
 import com.baomidou.dynamic.datasource.tx.DsTxEventListenerFactory;
@@ -58,7 +62,7 @@ class PersonRebindNotificationTest {
 
     @Test
     void defersDeliveryUntilDynamicDataSourceTransactionCommits() throws Exception {
-        Method listener = PersonRebindNotificationService.class.getMethod("notifyOldAccount",
+        Method listener = PersonRebindNotificationListener.class.getMethod("handle",
             PersonReboundEvent.class);
         DsTxEventListener annotation = listener.getAnnotation(DsTxEventListener.class);
         assertThat(annotation).isNotNull();
@@ -71,7 +75,9 @@ class PersonRebindNotificationTest {
 
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DsTxEventListenerFactory.class);
-            context.registerBean(PersonRebindNotificationService.class, () -> service);
+            PersonRebindNotificationUseCaseImpl useCase = new PersonRebindNotificationUseCaseImpl(service);
+            context.registerBean(PersonRebindNotificationListener.class,
+                () -> new PersonRebindNotificationListener(useCase));
             context.refresh();
             TransactionContext.bind("person-rebind-test");
             try {

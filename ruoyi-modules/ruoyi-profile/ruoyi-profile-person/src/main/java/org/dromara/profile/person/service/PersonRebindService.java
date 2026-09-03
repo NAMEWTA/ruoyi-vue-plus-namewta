@@ -1,14 +1,12 @@
 package org.dromara.profile.person.service;
-
-import org.dromara.profile.person.service.IPersonRebindService;
-
 import org.dromara.profile.person.domain.exception.PersonRebindException;
 import org.dromara.profile.person.dao.PersonRebindDao;
 import org.dromara.profile.person.dao.PersonApplicationDao;
 import org.dromara.profile.person.domain.model.read.PersonRebindCandidateRow;
 import org.dromara.profile.person.event.PersonReboundEvent;
-import org.dromara.profile.person.service.impl.PersonVerificationProviderRegistry;
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+import org.dromara.profile.person.port.provider.PersonVerificationProviderRegistryPort;
+import org.dromara.profile.person.port.verification.PersonVerificationService;
+import org.dromara.profile.person.port.notification.PersonRebindNotificationPort;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
@@ -18,8 +16,9 @@ import org.dromara.profile.person.domain.application.PersonApplication;
 import org.dromara.profile.person.domain.bo.PersonApplicationSaveBo;
 import org.dromara.profile.person.domain.application.PersonIdentityFields;
 import org.dromara.profile.person.domain.application.PersonRebindPublication;
+import org.dromara.profile.person.domain.application.PersonRebindProcessCommand;
 import org.dromara.profile.person.domain.application.PersonSubmission;
-import org.dromara.profile.person.service.PersonWorkflowGateway;
+import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
 import org.dromara.profile.person.domain.model.read.PersonApplicationRow;
 import org.dromara.profile.person.domain.model.read.PersonBindingEventRow;
 import org.dromara.profile.person.domain.model.read.PersonBindingRow;
@@ -40,11 +39,12 @@ import org.dromara.profile.person.domain.vo.PersonRebindUnbindVo;
 import org.dromara.profile.person.domain.exception.PersonVerificationException;
 import org.dromara.profile.person.domain.verification.PersonVerificationStartAttemptCommand;
 import org.dromara.system.api.UserService;
+import org.dromara.system.api.ConfigService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.json.JsonMapper;
-
+import org.dromara.common.json.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -57,54 +57,95 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
-
 /**
  * 创建个人换绑业务服务。
  */
 @Service
-public class PersonRebindService implements IPersonRebindService {
-
+public class PersonRebindService {
     private static final Set<String> EDITABLE_STATUSES = Set.of("DRAFT", "BACK", "CANCEL");
     private static final Set<String> GENDERS = Set.of("MALE", "FEMALE", "UNKNOWN");
-
     private final PersonRebindDao dao;
     private final PersonApplicationDao applicationDao;
-    private final JsonMapper jsonMapper;
     private final ProfileMaterialPort materials;
-    private final PersonVerificationProviderRegistry providers;
+    private final PersonVerificationProviderRegistryPort providers;
     private final PersonVerificationService attempts;
     private final PersonWorkflowGateway workflow;
     private final UserService users;
     private final Clock clock;
-
+    private final ConfigService configService;
+    private final PersonRebindNotificationPort notifications;
+    private final ApplicationEventPublisher events;
     /** 创建个人换绑业务服务。 */
-    @Autowired
     public PersonRebindService(PersonRebindDao dao, PersonApplicationDao applicationDao,
-                               JsonMapper jsonMapper,
-                               ProfileMaterialPort materials, PersonVerificationProviderRegistry providers,
+                               Object jsonMapper,
+                               ProfileMaterialPort materials, PersonVerificationProviderRegistryPort providers,
                                PersonVerificationService attempts, PersonWorkflowGateway workflow,
                                UserService users) {
         this(dao, applicationDao, jsonMapper, materials, providers, attempts, workflow, users,
             Clock.systemUTC());
     }
-
     /** 创建可注入时钟的个人换绑业务服务，测试场景据此固定时间。 */
     public PersonRebindService(PersonRebindDao dao, PersonApplicationDao applicationDao,
-                        JsonMapper jsonMapper,
-                        ProfileMaterialPort materials, PersonVerificationProviderRegistry providers,
+                        Object jsonMapper,
+                        ProfileMaterialPort materials, PersonVerificationProviderRegistryPort providers,
                         PersonVerificationService attempts, PersonWorkflowGateway workflow,
                         UserService users, Clock clock) {
+        this(dao, applicationDao, jsonMapper, materials, providers, attempts, workflow, users, clock,
+            null, null, null);
+    }
+    /** 创建可处理工作流事件的个人换绑业务服务。 */
+    @Autowired
+    public PersonRebindService(PersonRebindDao dao, PersonApplicationDao applicationDao,
+                               ProfileMaterialPort materials,
+                               PersonVerificationProviderRegistryPort providers,
+                               PersonVerificationService attempts, PersonWorkflowGateway workflow,
+                               UserService users, ConfigService configService,
+                               PersonRebindNotificationPort notifications,
+                               ApplicationEventPublisher events) {
+        this(dao, applicationDao, null, materials, providers, attempts, workflow, users,
+            Clock.systemUTC(), configService, notifications, events);
+    }
+    /** 兼容存量测试适配器的完整构造方法，jsonMapper 参数已由统一 JsonUtils 接管。 */
+    @Deprecated
+    public PersonRebindService(PersonRebindDao dao, PersonApplicationDao applicationDao,
+                               Object jsonMapper, ProfileMaterialPort materials,
+                               PersonVerificationProviderRegistryPort providers,
+                               PersonVerificationService attempts, PersonWorkflowGateway workflow,
+                               UserService users, ConfigService configService,
+                               PersonRebindNotificationPort notifications,
+                               ApplicationEventPublisher events) {
+        this(dao, applicationDao, jsonMapper, materials, providers, attempts, workflow, users,
+            Clock.systemUTC(), configService, notifications, events);
+    }
+    /** 初始化个人换绑服务依赖。 */
+    private PersonRebindService(PersonRebindDao dao, PersonApplicationDao applicationDao,
+                        Object jsonMapper, ProfileMaterialPort materials,
+                        PersonVerificationProviderRegistryPort providers,
+                        PersonVerificationService attempts, PersonWorkflowGateway workflow,
+                        UserService users, Clock clock, ConfigService configService,
+                        PersonRebindNotificationPort notifications, ApplicationEventPublisher events) {
         this.dao = dao;
         this.applicationDao = applicationDao;
-        this.jsonMapper = jsonMapper;
-        this.materials = materials;
+                this.materials = materials;
         this.providers = providers;
         this.attempts = attempts;
         this.workflow = workflow;
         this.users = users;
         this.clock = clock;
+        this.configService = configService;
+        this.notifications = notifications;
+        this.events = events;
     }
-
+    /** 兼容存量测试适配器使用的具体注册表构造方法。 */
+    @Deprecated
+    public PersonRebindService(PersonRebindDao dao, PersonApplicationDao applicationDao,
+                               Object jsonMapper, ProfileMaterialPort materials,
+                               org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry providers,
+                               PersonVerificationService attempts, PersonWorkflowGateway workflow,
+                               UserService users, Clock clock) {
+        this(dao, applicationDao, jsonMapper, materials, (PersonVerificationProviderRegistryPort) providers,
+            attempts, workflow, users, clock, null, null, null);
+    }
     /**
      * 校验申请身份并返回探测结果
      */
@@ -119,7 +160,6 @@ public class PersonRebindService implements IPersonRebindService {
         }
         return new PersonRebindProbeVo(probeStatus(type + ":" + number));
     }
-
     /**
      * 匹配身份数据
      */
@@ -139,11 +179,10 @@ public class PersonRebindService implements IPersonRebindService {
         }
         return new PersonRebindMatchVo("REBIND_AVAILABLE", maskedPhone(candidate.get().getOldUserId()));
     }
-
     /**
      * 确认当前业务操作
      */
-    @DSTransactional
+
     public PersonRebindConfirmationVo confirm(long userId, PersonRebindConfirmBo command) {
         requireUserId(userId);
         if (command == null) {
@@ -164,11 +203,10 @@ public class PersonRebindService implements IPersonRebindService {
         int version = confirm(application, candidate, command.expectedVersion());
         return new PersonRebindConfirmationVo("CONFIRMED", maskedPhone(candidate.getOldUserId()), version);
     }
-
     /**
      * 提交申请并启动后续流程
      */
-    @DSTransactional
+
     public PersonRebindSubmissionVo submit(long userId, PersonRebindSubmitBo command) {
         requireUserId(userId);
         if (command == null) {
@@ -183,7 +221,6 @@ public class PersonRebindService implements IPersonRebindService {
         requireProviderEnabled(application.providerCode());
         requireApplicantUnbound(userId);
         requireFrozenCandidate(application);
-
         MaterialOwnerKey working = owner(MaterialOwnerType.WORKING, application.personApplicationId());
         materials.validateRequired(working, application.fields().documentTypeCode(), Set.of("ALWAYS"));
         int snapshotVersion = application.submissionSeq() + 1;
@@ -199,22 +236,19 @@ public class PersonRebindService implements IPersonRebindService {
         workflow.start(application.personApplicationId(), submission.personSubmissionId(), snapshotVersion);
         return new PersonRebindSubmissionVo(waiting.status(), waiting.submissionSeq(), waiting.version());
     }
-
     /**
      * 解除档案绑定
      */
-    @DSTransactional
+
     public PersonRebindUnbindVo unbind(long userId) {
         requireUserId(userId);
         unbindBinding(userId, clock.instant());
         return new PersonRebindUnbindVo("UNBOUND");
     }
-
     /**
      * 发布换绑后的档案
      */
-    @Override
-    @DSTransactional
+
     public Optional<PersonRebindPublication> publishApprovedRebind(long applicationId, int snapshotVersion,
                                                                    Instant finishedTime) {
         PersonApplicationRow application = dao.lockApplication(applicationId);
@@ -230,7 +264,6 @@ public class PersonRebindService implements IPersonRebindService {
             throw failure("PERSON_REBIND_SNAPSHOT_INVALID");
         }
         requireFrozenSnapshot(application, submission);
-
         PersonProfileRow profile = dao.lockProfile(submission.getTargetProfileId());
         PersonBindingRow oldBinding = dao.lockExpectedBinding(submission.getExpectedBindingId(),
             submission.getTargetProfileId(), submission.getExpectedBindingVersion());
@@ -240,7 +273,6 @@ public class PersonRebindService implements IPersonRebindService {
         if (dao.lockEffectiveBindingByUser(application.getApplicantUserId()) != null) {
             throw failure("PERSON_REBIND_APPLICANT_ALREADY_BOUND");
         }
-
         try {
             PersonVersionRow currentVersion = dao.lockCurrentVersion(profile.getPersonProfileId());
             int nextVersion = currentVersion == null ? 1 : intValue(currentVersion.getVersionNo()) + 1;
@@ -248,26 +280,22 @@ public class PersonRebindService implements IPersonRebindService {
                 requireChanged(dao.supersedeVersion(currentVersion.getPersonVersionId()),
                     "PERSON_REBIND_PROFILE_VERSION_CONFLICT");
             }
-
             PersonVersionRow version = version(profile.getPersonProfileId(), nextVersion, submission, finishedTime);
             requireChanged(dao.insertVersion(version), "PERSON_REBIND_PROFILE_VERSION_CONFLICT");
             PersonProfileRow updated = updatedProfile(profile, version.getPersonVersionId(), submission);
             requireChanged(dao.updateProfile(updated), "PERSON_REBIND_PROFILE_VERSION_CONFLICT");
-
             int oldBindingVersion = intValue(oldBinding.getBindingVersion());
             requireChanged(dao.unbind(oldBinding.getPersonBindingId(), oldBindingVersion,
                 application.getApplicantUserId(), finishedTime), "PERSON_REBIND_BINDING_CHANGED");
             requireChanged(dao.insertBindingEvent(bindingEvent(oldBinding, "UNBOUND",
                 oldBindingVersion + 1, submission.getPersonSubmissionId(), "PERSON_REBIND_APPROVED", finishedTime)),
                 "PERSON_REBIND_BINDING_EVENT_CONFLICT");
-
             PersonBindingRow newBinding = binding(profile.getPersonProfileId(), application.getApplicantUserId(),
                 submission.getPersonSubmissionId(), finishedTime);
             requireChanged(dao.insertBinding(newBinding), "PERSON_REBIND_BINDING_CONFLICT");
             requireChanged(dao.insertBindingEvent(bindingEvent(newBinding, "ACTIVE", 1,
                 submission.getPersonSubmissionId(), "PERSON_REBIND_APPROVED", finishedTime)),
                 "PERSON_REBIND_BINDING_EVENT_CONFLICT");
-
             requireChanged(dao.finishApplication(applicationId, snapshotVersion,
                 intValue(application.getDecisionVersion()), intValue(application.getVersion()), finishedTime),
                 "PERSON_REBIND_DECISION_CONFLICT");
@@ -277,14 +305,65 @@ public class PersonRebindService implements IPersonRebindService {
             throw failure("PERSON_REBIND_PUBLICATION_CONFLICT", exception);
         }
     }
+    /** 处理工作流换绑事件并编排发布、材料快照和事务后通知。 */
 
+    public void handleProcess(PersonRebindProcessCommand command) {
+        if (command == null || configService == null || !expectedFlowCode().equals(command.flowCode())
+            || !"FINISH".equals(normalizeStatus(command.status()))
+            || "REJECT".equals(normalizeDecision(command.decision()))) {
+            return;
+        }
+        Long applicationId = positiveLong(command.businessId());
+        if (applicationId == null) {
+            return;
+        }
+        Integer snapshotVersion = command.snapshotVersion();
+        if (snapshotVersion == null) {
+            snapshotVersion = workflow.persistedSnapshotVersionByInstanceId(command.processInstanceId());
+        }
+        if (snapshotVersion == null) {
+            return;
+        }
+        publishApprovedRebind(applicationId, snapshotVersion,
+            command.finishedTime() == null ? clock.instant() : command.finishedTime()).ifPresent(publication -> {
+                materials.snapshotImmutable(owner(MaterialOwnerType.SUBMISSION, publication.personSubmissionId()),
+                    owner(MaterialOwnerType.VERSION, publication.personVersionId()));
+                if (notifications != null) {
+                    notifications.stage(publication.event());
+                }
+                if (events != null) {
+                    events.publishEvent(publication.event());
+                }
+            });
+    }
+    /** 读取个人换绑流程编码。 */
+    private String expectedFlowCode() {
+        String value = configService.getConfigValue("profile.person.flowCode");
+        return value == null ? "" : value.strip();
+    }
+    /** 规范化工作流状态。 */
+    private String normalizeStatus(String value) {
+        return value == null ? "" : value.strip().toUpperCase(Locale.ROOT);
+    }
+    /** 规范化工作流决定。 */
+    private String normalizeDecision(String value) {
+        return value == null ? "" : value.strip().toUpperCase(Locale.ROOT);
+    }
+    /** 解析正整数业务编号。 */
+    private Long positiveLong(String value) {
+        try {
+            long parsed = Long.parseLong(value);
+            return parsed > 0 ? parsed : null;
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
     /**
      * 查询申请探测状态
      */
     public String probeStatus(String identityKey) {
         return dao.selectProbeStatus(identityKey);
     }
-
     /**
      * 查询精确匹配的候选身份
      */
@@ -293,7 +372,6 @@ public class PersonRebindService implements IPersonRebindService {
             fields.documentNumber(), fields.identityKey(), fields.gender(), fields.birthDate(),
             fields.validFrom(), fields.validUntil()));
     }
-
     /**
      * 锁定未完成申请
      */
@@ -304,7 +382,6 @@ public class PersonRebindService implements IPersonRebindService {
         }
         return application;
     }
-
     /**
      * 校验申请人尚未绑定档案
      */
@@ -313,7 +390,6 @@ public class PersonRebindService implements IPersonRebindService {
             throw failure("PERSON_REBIND_APPLICANT_ALREADY_BOUND");
         }
     }
-
     /**
      * 确认当前业务操作
      */
@@ -325,7 +401,6 @@ public class PersonRebindService implements IPersonRebindService {
         requireChanged(changed, "PERSON_REBIND_VERSION_CONFLICT");
         return expectedVersion + 1;
     }
-
     /**
      * 锁定身份候选记录
      */
@@ -338,7 +413,6 @@ public class PersonRebindService implements IPersonRebindService {
         }
         return locked;
     }
-
     /**
      * 校验候选身份已冻结
      */
@@ -354,7 +428,6 @@ public class PersonRebindService implements IPersonRebindService {
         }
         return candidate;
     }
-
     /**
      * 解除指定绑定关系
      */
@@ -370,21 +443,18 @@ public class PersonRebindService implements IPersonRebindService {
             "SELF_SERVICE", binding.getPersonBindingId(), "PERSON_SELF_UNBOUND", occurredTime)),
             "PERSON_BINDING_EVENT_CONFLICT");
     }
-
     /**
      * 按用户查询未完成申请
      */
     public Optional<PersonApplication> findOpenByUserId(long userId) {
         return Optional.ofNullable(applicationDao.selectOpenByUserId(userId)).map(this::application);
     }
-
     /**
      * 按用户查询当前有效档案编号
      */
     public Long findEffectiveProfileIdByUser(long userId) {
         return applicationDao.selectEffectiveProfileIdByUser(userId);
     }
-
     /**
      * 按用户锁定未完成申请
      */
@@ -395,7 +465,6 @@ public class PersonRebindService implements IPersonRebindService {
         }
         return application(row);
     }
-
     /**
      * 查询证件类型配置
      */
@@ -404,7 +473,6 @@ public class PersonRebindService implements IPersonRebindService {
         return Optional.ofNullable(row).map(value -> new PersonDocumentTypeRule(value.getDocumentTypeCode(),
             value.getNumberPattern(), "Y".equals(value.getValidityRequired())));
     }
-
     /**
      * 新增申请提交记录
      */
@@ -420,7 +488,6 @@ public class PersonRebindService implements IPersonRebindService {
             intValue(row.getSubmissionSeq()), row.getApplicantUserId(), fields(row), row.getProviderCode(),
             row.getSubmittedTime());
     }
-
     /**
      * 标记申请为等待处理
      */
@@ -434,7 +501,6 @@ public class PersonRebindService implements IPersonRebindService {
         }
         return application(row);
     }
-
     /**
      * 校验材料快照已冻结
      */
@@ -446,7 +512,6 @@ public class PersonRebindService implements IPersonRebindService {
             throw failure("PERSON_REBIND_SNAPSHOT_INVALID");
         }
     }
-
     /**
      * 处理same。
      */
@@ -460,7 +525,6 @@ public class PersonRebindService implements IPersonRebindService {
             && Objects.equals(fields.validFrom(), candidate.getValidFrom())
             && Objects.equals(fields.validUntil(), candidate.getValidUntil());
     }
-
     /**
      * 处理same。
      */
@@ -474,7 +538,6 @@ public class PersonRebindService implements IPersonRebindService {
             && Objects.equals(application.getValidFrom(), fields.validFrom())
             && Objects.equals(application.getValidUntil(), fields.validUntil());
     }
-
     /**
      * 处理same。
      */
@@ -488,7 +551,6 @@ public class PersonRebindService implements IPersonRebindService {
             && Objects.equals(application.getValidFrom(), submission.getValidFrom())
             && Objects.equals(application.getValidUntil(), submission.getValidUntil());
     }
-
     /**
      * 处理same。
      */
@@ -502,14 +564,13 @@ public class PersonRebindService implements IPersonRebindService {
             && Objects.equals(submission.getValidFrom(), profile.getValidFrom())
             && Objects.equals(submission.getValidUntil(), profile.getValidUntil());
     }
-
     /**
      * 查询档案版本信息
      */
     private PersonVersionRow version(long profileId, int versionNo, PersonSubmissionRow submission,
                                      Instant finishedTime) {
         PersonVersionRow row = new PersonVersionRow();
-        row.setPersonVersionId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
+        row.setPersonVersionId(org.dromara.common.mybatis.utils.IdGeneratorUtil.nextLongId());
         row.setPersonProfileId(profileId);
         row.setVersionNo(versionNo);
         row.setSourceType("USER_SUBMISSION");
@@ -518,7 +579,6 @@ public class PersonRebindService implements IPersonRebindService {
         copy(row, submission);
         return row;
     }
-
     /**
      * 构造更新后的档案对象
      */
@@ -531,13 +591,12 @@ public class PersonRebindService implements IPersonRebindService {
         copy(row, submission);
         return row;
     }
-
     /**
      * 查询档案绑定信息
      */
     private PersonBindingRow binding(long profileId, long userId, long sourceId, Instant boundTime) {
         PersonBindingRow row = new PersonBindingRow();
-        row.setPersonBindingId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
+        row.setPersonBindingId(org.dromara.common.mybatis.utils.IdGeneratorUtil.nextLongId());
         row.setPersonProfileId(profileId);
         row.setUserId(userId);
         row.setStatus("ACTIVE");
@@ -547,7 +606,6 @@ public class PersonRebindService implements IPersonRebindService {
         row.setBoundTime(boundTime);
         return row;
     }
-
     /**
      * 查询绑定事件记录
      */
@@ -555,7 +613,6 @@ public class PersonRebindService implements IPersonRebindService {
                                                 long sourceId, String reason, Instant occurredTime) {
         return bindingEvent(binding, eventType, bindingVersion, "USER_SUBMISSION", sourceId, reason, occurredTime);
     }
-
     /**
      * 查询绑定事件记录
      */
@@ -563,7 +620,7 @@ public class PersonRebindService implements IPersonRebindService {
                                                 String sourceType, long sourceId, String reason,
                                                 Instant occurredTime) {
         PersonBindingEventRow row = new PersonBindingEventRow();
-        row.setPersonBindingEventId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
+        row.setPersonBindingEventId(org.dromara.common.mybatis.utils.IdGeneratorUtil.nextLongId());
         row.setPersonBindingId(binding.getPersonBindingId());
         row.setPersonProfileId(binding.getPersonProfileId());
         row.setUserId(binding.getUserId());
@@ -575,14 +632,13 @@ public class PersonRebindService implements IPersonRebindService {
         row.setOccurredTime(occurredTime);
         return row;
     }
-
     /**
      * 转换申请提交读模型
      */
     private PersonSubmissionRow submissionRow(PersonApplication application, PersonIdentityFields fields,
                                               int submissionSeq, Instant submittedTime) {
         PersonSubmissionRow row = new PersonSubmissionRow();
-        row.setPersonSubmissionId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
+        row.setPersonSubmissionId(org.dromara.common.mybatis.utils.IdGeneratorUtil.nextLongId());
         row.setPersonApplicationId(application.personApplicationId());
         row.setSubmissionSeq(submissionSeq);
         row.setApplicantUserId(application.applicantUserId());
@@ -591,12 +647,11 @@ public class PersonRebindService implements IPersonRebindService {
         row.setTargetProfileId(application.targetProfileId());
         row.setExpectedBindingId(application.expectedBindingId());
         row.setExpectedBindingVersion(application.expectedBindingVersion());
-        row.setFieldSnapshotJson(jsonMapper.writeValueAsString(fields));
+        row.setFieldSnapshotJson(JsonUtils.toJsonString(fields));
         row.setSubmittedTime(submittedTime);
         copy(row, fields);
         return row;
     }
-
     /**
      * 处理application。
      */
@@ -607,7 +662,6 @@ public class PersonRebindService implements IPersonRebindService {
             row.getExpectedBindingVersion(), intValue(row.getDecisionVersion()), intValue(row.getVersion()),
             row.getSubmittedTime(), row.getFinishedTime());
     }
-
     /**
      * 提取并规范化申请身份字段
      */
@@ -615,7 +669,6 @@ public class PersonRebindService implements IPersonRebindService {
         return new PersonIdentityFields(row.getFullName(), row.getDocumentTypeCode(), row.getDocumentNumber(),
             row.getIdentityKey(), row.getGender(), row.getBirthDate(), row.getValidFrom(), row.getValidUntil());
     }
-
     /**
      * 提取并规范化申请身份字段
      */
@@ -623,7 +676,6 @@ public class PersonRebindService implements IPersonRebindService {
         return new PersonIdentityFields(row.getFullName(), row.getDocumentTypeCode(), row.getDocumentNumber(),
             row.getIdentityKey(), row.getGender(), row.getBirthDate(), row.getValidFrom(), row.getValidUntil());
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -637,7 +689,6 @@ public class PersonRebindService implements IPersonRebindService {
         target.setValidFrom(fields.validFrom());
         target.setValidUntil(fields.validUntil());
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -651,7 +702,6 @@ public class PersonRebindService implements IPersonRebindService {
         target.setValidFrom(source.getValidFrom());
         target.setValidUntil(source.getValidUntil());
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -665,7 +715,6 @@ public class PersonRebindService implements IPersonRebindService {
         target.setValidFrom(source.getValidFrom());
         target.setValidUntil(source.getValidUntil());
     }
-
     /**
      * 校验申请确实发生变更
      */
@@ -674,7 +723,6 @@ public class PersonRebindService implements IPersonRebindService {
             throw failure(category);
         }
     }
-
     /**
      * 安全读取身份信息
      */
@@ -687,7 +735,6 @@ public class PersonRebindService implements IPersonRebindService {
             return null;
         }
     }
-
     /**
      * 校验身份信息完整有效
      */
@@ -700,7 +747,6 @@ public class PersonRebindService implements IPersonRebindService {
             throw failure("PERSON_REBIND_NOT_AVAILABLE");
         }
     }
-
     /**
      * 规范化输入数据
      */
@@ -712,7 +758,6 @@ public class PersonRebindService implements IPersonRebindService {
             command.documentNumber(), command.gender(), command.birthDate(), command.validFrom(),
             command.validUntil(), 0));
     }
-
     /**
      * 校验申请信息完整性
      */
@@ -738,7 +783,6 @@ public class PersonRebindService implements IPersonRebindService {
             throw failure("PERSON_REBIND_IDENTITY_INVALID");
         }
     }
-
     /**
      * 校验认证提供方已启用
      */
@@ -749,7 +793,6 @@ public class PersonRebindService implements IPersonRebindService {
             throw new PersonRebindException("PERSON_PROVIDER_UNAVAILABLE", exception);
         }
     }
-
     /**
      * 启动认证流程并记录尝试
      */
@@ -760,7 +803,6 @@ public class PersonRebindService implements IPersonRebindService {
             throw new PersonRebindException("PERSON_PROVIDER_UNAVAILABLE", exception);
         }
     }
-
     /**
      * 生成脱敏手机号
      */
@@ -772,7 +814,6 @@ public class PersonRebindService implements IPersonRebindService {
         return phone.substring(0, 3) + "*".repeat(phone.length() - 7)
             + phone.substring(phone.length() - 4);
     }
-
     /**
      * 计算身份字段指纹
      */
@@ -785,28 +826,24 @@ public class PersonRebindService implements IPersonRebindService {
             throw new IllegalStateException("SHA-256 unavailable", exception);
         }
     }
-
     /**
      * 解析材料所有者
      */
     private MaterialOwnerKey owner(MaterialOwnerType type, long ownerId) {
         return new MaterialOwnerKey(ProfileType.PERSON, type, ownerId);
     }
-
     /**
      * 处理same。
      */
     private boolean same(PersonIdentityFields first, PersonIdentityFields second) {
         return first.equals(second);
     }
-
     /**
      * 返回不可用状态
      */
     private PersonRebindMatchVo unavailable() {
         return new PersonRebindMatchVo("NOT_AVAILABLE", null);
     }
-
     /**
      * 转换为大写文本
      */
@@ -814,7 +851,6 @@ public class PersonRebindService implements IPersonRebindService {
         String normalized = text(value);
         return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
-
     /**
      * 规范化文本内容
      */
@@ -825,14 +861,12 @@ public class PersonRebindService implements IPersonRebindService {
         String normalized = value.strip();
         return normalized.isEmpty() ? null : normalized;
     }
-
     /**
      * 解析整数值
      */
     private int intValue(Integer value) {
         return value == null ? 0 : value;
     }
-
     /**
      * 校验用户编号有效
      */
@@ -841,19 +875,16 @@ public class PersonRebindService implements IPersonRebindService {
             throw failure("PERSON_USER_INVALID");
         }
     }
-
     /**
      * 构造业务失败异常
      */
     private PersonRebindException failure(String category) {
         return new PersonRebindException(category);
     }
-
     /**
      * 构造业务失败异常
      */
     private PersonRebindException failure(String category, Throwable cause) {
         return new PersonRebindException(category, cause);
     }
-
 }

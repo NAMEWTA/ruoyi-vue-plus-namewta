@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProfileStructureContractTest {
 
     private static final Set<String> CONTROLLER_SURFACES = Set.of("admin", "self", "anonymous");
-    private static final Set<String> RETIRED_LAYER_NAMES = Set.of("dao", "repository", "manager");
+    private static final Set<String> RETIRED_LAYER_NAMES = Set.of("repository", "manager");
     private static final Set<String> STATEMENT_ELEMENTS = Set.of("select", "insert", "update", "delete");
     private static final Set<String> BASE_MAPPER_METHODS = Arrays.stream(BaseMapper.class.getMethods())
         .map(Method::getName)
@@ -41,13 +41,11 @@ class ProfileStructureContractTest {
         "(?m)^\\s*@(?:RestController|Controller)\\b");
     private static final Pattern SA_IGNORE = Pattern.compile("(?m)^\\s*@SaIgnore\\b");
     private static final Pattern PACKAGE = Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;");
-    private static final Pattern SERVICE_INTERFACE = Pattern.compile(
-        "(?m)^(?:public\\s+)?interface\\s+\\w+");
     private static final Pattern MAPPER_INTERFACE = Pattern.compile(
         "\\binterface\\s+(\\w+Mapper)\\s+extends[^\\{]*\\bBaseMapperPlus\\s*<", Pattern.DOTALL);
     private static final Pattern SQL_ANNOTATION = Pattern.compile(
         "@(?:Select|Insert|Update|Delete)(?:Provider)?\\b");
-    private static final Pattern CONCRETE_SERVICE_DEPENDENCY = Pattern.compile(
+    private static final Pattern SERVICE_IMPL_DEPENDENCY = Pattern.compile(
         "\\bprivate\\s+final\\s+\\w+ServiceImpl\\b|import\\s+org\\.dromara\\.profile\\.[^;]+\\.service\\.impl\\.\\w+ServiceImpl;");
     private static final Pattern STRING_CONSTANT = Pattern.compile(
         "(?m)^\\s*(?:(?:public|protected|private|static|final)\\s+)*String\\s+\\w+\\s*=");
@@ -152,24 +150,16 @@ class ProfileStructureContractTest {
     }
 
     @Test
-    void servicePackagesStayOnTheStandardAxisAndSpringTransactionsRemainRetired() throws Exception {
+    void servicesAndDaosStayOnTheLayeredAxisAndSpringTransactionsRemainRetired() throws Exception {
         List<String> violations = new ArrayList<>();
 
         for (ProfileModule module : profileModules()) {
             Path serviceRoot = module.packageRoot().resolve("service");
-            Path implementationRoot = serviceRoot.resolve("impl");
             for (Path source : javaFiles(serviceRoot)) {
                 Path parent = source.getParent().normalize();
-                String content = Files.readString(source);
-
-                if (parent.equals(serviceRoot.normalize())) {
-                    if (!SERVICE_INTERFACE.matcher(content).find()) {
-                        violations.add(display(source)
-                            + " is in service root but is not a Service interface/contract");
-                    }
-                } else if (!parent.equals(implementationRoot.normalize())) {
+                if (!parent.equals(serviceRoot.normalize())) {
                     violations.add(display(source)
-                        + " must be directly under service or service/impl; nested service package is "
+                        + " must be directly under service; nested production service package is "
                         + display(parent));
                 }
             }
@@ -185,21 +175,21 @@ class ProfileStructureContractTest {
                     violations.add(display(source)
                         + " uses the retired *DataSupport forwarding abstraction");
                 }
-                if (fileName.matches(".*(?:Dao|Repository|Manager)\\.java")) {
+                if (fileName.matches(".*(?:Repository|Manager)\\.java")) {
                     violations.add(display(source)
-                        + " uses a retired dao/repository/manager layer type name");
+                        + " uses a retired repository/manager layer type name");
                 }
                 for (Path segment : relative) {
                     if (RETIRED_LAYER_NAMES.contains(segment.toString().toLowerCase())) {
                         violations.add(display(source)
-                            + " is under a retired dao/repository/manager package");
+                            + " is under a retired repository/manager package");
                         break;
                     }
                 }
                 String content = Files.readString(source);
-                if (CONCRETE_SERVICE_DEPENDENCY.matcher(content).find()) {
+                if (SERVICE_IMPL_DEPENDENCY.matcher(content).find()) {
                     violations.add(display(source)
-                        + " depends on a concrete ServiceImpl instead of its service interface");
+                        + " depends on a retired ServiceImpl type");
                 }
                 if (content.contains("org.springframework.transaction.annotation.Transactional")) {
                     violations.add(display(source) + " uses Spring @Transactional instead of @DSTransactional");

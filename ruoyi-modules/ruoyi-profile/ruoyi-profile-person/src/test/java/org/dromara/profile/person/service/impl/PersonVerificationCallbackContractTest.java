@@ -1,5 +1,12 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
+
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
+
 import org.dromara.profile.person.domain.exception.PersonVerificationException;
 import org.dromara.profile.person.domain.verification.PersonApplicationVerificationState;
 import org.dromara.profile.person.domain.verification.PersonProviderAttemptStatus;
@@ -112,7 +119,7 @@ class PersonVerificationCallbackContractTest {
             PersonProviderAttemptStatus.PENDING, null, null, null, null));
         PersonVerificationSecurityAuditRecorder recorder =
             new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(mapperFixture.mapper()));
-        PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
+        PersonVerificationAttemptService coordinator = new PersonVerificationAttemptService(
             new PersonVerificationProviderRegistry(List.of(provider), properties),
             new PersonVerificationAttemptDao(mapperFixture.mapper()),
             mapperFixture.evidenceCodec(), recorder);
@@ -122,7 +129,7 @@ class PersonVerificationCallbackContractTest {
     private record Fixture(
         PersonDeterministicTestProvider provider,
         PersonVerificationMapperFixture mapperFixture,
-        PersonVerificationAttemptCoordinator coordinator
+        PersonVerificationAttemptService coordinator
     ) {
         PersonProviderCallbackEnvelope callback(String payload, Instant timestamp) {
             String requestId = "person-41-1";

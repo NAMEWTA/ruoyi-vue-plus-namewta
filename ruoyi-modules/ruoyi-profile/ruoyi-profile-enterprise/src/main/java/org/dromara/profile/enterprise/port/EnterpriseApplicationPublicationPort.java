@@ -7,7 +7,7 @@ import org.dromara.profile.enterprise.domain.application.EnterpriseSubmission;
 import java.time.Instant;
 import java.util.Optional;
 
-/** EnterpriseApplicationPublicationPort 业务端口合同，隔离外部适配实现。  Narrow application capability consumed by the enterprise administration workflow. */
+/** EnterpriseApplicationPublicationPort 业务端口合同，隔离企业管理流程与外部适配实现。 */
 public interface EnterpriseApplicationPublicationPort {
 
     /**

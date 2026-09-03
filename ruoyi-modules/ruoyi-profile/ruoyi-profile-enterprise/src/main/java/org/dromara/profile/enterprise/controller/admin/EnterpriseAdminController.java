@@ -10,7 +10,6 @@ import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.enterprise.domain.bo.*;
 import org.dromara.profile.enterprise.domain.vo.*;
-import org.dromara.system.api.OssService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
@@ -70,7 +69,7 @@ public class EnterpriseAdminController {
      */
     @GetMapping("/application/{applicationId}/material/{materialRefId}/access-url")
     @SaCheckPermission("profile:enterprise:review")
-    public R<OssService.OssAccessUrl> reviewMaterial(@Positive @PathVariable long applicationId,
+    public R<EnterpriseProfileAccessUrl> reviewMaterial(@Positive @PathVariable long applicationId,
                                                      @Positive @PathVariable long materialRefId) {
         return R.ok(service.reviewMaterial(applicationId, materialRefId));
     }
@@ -80,7 +79,7 @@ public class EnterpriseAdminController {
      */
     @GetMapping("/{profileId}/material/{materialRefId}/access-url")
     @SaCheckPermission("profile:enterprise:material")
-    public R<OssService.OssAccessUrl> material(@Positive @PathVariable long profileId,
+    public R<EnterpriseProfileAccessUrl> material(@Positive @PathVariable long profileId,
                                                @Positive @PathVariable long materialRefId) {
         return R.ok(service.material(profileId, materialRefId));
     }
@@ -94,7 +93,7 @@ public class EnterpriseAdminController {
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseAdminResultVo> decide(@Positive @PathVariable long applicationId,
                                              @Valid @RequestBody EnterpriseAdminDecisionBo command) {
-        return R.ok(service.decide(applicationId, command));
+        return R.ok(service.decide(LoginHelper.getUserId(), applicationId, command));
     }
 
     /**
@@ -105,7 +104,7 @@ public class EnterpriseAdminController {
     @Log(title = "管理员直建企业档案", businessType = BusinessType.INSERT,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseAdminResultVo> create(@Valid @RequestBody EnterpriseAdminCreateBo command) {
-        return R.ok(service.create(command));
+        return R.ok(service.create(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -117,7 +116,7 @@ public class EnterpriseAdminController {
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseAdminResultVo> revise(@Positive @PathVariable long profileId,
                                              @Valid @RequestBody EnterpriseAdminReviseBo command) {
-        return R.ok(service.revise(profileId, command));
+        return R.ok(service.revise(LoginHelper.getUserId(), profileId, command));
     }
 
     /**
@@ -129,7 +128,7 @@ public class EnterpriseAdminController {
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseAdminResultVo> assign(@Positive @PathVariable long profileId,
                                              @Valid @RequestBody EnterpriseAdminAssignBo command) {
-        return R.ok(service.assign(profileId, command));
+        return R.ok(service.assign(LoginHelper.getUserId(), profileId, command));
     }
 
     /**
@@ -141,7 +140,7 @@ public class EnterpriseAdminController {
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseAdminResultVo> manageBinding(@Positive @PathVariable long profileId,
                                                     @Valid @RequestBody EnterpriseAdminBindingBo command) {
-        return R.ok(service.manageBinding(profileId, command));
+        return R.ok(service.manageBinding(LoginHelper.getUserId(), profileId, command));
     }
 
     /**
@@ -153,6 +152,6 @@ public class EnterpriseAdminController {
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseAdminResultVo> revoke(@Positive @PathVariable long profileId,
                                              @Valid @RequestBody EnterpriseAdminRevokeBo command) {
-        return R.ok(service.revoke(profileId, command));
+        return R.ok(service.revoke(LoginHelper.getUserId(), profileId, command));
     }
 }

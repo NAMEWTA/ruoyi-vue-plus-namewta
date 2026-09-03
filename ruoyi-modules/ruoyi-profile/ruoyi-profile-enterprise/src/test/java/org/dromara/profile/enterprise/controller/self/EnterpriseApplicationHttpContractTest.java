@@ -4,7 +4,7 @@ import org.dromara.profile.enterprise.domain.bo.EnterpriseApplicationSaveBo;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseApplicationProbeBo;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationProbeVo;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseApplicationSubmitBo;
-import org.dromara.profile.enterprise.service.impl.EnterpriseApplicationServiceImpl;
+import org.dromara.profile.enterprise.usecase.impl.EnterpriseApplicationUseCaseImpl;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import org.dromara.common.log.annotation.Log;
@@ -54,11 +54,12 @@ class EnterpriseApplicationHttpContractTest {
             .getAnnotation(PostMapping.class).value()).containsExactly("/probe");
         assertThat(EnterpriseApplicationProbeVo.class.getRecordComponents())
             .extracting(component -> component.getName()).containsExactly("status");
-        assertThat(EnterpriseApplicationServiceImpl.class.getMethod("save", long.class, EnterpriseApplicationSaveBo.class)
+        assertThat(EnterpriseApplicationUseCaseImpl.class.getMethod("save", long.class, EnterpriseApplicationSaveBo.class)
             .isAnnotationPresent(DSTransactional.class)).isTrue();
-        assertThat(EnterpriseApplicationServiceImpl.class.getMethod("submit", long.class, int.class)
+        assertThat(EnterpriseApplicationUseCaseImpl.class.getMethod("submit", long.class, int.class)
             .isAnnotationPresent(DSTransactional.class)).isTrue();
-        assertThat(EnterpriseApplicationServiceImpl.class.getMethod("handleProcessEvent",
-            org.dromara.workflow.api.event.ProcessEvent.class).isAnnotationPresent(DSTransactional.class)).isTrue();
+        assertThat(EnterpriseApplicationUseCaseImpl.class.getMethod("handleProcess",
+            org.dromara.profile.enterprise.domain.application.EnterpriseApplicationProcessCommand.class)
+            .isAnnotationPresent(DSTransactional.class)).isTrue();
     }
 }

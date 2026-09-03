@@ -1,20 +1,19 @@
 package org.dromara.profile.enterprise.service;
-
-import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import org.dromara.common.mybatis.utils.IdGeneratorUtil;
 import org.dromara.profile.enterprise.domain.application.EnterpriseDocumentTypeRule;
 import org.dromara.profile.enterprise.domain.application.EnterpriseApplication;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationVo;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseApplicationSaveBo;
 import org.dromara.profile.enterprise.domain.application.EnterpriseDraftUpdate;
 import org.dromara.profile.enterprise.domain.application.EnterpriseIdentityFields;
+import org.dromara.profile.enterprise.domain.application.EnterpriseApplicationProcessCommand;
 import org.dromara.profile.enterprise.domain.bo.EnterpriseApplicationProbeBo;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationProbeVo;
 import org.dromara.profile.enterprise.domain.application.EnterprisePublication;
 import org.dromara.profile.enterprise.domain.application.EnterpriseSubmission;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseApplicationException;
 import org.dromara.profile.enterprise.port.EnterpriseApplicationPublicationPort;
-import org.dromara.profile.enterprise.service.EnterpriseWorkflowGateway;
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+import org.dromara.profile.enterprise.port.gateway.EnterpriseWorkflowGateway;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
@@ -29,15 +28,14 @@ import org.dromara.profile.enterprise.domain.model.read.EnterpriseProfileRow;
 import org.dromara.profile.enterprise.domain.model.read.EnterpriseSubmissionRow;
 import org.dromara.profile.enterprise.domain.model.read.EnterpriseVersionRow;
 import org.dromara.profile.enterprise.dao.EnterpriseApplicationDao;
-import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationProviderRegistry;
+import org.dromara.profile.enterprise.port.provider.EnterpriseVerificationProviderRegistryPort;
+import org.dromara.profile.enterprise.port.verification.EnterpriseVerificationService;
 import org.dromara.system.api.ConfigService;
 import org.dromara.workflow.api.event.ProcessEvent;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.json.JsonMapper;
-
+import org.dromara.common.json.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -51,63 +49,64 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
-
 /**
  * 创建企业申请业务服务。
  */
 @Service
 public class EnterpriseApplicationService implements EnterpriseApplicationPublicationPort {
-
     private static final String DEFAULT_PROVIDER_KEY = "profile.enterprise.provider.default";
     private static final String FLOW_CODE_KEY = "profile.enterprise.flowCode";
     private static final Set<String> EDITABLE_STATUSES = Set.of("DRAFT", "BACK", "CANCEL");
     private static final Set<String> EVENT_STATUSES = Set.of("BACK", "CANCEL", "INVALID", "TERMINATION");
     private static final Pattern CREDIT_CODE = Pattern.compile("[0-9A-Z-]{8,64}");
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
-
     private final EnterpriseApplicationDao dao;
-    private final JsonMapper jsonMapper;
     private final ProfileMaterialPort materials;
-    private final EnterpriseVerificationProviderRegistry providers;
+    private final EnterpriseVerificationProviderRegistryPort providers;
     private final EnterpriseVerificationService attempts;
     private final EnterpriseWorkflowGateway workflow;
     private final ConfigService configService;
     private final Clock clock;
-
     /** 创建企业申请业务服务。 */
     @Autowired
-    public EnterpriseApplicationService(EnterpriseApplicationDao dao, JsonMapper jsonMapper,
+    public EnterpriseApplicationService(EnterpriseApplicationDao dao,
                                     ProfileMaterialPort materials,
-                                    EnterpriseVerificationProviderRegistry providers,
+                                    EnterpriseVerificationProviderRegistryPort providers,
                                     EnterpriseVerificationService attempts,
                                     EnterpriseWorkflowGateway workflow, ConfigService configService) {
-        this(dao, jsonMapper, materials, providers, attempts, workflow, configService, Clock.systemUTC());
+        this(dao, null, materials, providers, attempts, workflow, configService, Clock.systemUTC());
     }
-
     /** 创建可注入时钟的企业申请业务服务，测试场景据此固定时间。 */
-    public EnterpriseApplicationService(EnterpriseApplicationDao dao, JsonMapper jsonMapper,
+    public EnterpriseApplicationService(EnterpriseApplicationDao dao, Object jsonMapper,
                              ProfileMaterialPort materials,
-                             EnterpriseVerificationProviderRegistry providers,
+                             EnterpriseVerificationProviderRegistryPort providers,
                              EnterpriseVerificationService attempts,
                              EnterpriseWorkflowGateway workflow, ConfigService configService, Clock clock) {
         this.dao = dao;
-        this.jsonMapper = jsonMapper;
-        this.materials = materials;
+                this.materials = materials;
         this.providers = providers;
         this.attempts = attempts;
         this.workflow = workflow;
         this.configService = configService;
         this.clock = clock;
     }
-
+    /** 兼容存量测试适配器使用的具体注册表构造方法。 */
+    @Deprecated
+    public EnterpriseApplicationService(EnterpriseApplicationDao dao, Object jsonMapper,
+                             ProfileMaterialPort materials,
+                             org.dromara.profile.enterprise.adapter.provider.EnterpriseVerificationProviderRegistry providers,
+                             EnterpriseVerificationService attempts, EnterpriseWorkflowGateway workflow,
+                             ConfigService configService, Clock clock) {
+        this(dao, jsonMapper, materials, (EnterpriseVerificationProviderRegistryPort) providers,
+            attempts, workflow, configService, clock);
+    }
     /**
      * 查询当前用户的进行中申请
      */
-    public Optional<EnterpriseApplicationVo> current(long userId) {
+    public EnterpriseApplicationVo current(long userId) {
         requireUserId(userId);
-        return findOpenByUserId(userId).map(EnterpriseApplicationVo::from);
+        return findOpenByUserId(userId).map(EnterpriseApplicationVo::from).orElse(null);
     }
-
     /**
      * 校验申请身份并返回探测结果
      */
@@ -121,11 +120,10 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         return new EnterpriseApplicationProbeVo(probeStatus(identityKey));
     }
-
     /**
      * 保存业务申请数据
      */
-    @DSTransactional
+
     public EnterpriseApplicationVo save(long userId, EnterpriseApplicationSaveBo command) {
         requireUserId(userId);
         EnterpriseIdentityFields fields = EnterpriseIdentityFields.normalize(command);
@@ -146,11 +144,10 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             new EnterpriseDraftUpdate(fields, targetProfileId, command.expectedVersion()));
         return EnterpriseApplicationVo.from(saved);
     }
-
     /**
      * 提交申请并启动后续流程
      */
-    @DSTransactional
+
     public EnterpriseApplicationVo submit(long userId, int expectedVersion) {
         requireUserId(userId);
         EnterpriseApplication application = lockOpenByUserId(userId);
@@ -171,7 +168,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             qualifiers.add("HANDLER_NOT_LEGAL_REPRESENTATIVE");
         }
         materials.validateRequired(working, "*", Set.copyOf(qualifiers));
-
         int snapshotVersion = application.submissionSeq() + 1;
         Instant submittedTime = clock.instant();
         EnterpriseSubmission submission = insertSubmission(
@@ -185,23 +181,21 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         workflow.start(application.enterpriseApplicationId(), submission.enterpriseSubmissionId(), snapshotVersion);
         return EnterpriseApplicationVo.from(waiting);
     }
-
     /**
      * 处理工作流状态事件
      */
-    @EventListener
-    @DSTransactional
-    public void handleProcessEvent(ProcessEvent event) {
-        if (event == null || !expectedFlowCode().equals(event.getFlowCode())) {
+
+    public void handleProcess(EnterpriseApplicationProcessCommand command) {
+        if (command == null || !expectedFlowCode().equals(command.flowCode())) {
             return;
         }
-        Long applicationId = positiveLong(event.getBusinessId());
+        Long applicationId = positiveLong(command.businessId());
         if (applicationId == null) {
             return;
         }
-        Integer snapshotVersion = snapshotVersion(event.getParams());
+        Integer snapshotVersion = command.snapshotVersion();
         if (snapshotVersion == null) {
-            snapshotVersion = workflow.persistedSnapshotVersion(event);
+            snapshotVersion = workflow.persistedSnapshotVersionByInstanceId(command.processInstanceId());
         }
         if (snapshotVersion == null) {
             return;
@@ -210,44 +204,76 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         if (application.submissionSeq() != snapshotVersion || !"WAITING".equals(application.status())) {
             return;
         }
-        String status = normalizeStatus(event.getStatus());
+        String status = normalizeStatus(command.status());
         if ("FINISH".equals(status)) {
-            if ("REJECT".equals(normalizeDecision(event.getParams()))) {
+            if ("REJECT".equals(normalizeDecision(command.decision()))) {
                 updateWorkflowStatus(applicationId, snapshotVersion, "INVALID",
-                    application.version(), clock.instant());
+                    application.version(), occurredTime(command.occurredTime()));
                 return;
             }
             EnterpriseSubmission submission = requireSubmission(applicationId, snapshotVersion);
-            EnterprisePublication publication = publishApproved(applicationId, snapshotVersion, clock.instant());
+            EnterprisePublication publication = publishApproved(applicationId, snapshotVersion,
+                occurredTime(command.occurredTime()));
             materials.snapshotImmutable(owner(MaterialOwnerType.SUBMISSION, submission.enterpriseSubmissionId()),
                 owner(MaterialOwnerType.VERSION, publication.enterpriseVersionId()));
         } else if (EVENT_STATUSES.contains(status)) {
             updateWorkflowStatus(applicationId, snapshotVersion, status,
-                application.version(), clock.instant());
+                application.version(), occurredTime(command.occurredTime()));
         }
     }
-
+    /**
+     * 兼容存量事件调用方；新代码应由 Listener 转换后调用 {@link #handleProcess(EnterpriseApplicationProcessCommand)}。
+     *
+     * @param event 原始工作流事件
+     */
+    @Deprecated
+    public void handleProcessEvent(ProcessEvent event) {
+        if (event == null) {
+            return;
+        }
+        Map<String, Object> params = event.getParams();
+        handleProcess(new EnterpriseApplicationProcessCommand(event.getInstanceId(), event.getBusinessId(),
+            event.getFlowCode(), event.getStatus(), decision(params), snapshotVersion(params), clock.instant()));
+    }
+    /** 提取存量事件中的决定字段。 */
+    private String decision(Map<String, Object> params) {
+        Object value = params == null ? null : params.get("profileDecision");
+        return value == null ? "" : value.toString().strip().toUpperCase(Locale.ROOT);
+    }
+    /** 提取存量事件中的快照版本。 */
+    private Integer snapshotVersion(Map<String, Object> params) {
+        Object value = params == null ? null : params.get("snapshotVersion");
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return value == null ? null : Integer.valueOf(value.toString());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+    /** 取得事件时间并提供当前时间兜底。 */
+    private Instant occurredTime(Instant value) {
+        return value == null ? clock.instant() : value;
+    }
     /**
      * 按用户查询未完成申请
      */
     public Optional<EnterpriseApplication> findOpenByUserId(long userId) {
         return Optional.ofNullable(dao.selectOpenByUserId(userId)).map(this::application);
     }
-
     /**
      * 按用户锁定未完成申请
      */
     public EnterpriseApplication lockOpenByUserId(long userId) {
         return requireApplication(dao.lockOpenByUserId(userId));
     }
-
     /**
      * 按编号锁定申请记录
      */
     public EnterpriseApplication lockById(long applicationId) {
         return requireApplication(dao.lockApplicationById(applicationId));
     }
-
     /**
      * 查询证件类型配置
      */
@@ -257,28 +283,24 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         return Optional.ofNullable(row).map(value -> new EnterpriseDocumentTypeRule(value.getDocumentTypeCode(),
             value.getNumberPattern(), "Y".equals(value.getValidityRequired())));
     }
-
     /**
      * 按身份查询生效档案编号
      */
     public Long findActiveProfileIdByIdentity(String identityKey) {
         return identityKey == null ? null : dao.selectActiveProfileIdByIdentity(identityKey);
     }
-
     /**
      * 按用户查询当前有效档案编号
      */
     public Long findEffectiveProfileIdByUser(long userId) {
         return dao.selectEffectiveProfileIdByUser(userId);
     }
-
     /**
      * 查询申请探测状态
      */
     public String probeStatus(String identityKey) {
         return dao.selectProbeStatus(identityKey);
     }
-
     /**
      * 保存申请草稿
      */
@@ -289,7 +311,7 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
                 if (update.expectedVersion() != 0) {
                     throw failure("ENTERPRISE_APPLICATION_VERSION_CONFLICT");
                 }
-                EnterpriseApplicationRow inserted = draftRow(IdWorker.getId(), userId, providerCode, update);
+                EnterpriseApplicationRow inserted = draftRow(IdGeneratorUtil.nextLongId(), userId, providerCode, update);
                 requireChanged(dao.insertApplication(inserted), "ENTERPRISE_APPLICATION_CREATE_CONFLICT");
             } else {
                 if (!editable(current.getStatus()) || intValue(current.getVersion()) != update.expectedVersion()) {
@@ -305,7 +327,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         return requireApplication(dao.selectOpenByUserId(userId));
     }
-
     /**
      * 校验申请允许提交
      */
@@ -328,7 +349,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw failure("ENTERPRISE_IDENTITY_CONFLICT");
         }
     }
-
     /**
      * 新增申请提交记录
      */
@@ -342,7 +362,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         return submission(row);
     }
-
     /**
      * 校验并获取提交记录
      */
@@ -354,7 +373,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         return submission(row);
     }
-
     /**
      * 标记申请为等待处理
      */
@@ -364,12 +382,11 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             "ENTERPRISE_APPLICATION_VERSION_CONFLICT");
         return requireApplication(dao.lockApplicationById(applicationId));
     }
-
     /**
      * 发布已审核通过的档案
      */
     @Override
-    @DSTransactional
+
     public EnterprisePublication publishApproved(long applicationId, int snapshotVersion, Instant finishedTime) {
         EnterpriseApplicationRow application = dao.lockApplicationById(applicationId);
         if (application == null || !"WAITING".equals(application.getStatus())
@@ -380,7 +397,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         if (submission == null) {
             throw failure("ENTERPRISE_SUBMISSION_NOT_FOUND");
         }
-
         try {
             PublicationTarget target = publicationTarget(application.getApplicantUserId(), submission);
             EnterpriseVersionRow currentVersion = dao.selectCurrentVersionForUpdate(
@@ -390,7 +406,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
                 requireChanged(dao.supersedeVersion(currentVersion.getEnterpriseVersionId()),
                     "ENTERPRISE_PROFILE_VERSION_CONFLICT");
             }
-
             EnterpriseVersionRow version = versionRow(target.profile().getEnterpriseProfileId(), nextVersion,
                 submission, finishedTime);
             requireChanged(dao.insertVersion(version), "ENTERPRISE_PROFILE_VERSION_CONFLICT");
@@ -398,13 +413,11 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
                 target.profile().getPreviousProfileId(), version.getEnterpriseVersionId(), submission,
                 target.profile().getVersion());
             requireChanged(dao.updateProfile(updatedProfile), "ENTERPRISE_PROFILE_VERSION_CONFLICT");
-
             EnterpriseBindingRow binding = bindingRow(target.profile().getEnterpriseProfileId(),
                 application.getApplicantUserId(), submission.getEnterpriseSubmissionId(), finishedTime);
             requireChanged(dao.insertBinding(binding), "ENTERPRISE_BINDING_CONFLICT");
             requireChanged(dao.insertBindingEvent(bindingEvent(binding, submission.getEnterpriseSubmissionId(),
                 finishedTime)), "ENTERPRISE_BINDING_EVENT_CONFLICT");
-
             requireChanged(dao.finishApplication(applicationId, snapshotVersion,
                 intValue(application.getDecisionVersion()), intValue(application.getVersion()), finishedTime),
                 "ENTERPRISE_APPLICATION_DECISION_CONFLICT");
@@ -414,7 +427,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw failure("ENTERPRISE_PUBLICATION_CONFLICT", exception);
         }
     }
-
     /**
      * 更新workflowstatus。
      */
@@ -423,7 +435,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         requireChanged(dao.updateWorkflowStatus(applicationId, snapshotVersion, status,
             expectedVersion, occurredTime), "ENTERPRISE_APPLICATION_DECISION_CONFLICT");
     }
-
     /**
      * 解析发布目标
      */
@@ -441,15 +452,13 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         if (profile != null) {
             return new PublicationTarget(profile, false);
         }
-
         EnterpriseProfileRow revoked = dao.lockLatestRevokedProfileByIdentity(submission.getIdentityKey());
-        long profileId = IdWorker.getId();
+        long profileId = IdGeneratorUtil.nextLongId();
         EnterpriseProfileRow created = profileRow(profileId,
             revoked == null ? null : revoked.getEnterpriseProfileId(), null, submission, 0);
         requireChanged(dao.insertProfile(created), "ENTERPRISE_IDENTITY_CONFLICT");
         return new PublicationTarget(created, revoked != null);
     }
-
     /**
      * 转换申请草稿读模型
      */
@@ -463,25 +472,23 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         copy(row, update.fields());
         return row;
     }
-
     /**
      * 转换申请提交读模型
      */
     private EnterpriseSubmissionRow submissionRow(EnterpriseApplication application, EnterpriseIdentityFields fields,
                                                   int submissionSeq, Instant submittedTime) {
         EnterpriseSubmissionRow row = new EnterpriseSubmissionRow();
-        row.setEnterpriseSubmissionId(IdWorker.getId());
+        row.setEnterpriseSubmissionId(IdGeneratorUtil.nextLongId());
         row.setEnterpriseApplicationId(application.enterpriseApplicationId());
         row.setSubmissionSeq(submissionSeq);
         row.setApplicantUserId(application.applicantUserId());
         row.setProviderCode(application.providerCode());
         row.setTargetProfileId(application.targetProfileId());
-        row.setFieldSnapshotJson(jsonMapper.writeValueAsString(fields));
+        row.setFieldSnapshotJson(JsonUtils.toJsonString(fields));
         row.setSubmittedTime(submittedTime);
         copy(row, fields);
         return row;
     }
-
     /**
      * 转换档案读模型
      */
@@ -496,14 +503,13 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         copy(row, submission);
         return row;
     }
-
     /**
      * 转换档案版本读模型
      */
     private EnterpriseVersionRow versionRow(long profileId, int versionNo, EnterpriseSubmissionRow submission,
                                             Instant publishedTime) {
         EnterpriseVersionRow row = new EnterpriseVersionRow();
-        row.setEnterpriseVersionId(IdWorker.getId());
+        row.setEnterpriseVersionId(IdGeneratorUtil.nextLongId());
         row.setEnterpriseProfileId(profileId);
         row.setVersionNo(versionNo);
         row.setSourceType("USER_SUBMISSION");
@@ -513,13 +519,12 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         copy(row, submission);
         return row;
     }
-
     /**
      * 转换绑定读模型
      */
     private EnterpriseBindingRow bindingRow(long profileId, long userId, long sourceId, Instant boundTime) {
         EnterpriseBindingRow row = new EnterpriseBindingRow();
-        row.setEnterpriseBindingId(IdWorker.getId());
+        row.setEnterpriseBindingId(IdGeneratorUtil.nextLongId());
         row.setEnterpriseProfileId(profileId);
         row.setUserId(userId);
         row.setStatus("ACTIVE");
@@ -529,13 +534,12 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         row.setBoundTime(boundTime);
         return row;
     }
-
     /**
      * 查询绑定事件记录
      */
     private EnterpriseBindingEventRow bindingEvent(EnterpriseBindingRow binding, long sourceId, Instant occurredTime) {
         EnterpriseBindingEventRow row = new EnterpriseBindingEventRow();
-        row.setEnterpriseBindingEventId(IdWorker.getId());
+        row.setEnterpriseBindingEventId(IdGeneratorUtil.nextLongId());
         row.setEnterpriseBindingId(binding.getEnterpriseBindingId());
         row.setEnterpriseProfileId(binding.getEnterpriseProfileId());
         row.setUserId(binding.getUserId());
@@ -547,7 +551,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         row.setOccurredTime(occurredTime);
         return row;
     }
-
     /**
      * 处理application。
      */
@@ -557,7 +560,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             intValue(row.getSubmissionSeq()), intValue(row.getDecisionVersion()), intValue(row.getVersion()),
             row.getSubmittedTime(), row.getFinishedTime());
     }
-
     /**
      * 组装申请提交数据
      */
@@ -566,7 +568,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             intValue(row.getSubmissionSeq()), row.getApplicantUserId(), fields(row), row.getProviderCode(),
             row.getSubmittedTime());
     }
-
     /**
      * 提取并规范化申请身份字段
      */
@@ -578,7 +579,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             row.getRegisteredAddress(), row.getBusinessScope(), row.getContactName(), row.getContactPhone(),
             row.getEmail(), row.getRegisteredCapital(), row.getIndustryCode(), row.getWebsite());
     }
-
     /**
      * 提取并规范化申请身份字段
      */
@@ -590,7 +590,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             row.getRegisteredAddress(), row.getBusinessScope(), row.getContactName(), row.getContactPhone(),
             row.getEmail(), row.getRegisteredCapital(), row.getIndustryCode(), row.getWebsite());
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -605,7 +604,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         target.setHandlerIsLegalRepresentative(fields.handlerIsLegalRepresentative() ? "Y" : "N");
         copyOptional(target, fields);
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -620,7 +618,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         target.setHandlerIsLegalRepresentative(fields.handlerIsLegalRepresentative() ? "Y" : "N");
         copyOptional(target, fields);
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -633,7 +630,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         target.setLegalDocumentNumber(source.getLegalDocumentNumber());
         copyOptional(target, source);
     }
-
     /**
      * 复制领域数据并替换指定字段
      */
@@ -646,7 +642,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         target.setLegalDocumentNumber(source.getLegalDocumentNumber());
         copyOptional(target, source);
     }
-
     /**
      * 复制可选字段值
      */
@@ -663,7 +658,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         target.setIndustryCode(fields.industryCode());
         target.setWebsite(fields.website());
     }
-
     /**
      * 复制可选字段值
      */
@@ -680,7 +674,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         target.setIndustryCode(fields.industryCode());
         target.setWebsite(fields.website());
     }
-
     /**
      * 复制可选字段值
      */
@@ -697,7 +690,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         target.setIndustryCode(source.getIndustryCode());
         target.setWebsite(source.getWebsite());
     }
-
     /**
      * 复制可选字段值
      */
@@ -714,7 +706,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         target.setIndustryCode(source.getIndustryCode());
         target.setWebsite(source.getWebsite());
     }
-
     /**
      * 校验并获取申请记录
      */
@@ -724,7 +715,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         return application(row);
     }
-
     /**
      * 校验申请确实发生变更
      */
@@ -733,42 +723,35 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw failure(category);
         }
     }
-
     /**
      * 判断申请是否允许编辑
      */
     private boolean editable(String status) {
         return "DRAFT".equals(status) || "BACK".equals(status) || "CANCEL".equals(status);
     }
-
     /**
      * 解析整数值
      */
     private int intValue(Integer value) {
         return value == null ? 0 : value;
     }
-
     /**
      * 构造业务失败异常
      */
     private EnterpriseApplicationException failure(String category, Throwable cause) {
         return new EnterpriseApplicationException(category, cause);
     }
-
     /**
      * 承载PublicationTarget业务规则的领域服务。
      */
     private record PublicationTarget(EnterpriseProfileRow profile, boolean successor) {
     }
-
     /**
      * 规范化审核决定
      */
-    private String normalizeDecision(Map<String, Object> params) {
-        Object value = params == null ? null : params.get("profileDecision");
-        return value == null ? "" : value.toString().strip().toUpperCase(Locale.ROOT);
+    private String normalizeDecision(String value) {
+        return value == null ? "" : value.strip().toUpperCase(Locale.ROOT);
     }
-
     /**
      * 校验申请草稿字段
      */
@@ -798,7 +781,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         validateDates(fields, false);
     }
-
     /**
      * 校验申请信息完整性
      */
@@ -816,7 +798,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         validateDates(fields, true);
     }
-
     /**
      * 校验日期范围
      */
@@ -834,7 +815,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw failure("ENTERPRISE_BUSINESS_TERM_EXPIRED");
         }
     }
-
     /**
      * 解析证件类型校验规则
      */
@@ -842,7 +822,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         return findDocumentType(documentTypeCode)
             .orElseThrow(() -> failure("ENTERPRISE_DOCUMENT_TYPE_UNAVAILABLE"));
     }
-
     /**
      * 解析默认认证提供方
      */
@@ -853,7 +832,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         return providerCode.strip();
     }
-
     /**
      * 校验认证提供方已启用
      */
@@ -864,7 +842,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw new EnterpriseApplicationException("ENTERPRISE_PROVIDER_UNAVAILABLE", exception);
         }
     }
-
     /**
      * 启动认证流程并记录尝试
      */
@@ -875,7 +852,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw new EnterpriseApplicationException("ENTERPRISE_PROVIDER_UNAVAILABLE", exception);
         }
     }
-
     /**
      * 处理expectedflowcode。
      */
@@ -883,7 +859,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         String flowCode = configService.getConfigValue(FLOW_CODE_KEY);
         return flowCode == null ? "" : flowCode.strip();
     }
-
     /**
      * 计算身份字段指纹
      */
@@ -896,7 +871,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw new IllegalStateException("SHA-256 unavailable", exception);
         }
     }
-
     /**
      * 规范化统一社会信用代码
      */
@@ -906,32 +880,15 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
         }
         return value.strip().toUpperCase(Locale.ROOT);
     }
-
     /**
      * 解析材料所有者
      */
     private MaterialOwnerKey owner(MaterialOwnerType type, long ownerId) {
         return new MaterialOwnerKey(ProfileType.ENTERPRISE, type, ownerId);
     }
-
     /**
      * 生成档案版本快照
      */
-    private Integer snapshotVersion(Map<String, Object> params) {
-        if (params == null) {
-            return null;
-        }
-        Object value = params.get("snapshotVersion");
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        try {
-            return value == null ? null : Integer.valueOf(value.toString());
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
     /**
      * 校验正数长整型编号
      */
@@ -943,28 +900,24 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             return null;
         }
     }
-
     /**
      * 校验正数档案编号
      */
     private Long positiveId(Long value) {
         return value != null && value > 0 ? value : null;
     }
-
     /**
      * 规范化业务状态
      */
     private String normalizeStatus(String status) {
         return status == null ? "" : status.strip().toUpperCase(java.util.Locale.ROOT);
     }
-
     /**
      * 校验文本长度
      */
     private int length(String value) {
         return value == null ? 0 : value.length();
     }
-
     /**
      * 校验用户编号有效
      */
@@ -973,7 +926,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw failure("ENTERPRISE_USER_INVALID");
         }
     }
-
     /**
      * 构造业务失败异常
      */

@@ -1,5 +1,9 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+
 import org.dromara.profile.person.domain.exception.PersonRebindException;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
 import org.dromara.profile.person.mapper.PersonRebindMapper;
@@ -9,7 +13,7 @@ import org.dromara.profile.person.domain.application.PersonApplication;
 import org.dromara.profile.person.domain.bo.PersonApplicationSaveBo;
 import org.dromara.profile.person.domain.application.PersonIdentityFields;
 import org.dromara.profile.person.domain.application.PersonSubmission;
-import org.dromara.profile.person.service.PersonWorkflowGateway;
+import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
 import org.dromara.profile.person.domain.model.read.PersonApplicationRow;
 import org.dromara.profile.person.domain.model.read.PersonDocumentTypeRow;
 import org.dromara.profile.person.domain.bo.PersonRebindConfirmBo;
@@ -48,7 +52,7 @@ class PersonRebindServiceTest {
     private final PersonApplicationMapper applicationMapper = mock(PersonApplicationMapper.class);
     private final ProfileMaterialPort materials = mock(ProfileMaterialPort.class);
     private final PersonVerificationProviderRegistry providers = mock(PersonVerificationProviderRegistry.class);
-    private final PersonVerificationAttemptCoordinator attempts = mock(PersonVerificationAttemptCoordinator.class);
+    private final PersonVerificationAttemptService attempts = mock(PersonVerificationAttemptService.class);
     private final PersonWorkflowGateway workflow = mock(PersonWorkflowGateway.class);
     private final UserService users = mock(UserService.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC);

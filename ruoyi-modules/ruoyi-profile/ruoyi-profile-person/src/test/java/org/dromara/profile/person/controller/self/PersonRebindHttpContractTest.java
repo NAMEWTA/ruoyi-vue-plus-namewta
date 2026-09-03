@@ -55,10 +55,11 @@ class PersonRebindHttpContractTest {
     }
 
     @Test
-    void finalPublicationRunsBeforeTheOrdinaryPersonListener() throws Exception {
+    void listenerDelegatesBeforeTheOrdinaryPersonListener() throws Exception {
         Method handle = PersonRebindProcessListener.class.getMethod("handle",
             org.dromara.workflow.api.event.ProcessEvent.class);
-        assertThat(handle.isAnnotationPresent(DSTransactional.class)).isTrue();
+        assertThat(handle.isAnnotationPresent(DSTransactional.class)).isFalse();
+        assertThat(handle.isAnnotationPresent(org.springframework.context.event.EventListener.class)).isTrue();
         assertThat(handle.getAnnotation(Order.class).value()).isEqualTo(Ordered.HIGHEST_PRECEDENCE);
     }
 }

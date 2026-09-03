@@ -1,5 +1,13 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationSecurityAuditRecorder;
+
+import org.dromara.profile.enterprise.adapter.codec.EnterpriseVerificationEvidenceCodec;
+
+import org.dromara.profile.enterprise.service.EnterpriseVerificationAttemptService;
+
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseVerificationProviderRegistry;
+
 import org.dromara.profile.enterprise.controller.advice.EnterpriseVerificationCallbackExceptionHandler;
 import org.dromara.profile.enterprise.controller.anonymous.EnterpriseVerificationAnonymousController;
 import org.dromara.profile.enterprise.usecase.impl.EnterpriseVerificationUseCaseImpl;
@@ -56,7 +64,7 @@ class EnterpriseVerificationMySqlE2ETest {
                 new EnterpriseDeterministicTestProvider("enterprise-mysql-e2e-secret");
             EnterpriseVerificationProviderProperties properties = new EnterpriseVerificationProviderProperties();
             properties.setEnabledProviders(Set.of("test-provider"));
-            EnterpriseVerificationAttemptCoordinator coordinator = new EnterpriseVerificationAttemptCoordinator(
+            EnterpriseVerificationAttemptService coordinator = new EnterpriseVerificationAttemptService(
                 new EnterpriseVerificationProviderRegistry(List.of(provider), properties),
                 new EnterpriseVerificationAttemptDao(mapper),
                 codec,

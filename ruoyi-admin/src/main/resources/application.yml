@@ -40,9 +40,9 @@ nacos:
       dev: ${NACOS_CONFIG_NAMESPACE_DEV:dev}
       prod: ${NACOS_CONFIG_NAMESPACE_PROD:prod}
 
-# OpenAPI 机器调用网关。默认关闭；KEK 只能由部署密钥系统注入。
+# OpenAPI 机器调用网关。默认开启；KEK 只能由部署密钥系统注入。
 openapi:
-  enabled: ${OPENAPI_ENABLED:false}
+  enabled: ${OPENAPI_ENABLED:true}
   clock-skew: ${OPENAPI_CLOCK_SKEW:60s}
   nonce-ttl: ${OPENAPI_NONCE_TTL:60s}
   app-rate-limit-per-minute: ${OPENAPI_APP_RATE_LIMIT_PER_MINUTE:1000}

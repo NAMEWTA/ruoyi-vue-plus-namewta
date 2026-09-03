@@ -37,7 +37,7 @@ public class EnterpriseApplicationController {
     @GetMapping
     @SaCheckPermission("profile:enterprise:apply")
     public R<EnterpriseApplicationVo> current() {
-        return R.ok(service.current());
+        return R.ok(service.current(LoginHelper.getUserId()));
     }
 
     /**
@@ -48,7 +48,7 @@ public class EnterpriseApplicationController {
     @Log(title = "保存企业实名认证申请", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseApplicationVo> save(@Valid @RequestBody EnterpriseApplicationSaveBo command) {
-        return R.ok(service.save(command));
+        return R.ok(service.save(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -59,7 +59,7 @@ public class EnterpriseApplicationController {
     @Log(title = "提交企业实名认证申请", businessType = BusinessType.OTHER,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<EnterpriseApplicationVo> submit(@Valid @RequestBody EnterpriseApplicationSubmitBo command) {
-        return R.ok(service.submit(command.expectedVersion()));
+        return R.ok(service.submit(LoginHelper.getUserId(), command.expectedVersion()));
     }
 
     /**

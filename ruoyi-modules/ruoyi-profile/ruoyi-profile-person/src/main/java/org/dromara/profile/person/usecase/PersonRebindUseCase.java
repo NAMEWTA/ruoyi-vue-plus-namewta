@@ -1,6 +1,7 @@
 package org.dromara.profile.person.usecase;
 
 import org.dromara.profile.person.domain.application.PersonRebindPublication;
+import org.dromara.profile.person.domain.application.PersonRebindProcessCommand;
 import org.dromara.profile.person.domain.bo.*;
 import org.dromara.profile.person.domain.vo.*;
 
@@ -12,6 +13,19 @@ import java.util.Optional;
  */
 public interface PersonRebindUseCase {
 
+    /** @deprecated 新入口必须显式传入操作者编号。 */
+    @Deprecated
+    default PersonRebindMatchVo match(PersonRebindMatchBo command) { throw new UnsupportedOperationException("请传入 userId"); }
+    /** @deprecated 新入口必须显式传入操作者编号。 */
+    @Deprecated
+    default PersonRebindConfirmationVo confirm(PersonRebindConfirmBo command) { throw new UnsupportedOperationException("请传入 userId"); }
+    /** @deprecated 新入口必须显式传入操作者编号。 */
+    @Deprecated
+    default PersonRebindSubmissionVo submit(PersonRebindSubmitBo command) { throw new UnsupportedOperationException("请传入 userId"); }
+    /** @deprecated 新入口必须显式传入操作者编号。 */
+    @Deprecated
+    default PersonRebindUnbindVo unbind() { throw new UnsupportedOperationException("请传入 userId"); }
+
     /**
      * 编排 probe 应用用例。
      */
@@ -19,21 +33,26 @@ public interface PersonRebindUseCase {
     /**
      * 编排 match 应用用例。
      */
-    PersonRebindMatchVo match(PersonRebindMatchBo command);
+    default PersonRebindMatchVo match(long userId, PersonRebindMatchBo command) { return match(command); }
     /**
      * 编排 confirm 应用用例。
      */
-    PersonRebindConfirmationVo confirm(PersonRebindConfirmBo command);
+    default PersonRebindConfirmationVo confirm(long userId, PersonRebindConfirmBo command) { return confirm(command); }
     /**
      * 编排 submit 应用用例。
      */
-    PersonRebindSubmissionVo submit(PersonRebindSubmitBo command);
+    default PersonRebindSubmissionVo submit(long userId, PersonRebindSubmitBo command) { return submit(command); }
     /**
      * 编排 unbind 应用用例。
      */
-    PersonRebindUnbindVo unbind();
+    default PersonRebindUnbindVo unbind(long userId) { return unbind(); }
     /**
      * 编排 publishApproved 应用用例。
      */
     Optional<PersonRebindPublication> publishApproved(long applicationId, int snapshotVersion, Instant finishedTime);
+
+    /** 接收工作流事件并编排换绑发布。 */
+    default void handleProcess(PersonRebindProcessCommand command) {
+        throw new UnsupportedOperationException("旧适配器不支持工作流事件入口");
+    }
 }

@@ -1,5 +1,14 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
+
+import org.dromara.profile.person.adapter.codec.PersonVerificationEvidenceCodec;
+
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+import org.dromara.profile.person.service.impl.PersonVerificationSecurityAuditRecorder;
+
 import org.dromara.profile.person.controller.anonymous.PersonVerificationCallbackExceptionHandler;
 import org.dromara.profile.person.controller.anonymous.PersonVerificationAnonymousController;
 import org.dromara.profile.person.usecase.impl.PersonVerificationUseCaseImpl;
@@ -56,7 +65,7 @@ class PersonVerificationMySqlE2ETest {
                 new PersonDeterministicTestProvider("person-mysql-e2e-secret");
             PersonVerificationProviderProperties properties = new PersonVerificationProviderProperties();
             properties.setEnabledProviders(Set.of("test-provider"));
-            PersonVerificationAttemptCoordinator coordinator = new PersonVerificationAttemptCoordinator(
+            PersonVerificationAttemptService coordinator = new PersonVerificationAttemptService(
                 new PersonVerificationProviderRegistry(List.of(provider), properties),
                 new PersonVerificationAttemptDao(mapper), evidenceCodec,
                 new PersonVerificationSecurityAuditRecorder(new PersonVerificationAttemptDao(mapper)));

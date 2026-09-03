@@ -1,9 +1,18 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.service.impl.EnterpriseVerificationSecurityAuditRecorder;
+
+import org.dromara.profile.enterprise.adapter.codec.EnterpriseVerificationEvidenceCodec;
+
+import org.dromara.profile.enterprise.service.EnterpriseVerificationAttemptService;
+
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseVerificationProviderRegistry;
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseManualVerificationProvider;
+
 import org.dromara.profile.enterprise.controller.advice.EnterpriseApplicationExceptionHandler;
 import org.dromara.profile.enterprise.controller.self.EnterpriseApplicationController;
 import org.dromara.profile.enterprise.domain.exception.EnterpriseApplicationException;
-import org.dromara.profile.enterprise.service.EnterpriseWorkflowGateway;
+import org.dromara.profile.enterprise.port.gateway.EnterpriseWorkflowGateway;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -216,7 +225,7 @@ class EnterpriseApplicationMySqlE2ETest {
         properties.setEnabledProviders(java.util.Set.of("manual"));
         EnterpriseVerificationProviderRegistry providers = new EnterpriseVerificationProviderRegistry(
             List.of(new EnterpriseManualVerificationProvider()), properties);
-        EnterpriseVerificationAttemptCoordinator attempts = new EnterpriseVerificationAttemptCoordinator(
+        EnterpriseVerificationAttemptService attempts = new EnterpriseVerificationAttemptService(
             providers, new EnterpriseVerificationAttemptDao(attemptMapper), evidenceCodec,
             new EnterpriseVerificationSecurityAuditRecorder(new EnterpriseVerificationAttemptDao(attemptMapper)));
         ConfigService config = mock(ConfigService.class);

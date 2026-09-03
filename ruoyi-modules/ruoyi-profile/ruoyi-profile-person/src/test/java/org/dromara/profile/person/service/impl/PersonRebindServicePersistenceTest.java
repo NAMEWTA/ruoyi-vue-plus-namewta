@@ -1,10 +1,14 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.person.domain.application.PersonRebindPublication;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
 import org.dromara.profile.person.mapper.PersonRebindMapper;
-import org.dromara.profile.person.service.PersonWorkflowGateway;
+import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
 import org.dromara.profile.person.domain.model.read.PersonApplicationRow;
 import org.dromara.profile.person.domain.model.read.PersonBindingEventRow;
 import org.dromara.profile.person.domain.model.read.PersonBindingRow;
@@ -37,7 +41,7 @@ class PersonRebindServicePersistenceTest {
     private final Instant now = Instant.parse("2026-09-01T12:00:00Z");
     private final PersonRebindServiceImpl service = new PersonRebindServiceImpl(
         mapper, mock(PersonApplicationMapper.class), JsonMapper.builder().build(), mock(ProfileMaterialPort.class),
-        mock(PersonVerificationProviderRegistry.class), mock(PersonVerificationAttemptCoordinator.class),
+        mock(PersonVerificationProviderRegistry.class), mock(PersonVerificationAttemptService.class),
         mock(PersonWorkflowGateway.class), mock(UserService.class),
         java.time.Clock.fixed(now, java.time.ZoneOffset.UTC));
 

@@ -1,5 +1,4 @@
 package org.dromara.profile.person.service;
-
 import org.dromara.profile.person.domain.exception.ProfileMaterialException;
 import org.dromara.profile.person.domain.material.MaterialNode;
 import org.dromara.profile.person.domain.material.MaterialOwner;
@@ -8,19 +7,24 @@ import org.dromara.profile.person.domain.material.MaterialRequirement;
 import org.dromara.profile.person.domain.model.read.MaterialNodeRow;
 import org.dromara.profile.person.domain.model.read.MaterialReferenceRow;
 import org.dromara.profile.person.dao.ProfileMaterialDao;
-import org.dromara.profile.person.service.IProfileMaterialService;
-import org.dromara.profile.person.service.ProfileMaterialAccessPolicy;
-import com.baomidou.mybatisplus.core.toolkit.IdWorker;
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+import org.dromara.profile.person.port.security.ProfileMaterialAccessPolicy;
+import org.dromara.common.mybatis.utils.IdGeneratorUtil;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialOwnerContributor;
 import org.dromara.profile.api.material.ProfileMaterialOwnerContributor.ResolvedMaterialOwner;
 import org.dromara.profile.api.material.ProfileMaterialOwnerContributor.SnapshotRelationship;
+import org.dromara.profile.api.material.ProfileMaterialPort.MaterialAttachCommand;
+import org.dromara.profile.api.material.ProfileMaterialPort.MaterialNodeCommand;
+import org.dromara.profile.api.material.ProfileMaterialPort.MaterialNodeType;
+import org.dromara.profile.api.material.ProfileMaterialPort.MaterialNodeView;
+import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey;
+import org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerType;
+import org.dromara.profile.api.material.ProfileMaterialPort.MaterialReferenceView;
+import org.dromara.profile.api.material.ProfileMaterialPort.MaterialScope;
 import org.dromara.system.api.OssService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -34,13 +38,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
 /**
  * 创建档案材料业务服务。
  */
 @Service
-public class ProfileMaterialService implements IProfileMaterialService {
-
+public class ProfileMaterialService {
     static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
     static final int MAX_FILE_COUNT = 10;
     private static final String REFERENCE_TABLE = "profile_material_ref";
@@ -49,13 +51,11 @@ public class ProfileMaterialService implements IProfileMaterialService {
         ".jpeg", Set.of("image/jpeg"),
         ".png", Set.of("image/png"),
         ".pdf", Set.of("application/pdf"));
-
     private final ProfileMaterialDao dao;
     private final OssService ossService;
     private final ProfileMaterialAccessPolicy accessPolicy;
     private final Map<ProfileType, ProfileMaterialOwnerContributor> ownerContributors;
     private final Clock clock;
-
     /** 创建档案材料业务服务。 */
     @Autowired
     public ProfileMaterialService(ProfileMaterialDao dao, OssService ossService,
@@ -63,7 +63,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
                                       List<ProfileMaterialOwnerContributor> ownerContributors) {
         this(dao, ossService, accessPolicy, ownerContributors, Clock.systemUTC());
     }
-
     /** 创建可注入时钟的档案材料业务服务，测试场景据此固定时间。 */
     public ProfileMaterialService(ProfileMaterialDao dao, OssService ossService,
                                ProfileMaterialAccessPolicy accessPolicy,
@@ -76,11 +75,9 @@ public class ProfileMaterialService implements IProfileMaterialService {
             ProfileMaterialOwnerContributor::profileType, Function.identity()));
         this.clock = clock;
     }
-
     /**
      * 查询材料目录树
      */
-    @Override
     public List<MaterialNodeView> tree(MaterialScope scope, boolean includeDisabled) {
         Objects.requireNonNull(scope, "scope");
         if (includeDisabled) {
@@ -88,23 +85,19 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return buildTree(nodes(scope, includeDisabled));
     }
-
     /**
      * 创建材料节点
      */
-    @Override
-    @DSTransactional
+
     public MaterialNodeView createNode(MaterialNodeCommand command) {
         accessPolicy.requireCatalogManage();
         Shape shape = shape(command, null);
-        return view(insertNode(IdWorker.getId(), command, shape.depth()), List.of());
+        return view(insertNode(IdGeneratorUtil.nextLongId(), command, shape.depth()), List.of());
     }
-
     /**
      * 更新node。
      */
-    @Override
-    @DSTransactional
+
     public MaterialNodeView updateNode(Long materialNodeId, MaterialNodeCommand command) {
         accessPolicy.requireCatalogManage();
         MaterialNode current = requireNodeForUpdate(materialNodeId);
@@ -112,12 +105,10 @@ public class ProfileMaterialService implements IProfileMaterialService {
         Shape shape = shape(command, current);
         return view(updateNode(materialNodeId, command, shape.depth()), List.of());
     }
-
     /**
      * 变更材料节点状态
      */
-    @Override
-    @DSTransactional
+
     public void changeStatus(Long materialNodeId, boolean enabled, int expectedVersion) {
         accessPolicy.requireCatalogManage();
         MaterialNode current = requireNodeForUpdate(materialNodeId);
@@ -129,12 +120,10 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         changeNodeStatus(materialNodeId, enabled, expectedVersion);
     }
-
     /**
      * 归档材料节点
      */
-    @Override
-    @DSTransactional
+
     public void archiveNode(Long materialNodeId, int expectedVersion) {
         accessPolicy.requireCatalogManage();
         MaterialNode current = requireNodeForUpdate(materialNodeId);
@@ -146,12 +135,10 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         archiveMaterialNode(materialNodeId, expectedVersion);
     }
-
     /**
      * 关联材料到业务对象
      */
-    @Override
-    @DSTransactional
+
     public MaterialReferenceView attach(MaterialAttachCommand command) {
         MaterialOwner owner = lockOwner(command.owner());
         MaterialOwnerType ownerType = command.owner().ownerType();
@@ -176,7 +163,7 @@ public class ProfileMaterialService implements IProfileMaterialService {
         /**
          * 规范化文件 MIME 类型
          */
-        MaterialReference reference = new MaterialReference(IdWorker.getId(), command.owner(), command.ossId(),
+        MaterialReference reference = new MaterialReference(IdGeneratorUtil.nextLongId(), command.owner(), command.ossId(),
             tag.materialNodeId(), tag.materialTagCode(), tag.nodeName(), metadata.fileName(), metadata.fileSize(),
             extension, normalizeMime(metadata.contentType()), true,
             ownerType == MaterialOwnerType.SOURCE, now, null, 0);
@@ -185,12 +172,10 @@ public class ProfileMaterialService implements IProfileMaterialService {
             Set.of(), Set.of(inserted.ossId()));
         return view(inserted);
     }
-
     /**
      * 解除业务对象与材料的关联
      */
-    @Override
-    @DSTransactional
+
     public void detach(MaterialOwnerKey ownerKey, Long materialRefId) {
         MaterialOwner owner = lockOwner(ownerKey);
         accessPolicy.requireWrite(owner);
@@ -210,23 +195,19 @@ public class ProfileMaterialService implements IProfileMaterialService {
         ossService.reconcileReferences(REFERENCE_TABLE, String.valueOf(materialRefId),
             Set.of(reference.ossId()), Set.of());
     }
-
     /**
      * 查询材料列表
      */
-    @Override
-    @DSTransactional
+
     public List<MaterialReferenceView> list(MaterialOwnerKey ownerKey) {
         MaterialOwner owner = lockOwner(ownerKey);
         accessPolicy.requireRead(owner);
         return references(ownerKey).stream().map(this::view).toList();
     }
-
     /**
      * 生成材料访问地址
      */
-    @Override
-    @DSTransactional
+
     public OssService.OssAccessUrl accessUrl(MaterialOwnerKey ownerKey, Long materialRefId) {
         MaterialOwner owner = lockOwner(ownerKey);
         accessPolicy.requireRead(owner);
@@ -237,12 +218,17 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return ossService.resolveAccessUrl(reference.ossId());
     }
-
+    /** 查询材料访问地址并转换为 Profile HTTP 输出。 */
+    public org.dromara.profile.person.domain.vo.PersonProfileAccessUrl accessUrlView(MaterialOwnerKey ownerKey,
+                                                                                  Long materialRefId) {
+        OssService.OssAccessUrl value = accessUrl(ownerKey, materialRefId);
+        return value == null ? null : new org.dromara.profile.person.domain.vo.PersonProfileAccessUrl(
+            value.accessType(), value.url(), value.expiresAt(), value.fileName());
+    }
     /**
      * 校验必需材料是否齐全
      */
-    @Override
-    @DSTransactional
+
     public void validateRequired(MaterialOwnerKey ownerKey, String documentTypeCode, Set<String> conditions) {
         MaterialOwner owner = lockOwner(ownerKey);
         accessPolicy.requireRead(owner);
@@ -256,12 +242,10 @@ public class ProfileMaterialService implements IProfileMaterialService {
             }
         }
     }
-
     /**
      * 冻结材料快照数据
      */
-    @Override
-    @DSTransactional
+
     public List<MaterialReferenceView> snapshotImmutable(MaterialOwnerKey source, MaterialOwnerKey target) {
         if (source.profileType() != target.profileType() || !validSnapshotTransition(source, target)) {
             throw failure("MATERIAL_SNAPSHOT_OWNER_INVALID");
@@ -286,7 +270,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             return view(reference);
         }).toList();
     }
-
     /**
      * 校验快照状态转换是否合法
      */
@@ -298,7 +281,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             || (source.ownerType() == MaterialOwnerType.SOURCE
             && target.ownerType() == MaterialOwnerType.VERSION);
     }
-
     /**
      * 锁定材料所有者记录
      */
@@ -307,7 +289,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             .orElseThrow(() -> failure("MATERIAL_OWNER_NOT_FOUND"));
         return new MaterialOwner(resolved.owner(), resolved.applicantUserId());
     }
-
     /**
      * 校验档案处于可编辑状态
      */
@@ -316,7 +297,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             throw failure("MATERIAL_OWNER_READ_ONLY");
         }
     }
-
     /**
      * 解析对应类型的材料所有者处理器
      */
@@ -327,7 +307,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return contributor;
     }
-
     /**
      * 校验并计算材料节点结构
      */
@@ -370,7 +349,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return new Shape(depth);
     }
-
     /**
      * 保护系统内置材料编码
      */
@@ -387,7 +365,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             throw failure("SYSTEM_MATERIAL_TAG_PROTECTED");
         }
     }
-
     /**
      * 校验材料标签适用范围
      */
@@ -399,7 +376,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             throw failure("MATERIAL_TAG_NOT_APPLICABLE");
         }
     }
-
     /**
      * 校验材料元数据
      */
@@ -416,7 +392,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return originalExtension;
     }
-
     /**
      * 处理extension。
      */
@@ -425,7 +400,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         int index = value.lastIndexOf('.');
         return index < 0 ? "" : normalizeExtension(value.substring(index));
     }
-
     /**
      * 规范化文件扩展名
      */
@@ -433,35 +407,30 @@ public class ProfileMaterialService implements IProfileMaterialService {
         String value = requireText(extension, "fileSuffix").toLowerCase(Locale.ROOT);
         return value.startsWith(".") ? value : "." + value;
     }
-
     /**
      * 规范化文件 MIME 类型
      */
     private String normalizeMime(String mime) {
         return requireText(mime, "contentType").toLowerCase(Locale.ROOT);
     }
-
     /**
      * 查询材料节点
      */
     private List<MaterialNode> nodes(MaterialScope scope, boolean includeDisabled) {
         return dao.selectNodes(scope.name(), includeDisabled).stream().map(this::node).toList();
     }
-
     /**
      * 校验并获取材料节点
      */
     private MaterialNode requireNode(Long materialNodeId) {
         return requireNode(dao.selectNode(requirePositive(materialNodeId, "materialNodeId")));
     }
-
     /**
      * 校验并获取待更新材料节点
      */
     private MaterialNode requireNodeForUpdate(Long materialNodeId) {
         return requireNode(dao.lockNode(requirePositive(materialNodeId, "materialNodeId")));
     }
-
     /**
      * 新增材料节点记录
      */
@@ -475,7 +444,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return requireNode(materialNodeId);
     }
-
     /**
      * 更新node。
      */
@@ -489,42 +457,36 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return requireNode(materialNodeId);
     }
-
     /**
      * 统计材料节点的子节点数量
      */
     private long countChildren(Long materialNodeId) {
         return dao.countChildren(materialNodeId);
     }
-
     /**
      * 统计材料引用数量
      */
     private long countReferences(Long materialNodeId) {
         return dao.countReferences(materialNodeId);
     }
-
     /**
      * 变更材料节点状态
      */
     private void changeNodeStatus(Long materialNodeId, boolean enabled, int expectedVersion) {
         requireChanged(dao.updateStatus(materialNodeId, enabled ? "0" : "1", expectedVersion));
     }
-
     /**
      * 归档材料节点及其关联数据
      */
     private void archiveMaterialNode(Long materialNodeId, int expectedVersion) {
         requireChanged(dao.archiveNode(materialNodeId, expectedVersion));
     }
-
     /**
      * 统计已关联材料数量
      */
     private long countAttached(MaterialOwnerKey owner) {
         return dao.countAttached(owner.profileType().name(), owner.ownerType().name(), owner.ownerId());
     }
-
     /**
      * 新增材料引用记录
      */
@@ -536,7 +498,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             throw failure("MATERIAL_ALREADY_ATTACHED", exception);
         }
     }
-
     /**
      * 校验并获取材料引用
      */
@@ -547,14 +508,12 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return reference(row);
     }
-
     /**
      * 解除材料引用关系
      */
     private void detachReference(Long materialRefId, Instant detachedTime) {
         requireChanged(dao.detachReference(materialRefId, detachedTime));
     }
-
     /**
      * 查询材料引用记录
      */
@@ -562,7 +521,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         return dao.selectReferences(owner.profileType().name(), owner.ownerType().name(), owner.ownerId())
             .stream().map(this::reference).toList();
     }
-
     /**
      * 处理requirements。
      */
@@ -571,7 +529,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         return dao.selectRequirements(profileType.name(), documentTypeCode, conditions).stream()
             .map(row -> new MaterialRequirement(row.materialTagCode(), row.minimumCount())).toList();
     }
-
     /**
      * 统计标签下的材料数量
      */
@@ -581,21 +538,19 @@ public class ProfileMaterialService implements IProfileMaterialService {
             .forEach(row -> counts.put(row.materialTagCode(), row.materialCount()));
         return Map.copyOf(counts);
     }
-
     /**
      * 新增不可变材料副本
      */
     private List<MaterialReference> insertImmutableCopies(MaterialOwnerKey source, MaterialOwnerKey target,
                                                            Instant attachedTime) {
         return references(source).stream().filter(MaterialReference::attached).map(existing -> {
-            MaterialReference copy = new MaterialReference(IdWorker.getId(), target, existing.ossId(),
+            MaterialReference copy = new MaterialReference(IdGeneratorUtil.nextLongId(), target, existing.ossId(),
                 existing.materialNodeId(), existing.materialTagCode(), existing.materialTagName(),
                 existing.fileName(), existing.fileSize(), existing.fileExtension(), existing.mimeType(),
                 true, true, attachedTime, null, 0);
             return insertReference(copy);
         }).toList();
     }
-
     /**
      * 组装材料节点数据
      */
@@ -604,7 +559,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             row.nodeDepth(), MaterialScope.valueOf(row.profileType()), row.materialTagCode(), row.nodeName(),
             "Y".equals(row.systemRequired()), "0".equals(row.status()), row.orderNum(), row.version());
     }
-
     /**
      * 校验并获取材料节点
      */
@@ -614,7 +568,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return node(row);
     }
-
     /**
      * 组装材料引用数据
      */
@@ -626,7 +579,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             row.mimeType(), "ATTACHED".equals(row.status()), "Y".equals(row.immutableFlag()),
             row.attachedTime(), row.detachedTime(), row.version());
     }
-
     /**
      * 转换持久化读模型
      */
@@ -638,7 +590,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             reference.attached() ? "ATTACHED" : "DETACHED", reference.immutableEvidence() ? "Y" : "N",
             reference.attachedTime(), reference.detachedTime(), reference.version());
     }
-
     /**
      * 校验编号为正数
      */
@@ -648,7 +599,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return value;
     }
-
     /**
      * 校验申请确实发生变更
      */
@@ -657,7 +607,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             throw failure("MATERIAL_VERSION_CONFLICT");
         }
     }
-
     /**
      * 构建材料目录树
      */
@@ -669,7 +618,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         children.values().forEach(list -> list.sort(order));
         return children.getOrDefault(0L, List.of()).stream().map(node -> treeView(node, children)).toList();
     }
-
     /**
      * 转换材料目录树视图
      */
@@ -677,7 +625,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         return view(node, children.getOrDefault(node.materialNodeId(), List.of()).stream()
             .map(child -> treeView(child, children)).toList());
     }
-
     /**
      * 转换为对外视图对象
      */
@@ -686,7 +633,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             node.scope(), node.materialTagCode(), node.nodeName(), node.systemRequired(), node.enabled(),
             node.orderNum(), node.version(), children);
     }
-
     /**
      * 转换为对外视图对象
      */
@@ -696,7 +642,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             reference.fileSize(), reference.fileExtension(), reference.mimeType(), reference.attached(),
             reference.immutableEvidence(), reference.attachedTime(), reference.detachedTime(), reference.version());
     }
-
     /**
      * 校验材料属于同一所有者
      */
@@ -705,7 +650,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
             throw failure("MATERIAL_NOT_FOUND");
         }
     }
-
     /**
      * 校验文本非空
      */
@@ -715,14 +659,12 @@ public class ProfileMaterialService implements IProfileMaterialService {
         }
         return value.strip();
     }
-
     /**
      * 构造业务失败异常
      */
     private ProfileMaterialException failure(String category) {
         return new ProfileMaterialException(category);
     }
-
     /**
      * 构造业务失败异常
      */
@@ -731,7 +673,6 @@ public class ProfileMaterialService implements IProfileMaterialService {
         exception.initCause(cause);
         return exception;
     }
-
     /**
      * 承载Shape业务规则的领域服务。
      */

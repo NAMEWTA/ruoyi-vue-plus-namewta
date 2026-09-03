@@ -12,7 +12,6 @@ import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.person.domain.bo.*;
 import org.dromara.profile.person.domain.vo.*;
-import org.dromara.system.api.OssService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -70,7 +69,7 @@ public class PersonAdminController {
      */
     @GetMapping("/application/{applicationId}/material/{materialRefId}/access-url")
     @SaCheckPermission("profile:person:review")
-    public R<OssService.OssAccessUrl> reviewMaterial(@PathVariable long applicationId,
+    public R<PersonProfileAccessUrl> reviewMaterial(@PathVariable long applicationId,
                                                      @PathVariable long materialRefId) {
         return R.ok(service.reviewMaterial(applicationId, materialRefId));
     }
@@ -80,7 +79,7 @@ public class PersonAdminController {
      */
     @GetMapping("/{profileId}/material/{materialRefId}/access-url")
     @SaCheckPermission("profile:person:material")
-    public R<OssService.OssAccessUrl> material(@PathVariable long profileId, @PathVariable long materialRefId) {
+    public R<PersonProfileAccessUrl> material(@PathVariable long profileId, @PathVariable long materialRefId) {
         return R.ok(service.material(profileId, materialRefId));
     }
 
@@ -92,7 +91,7 @@ public class PersonAdminController {
     @Log(title = "个人档案管理员决定", businessType = BusinessType.OTHER,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonAdminResultVo> decide(@PathVariable long applicationId, @Valid @RequestBody PersonAdminDecisionBo command) {
-        return R.ok(service.decide(applicationId, command));
+        return R.ok(service.decide(LoginHelper.getUserId(), applicationId, command));
     }
 
     /**
@@ -103,7 +102,7 @@ public class PersonAdminController {
     @Log(title = "管理员直建个人档案", businessType = BusinessType.INSERT,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonAdminResultVo> create(@Valid @RequestBody PersonAdminCreateBo command) {
-        return R.ok(service.create(command));
+        return R.ok(service.create(LoginHelper.getUserId(), command));
     }
 
     /**
@@ -114,7 +113,7 @@ public class PersonAdminController {
     @Log(title = "管理员修订个人档案", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonAdminResultVo> revise(@PathVariable long profileId, @Valid @RequestBody PersonAdminReviseBo command) {
-        return R.ok(service.revise(profileId, command));
+        return R.ok(service.revise(LoginHelper.getUserId(), profileId, command));
     }
 
     /**
@@ -125,7 +124,7 @@ public class PersonAdminController {
     @Log(title = "管理员指定个人档案账户", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonAdminResultVo> assign(@PathVariable long profileId, @Valid @RequestBody PersonAdminAssignBo command) {
-        return R.ok(service.assign(profileId, command));
+        return R.ok(service.assign(LoginHelper.getUserId(), profileId, command));
     }
 
     /**
@@ -136,7 +135,7 @@ public class PersonAdminController {
     @Log(title = "个人档案绑定处置", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonAdminResultVo> manageBinding(@PathVariable long profileId, @Valid @RequestBody PersonAdminBindingBo command) {
-        return R.ok(service.manageBinding(profileId, command));
+        return R.ok(service.manageBinding(LoginHelper.getUserId(), profileId, command));
     }
 
     /**
@@ -147,6 +146,6 @@ public class PersonAdminController {
     @Log(title = "注销个人档案", businessType = BusinessType.UPDATE,
         isSaveRequestData = false, isSaveResponseData = false)
     public R<PersonAdminResultVo> revoke(@PathVariable long profileId, @Valid @RequestBody PersonAdminRevokeBo command) {
-        return R.ok(service.revoke(profileId, command));
+        return R.ok(service.revoke(LoginHelper.getUserId(), profileId, command));
     }
 }

@@ -1,5 +1,11 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.service.PersonRebindNotificationService;
+
+import org.dromara.profile.person.service.PersonVerificationAttemptService;
+
+import org.dromara.profile.person.adapter.provider.PersonVerificationProviderRegistry;
+
 import org.dromara.profile.person.controller.self.PersonRebindExceptionHandler;
 import org.dromara.profile.person.controller.self.PersonRebindController;
 import org.dromara.profile.person.domain.exception.PersonRebindException;
@@ -17,7 +23,7 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.api.material.ProfileMaterialPort;
-import org.dromara.profile.person.service.PersonWorkflowGateway;
+import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
 import org.dromara.profile.person.mapper.PersonNotificationAuditMapper;
 import org.dromara.profile.person.dao.PersonNotificationAuditDao;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
@@ -159,7 +165,7 @@ class PersonRebindMySqlE2ETest {
             PersonRebindServiceImpl service = new PersonRebindServiceImpl(
                 session.getMapper(PersonRebindMapper.class), session.getMapper(PersonApplicationMapper.class),
                 JsonMapper.builder().build(), mock(ProfileMaterialPort.class),
-                mock(PersonVerificationProviderRegistry.class), mock(PersonVerificationAttemptCoordinator.class),
+                mock(PersonVerificationProviderRegistry.class), mock(PersonVerificationAttemptService.class),
                 mock(PersonWorkflowGateway.class), mock(UserService.class), Clock.fixed(NOW, ZoneOffset.UTC));
 
             assertThatThrownBy(() -> service.publishApprovedRebind(971000000301L, 1, NOW))
@@ -185,16 +191,10 @@ class PersonRebindMySqlE2ETest {
         PersonRebindMapper rebinds = session.getMapper(PersonRebindMapper.class);
         ProfileMaterialPort materials = mock(ProfileMaterialPort.class);
         PersonVerificationProviderRegistry providers = mock(PersonVerificationProviderRegistry.class);
-        PersonVerificationAttemptCoordinator attempts = mock(PersonVerificationAttemptCoordinator.class);
+        PersonVerificationAttemptService attempts = mock(PersonVerificationAttemptService.class);
         RecordingWorkflow workflow = new RecordingWorkflow();
         UserService users = mock(UserService.class);
         when(users.selectPhonenumberById(970000000201L)).thenReturn("13800138000");
-        PersonRebindServiceImpl service = new PersonRebindServiceImpl(rebinds, applications,
-            JsonMapper.builder().build(), materials, providers, attempts, workflow, users,
-            Clock.fixed(NOW, ZoneOffset.UTC));
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new PersonRebindController(service))
-            .setControllerAdvice(new PersonRebindExceptionHandler()).build();
-
         ConfigService config = mock(ConfigService.class);
         when(config.getConfigValue("profile.person.flowCode")).thenReturn("profile_person_verification");
         ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
@@ -205,8 +205,12 @@ class PersonRebindMySqlE2ETest {
         PersonRebindNotificationService notifications = new PersonRebindNotificationService(
             new PersonNotificationAuditDao(session.getMapper(PersonNotificationAuditMapper.class)),
             messages, users, notifyClient);
-        PersonRebindProcessListener listener = new PersonRebindProcessListener(service, materials, workflow,
-            config, notifications, events);
+        PersonRebindServiceImpl service = new PersonRebindServiceImpl(rebinds, applications,
+            JsonMapper.builder().build(), materials, providers, attempts, workflow, users,
+            Clock.fixed(NOW, ZoneOffset.UTC), config, notifications, events);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new PersonRebindController(service))
+            .setControllerAdvice(new PersonRebindExceptionHandler()).build();
+        PersonRebindProcessListener listener = new PersonRebindProcessListener(service);
         return new Fixture(service, listener, notifications, events, mvc);
     }
 

@@ -63,6 +63,18 @@ class ProfileSchemaMySqlIntegrationTest {
             assertEquals("2", scalar(dataSource,
                 "select count(*) from flow_node where node_code in ('person_review','enterprise_review')"
                     + " and permission_flag='role:1761300000000000001' and form_custom='Y'"));
+            assertEquals("6", scalar(dataSource,
+                "select count(*) from flow_node where definition_id in (2100600000000000001,2100600000000000002)"
+                    + " and coordinate in ('100,100|100,100','300,100|300,100','500,100|500,100')"));
+            assertEquals("0", scalar(dataSource,
+                "select count(*) from flow_node where definition_id in (2100600000000000001,2100600000000000002)"
+                    + " and coordinate in ('100,100','300,100','500,100')"));
+            assertEquals("4", scalar(dataSource,
+                "select count(*) from flow_skip where definition_id in (2100600000000000001,2100600000000000002)"
+                    + " and coordinate in ('120,100;250,100','350,100;480,100')"));
+            assertEquals("0", scalar(dataSource,
+                "select count(*) from flow_skip where definition_id in (2100600000000000001,2100600000000000002)"
+                    + " and coordinate in ('200,100','400,100')"));
 
             assertIdentityGuard(dataSource);
             assertApplicationGuard(dataSource);

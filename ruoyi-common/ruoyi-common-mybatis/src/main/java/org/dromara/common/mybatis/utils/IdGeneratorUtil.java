@@ -17,7 +17,26 @@ public final class IdGeneratorUtil {
     /**
      * MyBatis-Plus 主键生成器。
      */
-    private static final IdentifierGenerator GENERATOR = SpringUtils.getBean(IdentifierGenerator.class);
+    private static volatile IdentifierGenerator GENERATOR;
+
+    /**
+     * 生成主键数值；应用上下文不可用时使用 MyBatis-Plus 默认雪花算法。
+     *
+     * @param entity 参与生成的实体
+     * @return 主键数值
+     */
+    private static Number generate(Object entity) {
+        IdentifierGenerator generator = GENERATOR;
+        if (generator == null) {
+            try {
+                generator = SpringUtils.getBean(IdentifierGenerator.class);
+                GENERATOR = generator;
+            } catch (RuntimeException ignored) {
+                return IdWorker.getId();
+            }
+        }
+        return generator.nextId(entity);
+    }
 
     /**
      * 生成字符串类型主键 ID
@@ -28,7 +47,7 @@ public final class IdGeneratorUtil {
      * @return 字符串格式主键 ID
      */
     public static String nextId() {
-        return GENERATOR.nextId(null).toString();
+        return generate(null).toString();
     }
 
     /**
@@ -40,7 +59,7 @@ public final class IdGeneratorUtil {
      * @return Long 类型主键 ID
      */
     public static Long nextLongId() {
-        return GENERATOR.nextId(null).longValue();
+        return generate(null).longValue();
     }
 
     /**
@@ -52,7 +71,7 @@ public final class IdGeneratorUtil {
      * @return Number 类型主键 ID
      */
     public static Number nextNumberId() {
-        return GENERATOR.nextId(null);
+        return generate(null);
     }
 
     /**
@@ -65,7 +84,7 @@ public final class IdGeneratorUtil {
      * @return Number 类型主键 ID
      */
     public static Number nextId(Object entity) {
-        return GENERATOR.nextId(entity);
+        return generate(entity);
     }
 
     /**
@@ -78,7 +97,7 @@ public final class IdGeneratorUtil {
      * @return 字符串格式主键 ID
      */
     public static String nextStringId(Object entity) {
-        return GENERATOR.nextId(entity).toString();
+        return generate(entity).toString();
     }
 
     /**
@@ -103,7 +122,16 @@ public final class IdGeneratorUtil {
      * @return 32 位 UUID 字符串
      */
     public static String nextUUID(Object entity) {
-        return GENERATOR.nextUUID(entity);
+        IdentifierGenerator generator = GENERATOR;
+        if (generator == null) {
+            try {
+                generator = SpringUtils.getBean(IdentifierGenerator.class);
+                GENERATOR = generator;
+            } catch (RuntimeException ignored) {
+                return IdWorker.get32UUID();
+            }
+        }
+        return generator.nextUUID(entity);
     }
 
     /**

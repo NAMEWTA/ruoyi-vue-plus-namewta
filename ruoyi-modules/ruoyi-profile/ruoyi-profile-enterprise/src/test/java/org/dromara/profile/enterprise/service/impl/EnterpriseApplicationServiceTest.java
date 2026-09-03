@@ -1,5 +1,9 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.service.EnterpriseVerificationAttemptService;
+
+import org.dromara.profile.enterprise.adapter.provider.EnterpriseVerificationProviderRegistry;
+
 import org.dromara.profile.enterprise.domain.application.EnterpriseDocumentTypeRule;
 import org.dromara.profile.enterprise.domain.application.EnterpriseApplication;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationVo;
@@ -10,7 +14,7 @@ import org.dromara.profile.enterprise.domain.bo.EnterpriseApplicationProbeBo;
 import org.dromara.profile.enterprise.domain.vo.EnterpriseApplicationProbeVo;
 import org.dromara.profile.enterprise.domain.application.EnterprisePublication;
 import org.dromara.profile.enterprise.domain.application.EnterpriseSubmission;
-import org.dromara.profile.enterprise.service.EnterpriseWorkflowGateway;
+import org.dromara.profile.enterprise.port.gateway.EnterpriseWorkflowGateway;
 import org.dromara.profile.enterprise.mapper.EnterpriseApplicationMapper;
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.api.material.ProfileMaterialPort;
@@ -52,7 +56,7 @@ class EnterpriseApplicationServiceTest {
     private final EnterpriseApplicationMapper mapper = mock(EnterpriseApplicationMapper.class);
     private final ProfileMaterialPort materials = mock(ProfileMaterialPort.class);
     private final EnterpriseVerificationProviderRegistry providers = mock(EnterpriseVerificationProviderRegistry.class);
-    private final EnterpriseVerificationAttemptCoordinator attempts = mock(EnterpriseVerificationAttemptCoordinator.class);
+    private final EnterpriseVerificationAttemptService attempts = mock(EnterpriseVerificationAttemptService.class);
     private final EnterpriseWorkflowGateway workflow = mock(EnterpriseWorkflowGateway.class);
     private final ConfigService config = mock(ConfigService.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC);

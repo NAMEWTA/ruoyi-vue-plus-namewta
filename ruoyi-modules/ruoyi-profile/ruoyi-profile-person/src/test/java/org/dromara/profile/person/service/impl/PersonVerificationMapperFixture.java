@@ -1,5 +1,7 @@
 package org.dromara.profile.person.service.impl;
 
+import org.dromara.profile.person.adapter.codec.PersonVerificationEvidenceCodec;
+
 import org.dromara.profile.person.domain.verification.PersonApplicationVerificationState;
 import org.dromara.profile.person.domain.verification.PersonProviderAttemptStatus;
 import org.dromara.profile.person.domain.verification.PersonVerificationAttempt;

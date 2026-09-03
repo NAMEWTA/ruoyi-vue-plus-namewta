@@ -1,5 +1,10 @@
 package org.dromara.profile.enterprise.service.impl;
 
+import org.dromara.profile.enterprise.adapter.api.EnterpriseProfileProjectionContributor;
+import org.dromara.profile.enterprise.service.EnterpriseProfileApiService;
+import org.dromara.profile.enterprise.usecase.impl.EnterpriseProfileApiUseCaseImpl;
+import org.dromara.profile.enterprise.adapter.api.EnterpriseProfileProjectionContributor;
+
 import org.dromara.profile.api.domain.ProfileType;
 import org.dromara.profile.enterprise.domain.model.read.EnterpriseActiveProjectionRow;
 import org.dromara.profile.enterprise.mapper.EnterpriseApplicationMapper;
@@ -28,7 +33,7 @@ class EnterpriseProfileProjectionContributorTest {
         when(mapper.selectActiveProjections(Set.of(101L, 102L))).thenReturn(List.of(row));
 
         EnterpriseProfileProjectionContributor contributor = new EnterpriseProfileProjectionContributor(
-            new EnterpriseApplicationDao(mapper));
+            new EnterpriseProfileApiUseCaseImpl(new EnterpriseProfileApiService(new EnterpriseApplicationDao(mapper))));
 
         assertThat(contributor.profileType()).isEqualTo(ProfileType.ENTERPRISE);
         assertThat(contributor.findActiveBindings(Set.of(101L, 102L))).containsOnlyKeys(101L);

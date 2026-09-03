@@ -1,8 +1,6 @@
 package org.dromara.profile.enterprise.service;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
 /**
  * 企业侧材料能力服务适配器，转发统一的材料目录和关联操作。
  *
@@ -11,9 +9,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class EnterpriseMaterialService {
-
     private final org.dromara.profile.api.material.ProfileMaterialPort materials;
-
     /**
      * 查询材料目录树
      */
@@ -67,6 +63,13 @@ public class EnterpriseMaterialService {
     public org.dromara.system.api.OssService.OssAccessUrl accessUrl(
         org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey owner, Long materialRefId) {
         return materials.accessUrl(owner, materialRefId);
+    }
+    /** 查询材料访问地址并转换为企业 Profile HTTP 输出。 */
+    public org.dromara.profile.enterprise.domain.vo.EnterpriseProfileAccessUrl accessUrlView(
+        org.dromara.profile.api.material.ProfileMaterialPort.MaterialOwnerKey owner, Long materialRefId) {
+        org.dromara.system.api.OssService.OssAccessUrl value = accessUrl(owner, materialRefId);
+        return value == null ? null : new org.dromara.profile.enterprise.domain.vo.EnterpriseProfileAccessUrl(
+            value.accessType(), value.url(), value.expiresAt(), value.fileName());
     }
     /**
      * 校验必需材料是否齐全
