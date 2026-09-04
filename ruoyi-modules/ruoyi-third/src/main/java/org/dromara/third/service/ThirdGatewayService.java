@@ -6,6 +6,10 @@ import org.dromara.third.api.ThirdPartyFailureCategory;
 import org.dromara.third.api.ThirdPartyGateway;
 import org.dromara.third.api.ThirdPartyRequest;
 import org.dromara.third.api.ThirdPartyResponse;
+import org.dromara.third.domain.ThirdCredential;
+import org.dromara.third.mapper.ThirdCredentialMapper;
+import org.dromara.third.mapper.ThirdEndpointMapper;
+import org.dromara.third.mapper.ThirdProviderMapper;
 import org.dromara.third.http.ThirdHttpClientFactory;
 import org.dromara.third.spi.ThirdAdapterRequest;
 import org.dromara.third.spi.ThirdAdapterResponse;
@@ -37,6 +41,8 @@ public class ThirdGatewayService implements ThirdPartyGateway {
     private final ThirdProviderAdapterRegistry adapterRegistry;
     private final ThirdResiliencePolicy resiliencePolicy;
     private final ThirdInvocationRecorder invocationRecorder;
+    private final ThirdCredentialMapper credentialMapper;
+    private final ThirdCredentialCrypto credentialCrypto;
     private final ThirdHttpClientFactory clientFactory = new ThirdHttpClientFactory();
 
     @Override
@@ -74,8 +80,11 @@ public class ThirdGatewayService implements ThirdPartyGateway {
         }
         try {
             String path = expandPath(snapshot.getEndpoint().getRelativePath(), request.path());
+            validateDeclaredValues(snapshot.getEndpoint().getQuerySchemaJson(), request.query());
+            validateBody(snapshot.getEndpoint().getBodySchemaJson(), request.body());
             Map<String, String> headers = declaredHeaders(snapshot.getEndpoint().getHeaderSchemaJson(), request.headers());
             mergeSharedHeaders(headers, snapshot.getProvider().getSharedHeadersJson());
+            mergeCredentialHeaders(headers, snapshot);
             ThirdAdapterRequest prepared = new ThirdAdapterRequest(request, snapshot, headers, request.body());
             ThirdProviderAdapter adapter = adapterRegistry.find(request.providerCode());
             if (adapter != null) prepared = adapter.prepare(prepared);
@@ -167,6 +176,33 @@ public class ThirdGatewayService implements ThirdPartyGateway {
         MultiValueMap<String, String> result = new LinkedMultiValueMap<>();
         values.forEach((key, value) -> { if (value != null) result.add(key, String.valueOf(value)); });
         return result;
+    }
+
+    private void mergeCredentialHeaders(Map<String, String> target, ThirdConfigSnapshot snapshot) {
+        java.util.List<ThirdCredential> credentials = credentialMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ThirdCredential>()
+            .eq(ThirdCredential::getProviderId, snapshot.getProvider().getProviderId()).eq(ThirdCredential::getDelFlag, "0")
+            .and(query -> query.isNull(ThirdCredential::getEndpointId).or().eq(ThirdCredential::getEndpointId, snapshot.getEndpoint().getEndpointId())));
+        java.util.Map<String, ThirdCredential> byType = new java.util.LinkedHashMap<>();
+        credentials.forEach(credential -> byType.putIfAbsent(credential.getCredentialType(), credential));
+        credentials.forEach(credential -> { if (credential.getEndpointId() != null) byType.put(credential.getCredentialType(), credential); });
+        byType.values().forEach(credential -> {
+            JsonNode node = JsonUtils.getJsonMapper().readTree(credentialCrypto.decrypt(credential));
+            if (node != null && node.isObject() && node.get("headers") != null && node.get("headers").isObject()) {
+                node.get("headers").properties().forEach(entry -> target.putIfAbsent(entry.getKey(), entry.getValue().asText()));
+            }
+        });
+    }
+
+    private static void validateDeclaredValues(String schema, Map<String, ?> values) {
+        if (values.isEmpty() || schema == null || schema.isBlank()) return;
+        java.util.Set<String> allowed = parseNames(schema);
+        if (values.keySet().stream().anyMatch(key -> !allowed.contains(key.toLowerCase()))) throw new IllegalArgumentException("Parameter is not declared");
+    }
+
+    private static void validateBody(String schema, JsonNode body) {
+        if (body == null || !body.isObject() || schema == null || schema.isBlank()) return;
+        java.util.Set<String> allowed = parseNames(schema);
+        body.propertyNames().forEach(name -> { if (!allowed.contains(name.toLowerCase())) throw new IllegalArgumentException("Body field is not declared"); });
     }
 
     private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId, ThirdPartyFailureCategory category, int status, String message) {

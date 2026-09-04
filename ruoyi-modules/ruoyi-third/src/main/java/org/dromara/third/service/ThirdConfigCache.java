@@ -29,7 +29,7 @@ public class ThirdConfigCache {
                 ThirdConfigSnapshot snapshot = JsonUtils.parseObject(cached, ThirdConfigSnapshot.class);
                 if (snapshot != null && snapshot.getProvider() != null && snapshot.getEndpoint() != null) return snapshot;
             }
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             throw unavailable(e);
         }
         ThirdProvider provider = providerMapper.selectOne(new LambdaQueryWrapper<ThirdProvider>()
@@ -42,7 +42,7 @@ public class ThirdConfigCache {
         ThirdConfigSnapshot snapshot = new ThirdConfigSnapshot(provider, endpoint);
         try {
             RedisUtils.setCacheObject(key, JsonUtils.toJsonString(snapshot), Duration.ofMinutes(10));
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             throw unavailable(e);
         }
         return snapshot;

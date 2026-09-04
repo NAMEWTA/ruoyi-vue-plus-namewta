@@ -28,7 +28,7 @@ public class ThirdResiliencePolicy {
         } catch (ThirdRejectedException e) {
             acquired.forEach(this::release);
             throw e;
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             acquired.forEach(this::release);
             throw new ThirdRejectedException(ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, "Third-party limit service unavailable");
         }

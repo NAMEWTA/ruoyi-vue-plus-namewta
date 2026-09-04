@@ -61,6 +61,7 @@ public class ThirdCredentialCrypto {
         } catch (IllegalArgumentException ignored) {
             key = raw.getBytes(StandardCharsets.UTF_8);
         }
+        if (key.length != 16 && key.length != 24 && key.length != 32) key = raw.getBytes(StandardCharsets.UTF_8);
         if (key.length != 16 && key.length != 24 && key.length != 32) {
             throw new ServiceException("第三方凭据主密钥长度必须为 16、24 或 32 字节");
         }
