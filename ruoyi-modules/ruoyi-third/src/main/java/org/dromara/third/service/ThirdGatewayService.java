@@ -79,6 +79,7 @@ public class ThirdGatewayService implements ThirdPartyGateway {
         } catch (ThirdRejectedException e) {
             return failure(request, requestId, e.category(), 0, null);
         }
+        int attemptsUsed = 0;
         try {
             String path = expandPath(snapshot.getEndpoint().getRelativePath(), request.path());
             validateDeclaredValues(snapshot.getEndpoint().getQuerySchemaJson(), request.query());
@@ -90,29 +91,43 @@ public class ThirdGatewayService implements ThirdPartyGateway {
             ThirdProviderAdapter adapter = adapterRegistry.find(request.providerCode());
             if (adapter != null) prepared = adapter.prepare(prepared);
             RestClient client = clientFactory.create(snapshot.getProvider().getBaseUrl(), snapshot.getProvider().getTimeoutConnectMs(), snapshot.getProvider().getTimeoutReadMs());
-            RestClient.RequestBodySpec spec = client.method(HttpMethod.valueOf(snapshot.getEndpoint().getHttpMethod()))
-                .uri(uriBuilder -> uriBuilder.path(path).queryParams(query(request.query())).build())
-                .headers(h -> headers.forEach(h::set));
-            if (prepared.body() != null && !"GET".equals(snapshot.getEndpoint().getHttpMethod())) {
-                if ("FORM".equals(snapshot.getEndpoint().getRequestMode())) {
-                    MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-                    request.query().forEach((key, value) -> form.add(key, String.valueOf(value)));
-                    spec.body(form);
-                } else {
-                    spec.body(prepared.body() instanceof JsonNode node ? node.toString() : prepared.body());
+            ResponseEntity<byte[]> response = null;
+            int maxAttempts = resiliencePolicy.maxAttempts(snapshot.getEndpoint());
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                attemptsUsed = attempt;
+                RestClient.RequestBodySpec spec = client.method(HttpMethod.valueOf(snapshot.getEndpoint().getHttpMethod()))
+                    .uri(uriBuilder -> uriBuilder.path(path).queryParams(query(request.query())).build())
+                    .headers(h -> headers.forEach(h::set));
+                if (prepared.body() != null && !"GET".equals(snapshot.getEndpoint().getHttpMethod())) {
+                    if ("FORM".equals(snapshot.getEndpoint().getRequestMode())) {
+                        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+                        request.query().forEach((key, value) -> form.add(key, String.valueOf(value)));
+                        spec.body(form);
+                    } else {
+                        spec.body(prepared.body() instanceof JsonNode node ? node.toString() : prepared.body());
+                    }
+                }
+                try {
+                    response = spec.retrieve().toEntity(byte[].class);
+                    break;
+                } catch (RestClientResponseException | org.springframework.web.client.ResourceAccessException e) {
+                    if (attempt == maxAttempts) throw e;
                 }
             }
-            ResponseEntity<byte[]> response = spec.retrieve().toEntity(byte[].class);
+            if (response == null) throw new RestClientException("No response from third-party endpoint");
             Object body = decode(response, snapshot.getEndpoint().getResponseMode());
             ThirdAdapterResponse mappedInput = new ThirdAdapterResponse(request, response.getStatusCode().value(), body,
                 (System.nanoTime() - startedAt) / 1_000_000, requestId);
             if (adapter != null) {
                 ThirdPartyResponse<?> mapped = adapter.mapResponse(mappedInput);
-                if (mapped != null) return (ThirdPartyResponse<T>) mapped;
+                if (mapped != null) {
+                    invocationRecorder.record(request, mapped, (System.nanoTime() - startedAt) / 1_000_000, attemptsUsed);
+                    return (ThirdPartyResponse<T>) mapped;
+                }
             }
             ThirdPartyResponse<T> result = new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), response.getStatusCode().value(),
                 ThirdPartyFailureCategory.NONE, null, convert(body, responseType));
-            invocationRecorder.record(request, result, (System.nanoTime() - startedAt) / 1_000_000, 1);
+            invocationRecorder.record(request, result, (System.nanoTime() - startedAt) / 1_000_000, attemptsUsed);
             return result;
         } catch (RestClientResponseException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.HTTP, e.getStatusCode().value(), null);

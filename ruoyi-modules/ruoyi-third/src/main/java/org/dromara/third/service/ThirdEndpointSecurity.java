@@ -5,12 +5,14 @@ import org.dromara.common.core.exception.ServiceException;
 import java.net.URI;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** Endpoint 元数据的不可绕过校验。 */
 public final class ThirdEndpointSecurity {
     private static final Set<String> METHODS = Set.of("GET", "POST", "PUT", "PATCH", "DELETE");
     private static final Set<String> REQUEST_MODES = Set.of("JSON", "QUERY", "FORM");
     private static final Set<String> RESPONSE_MODES = Set.of("JSON", "TEXT", "BYTES");
+    private static final Pattern PATH_TEMPLATE = Pattern.compile("\\{[A-Za-z][A-Za-z0-9_-]{0,63}\\}");
 
     private ThirdEndpointSecurity() { }
 
@@ -22,12 +24,16 @@ public final class ThirdEndpointSecurity {
 
     public static String validateRelativePath(String path) {
         if (path == null || path.isBlank() || path.length() > 512 || path.contains("\\") || path.contains("..")
-            || path.startsWith("//") || path.matches(".*[\\r\\n<>\\$\\{\\}].*")) {
+            || path.startsWith("//") || path.matches(".*[\\r\\n<>\\$].*")) {
             throw new ServiceException("Endpoint path must be a safe relative path");
         }
         if (!path.startsWith("/")) throw new ServiceException("Endpoint path must start with /");
+        String withoutTemplates = PATH_TEMPLATE.matcher(path).replaceAll("");
+        if (withoutTemplates.contains("{") || withoutTemplates.contains("}")) {
+            throw new ServiceException("Endpoint path contains an invalid template variable");
+        }
         try {
-            URI uri = URI.create(path);
+            URI uri = URI.create(PATH_TEMPLATE.matcher(path).replaceAll("template"));
             if (uri.isAbsolute() || uri.getHost() != null || uri.getRawAuthority() != null || uri.getQuery() != null) {
                 throw new ServiceException("Endpoint path cannot contain an authority or query");
             }
