@@ -106,6 +106,7 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
             validateBody(snapshot.getEndpoint().getBodySchemaJson(), request.body());
             Map<String, String> headers = declaredHeaders(snapshot.getEndpoint().getHeaderSchemaJson(), request.headers());
             mergeSharedHeaders(headers, snapshot.getProvider().getSharedHeadersJson());
+            mergeEndpointOverrides(headers, snapshot.getEndpoint().getOverrideJson());
             mergeCredentialHeaders(headers, snapshot);
             ThirdAdapterRequest prepared = new ThirdAdapterRequest(request, snapshot, headers, request.body());
             ThirdProviderAdapter adapter = adapterRegistry.find(request.providerCode());
@@ -207,6 +208,7 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         ThirdEndpointSecurity.validateMetadataJson(endpoint.getBodySchemaJson(), "Body schema");
         ThirdEndpointSecurity.validateMetadataJson(endpoint.getResponseSchemaJson(), "Response schema");
         ThirdEndpointSecurity.validateMetadataJson(endpoint.getOverrideJson(), "Override");
+        ThirdEndpointSecurity.validateOverrideJson(endpoint.getOverrideJson());
         ThirdEndpointSecurity.validateMetadataJson(endpoint.getSensitiveFieldsJson(), "Sensitive fields");
         ThirdEndpointSecurity.parseAllowedNames(endpoint.getPathSchemaJson());
         ThirdEndpointSecurity.parseAllowedNames(endpoint.getQuerySchemaJson());
@@ -263,6 +265,15 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
                 target.putIfAbsent(name, ThirdEndpointSecurity.validateConfiguredHeaderValue(entry.getValue().asText()));
             }
         });
+    }
+
+    private static void mergeEndpointOverrides(Map<String, String> target, String json) {
+        if (json == null || json.isBlank()) return;
+        JsonNode node = JsonUtils.getJsonMapper().readTree(json);
+        JsonNode headers = node == null ? null : node.get("headers");
+        if (headers != null && headers.isObject()) headers.properties().forEach(entry ->
+            target.put(ThirdEndpointSecurity.validateConfiguredHeaderName(entry.getKey()),
+                ThirdEndpointSecurity.validateConfiguredHeaderValue(entry.getValue().asText())));
     }
 
     private static MultiValueMap<String, String> query(Map<String, ?> values) {

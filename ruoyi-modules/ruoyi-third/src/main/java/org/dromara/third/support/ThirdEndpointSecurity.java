@@ -128,6 +128,29 @@ public final class ThirdEndpointSecurity {
         }
     }
 
+    /** Endpoint overrides may only replace server-controlled shared headers. */
+    public static void validateOverrideJson(String value) {
+        if (value == null || value.isBlank()) return;
+        try {
+            JsonNode node = JsonUtils.getJsonMapper().readTree(value);
+            if (node == null || !node.isObject()) throw new IllegalArgumentException();
+            node.properties().forEach(entry -> {
+                if (!"headers".equals(entry.getKey())) throw new ServiceException("Only header overrides are allowed");
+                JsonNode headers = entry.getValue();
+                if (!headers.isObject()) throw new ServiceException("Header overrides must be an object");
+                headers.properties().forEach(header -> {
+                    validateConfiguredHeaderName(header.getKey());
+                    if (!header.getValue().isValueNode() || header.getValue().isNull()) {
+                        throw new ServiceException("Header override value must be scalar");
+                    }
+                    validateConfiguredHeaderValue(header.getValue().asText());
+                });
+            });
+        } catch (RuntimeException ex) {
+            throw new ServiceException("Endpoint overrides must be a safe headers object");
+        }
+    }
+
     private static void rejectExecutableMetadata(JsonNode node) {
         if (node.isObject()) {
             for (Map.Entry<String, JsonNode> entry : node.properties()) {

@@ -43,4 +43,11 @@ class ThirdEndpointSecurityTest {
         assertEquals(java.util.Set.of("id"), ThirdEndpointSecurity.parseAllowedNames("{\"allowed\":[\"id\"]}"));
         assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.parseAllowedNames("{}"));
     }
+
+    @Test
+    void limitsEndpointOverridesToHeaders() {
+        ThirdEndpointSecurity.validateOverrideJson("{\"headers\":{\"X-Version\":\"v2\"}}");
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateOverrideJson("{\"baseUrl\":\"https://evil.example\"}"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateOverrideJson("{\"headers\":{\"X-Version\":\"bad\\nvalue\"}}"));
+    }
 }

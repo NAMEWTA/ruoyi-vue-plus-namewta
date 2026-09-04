@@ -52,6 +52,7 @@ public class ThirdEndpointService {
         ThirdEndpointSecurity.validateMetadataJson(bo.getBodySchemaJson(), "Body schema");
         ThirdEndpointSecurity.validateMetadataJson(bo.getResponseSchemaJson(), "Response schema");
         ThirdEndpointSecurity.validateMetadataJson(bo.getOverrideJson(), "Override");
+        ThirdEndpointSecurity.validateOverrideJson(bo.getOverrideJson());
         ThirdEndpointSecurity.validateMetadataJson(bo.getSensitiveFieldsJson(), "Sensitive fields");
         ThirdEndpointSecurity.parseAllowedNames(bo.getPathSchemaJson());
         ThirdEndpointSecurity.parseAllowedNames(bo.getQuerySchemaJson());
