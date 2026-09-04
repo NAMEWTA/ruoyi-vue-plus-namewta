@@ -8,6 +8,7 @@ import org.dromara.third.domain.ThirdInvocation;
 import org.dromara.third.domain.ThirdStatistic;
 import org.dromara.third.port.ThirdInvocationStore;
 import org.dromara.third.port.ThirdStatisticStore;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Tag("local")
 class ThirdInvocationRecorderAdapterTest {
     private final JsonMapper jsonMapper = new JsonMapper();
 
