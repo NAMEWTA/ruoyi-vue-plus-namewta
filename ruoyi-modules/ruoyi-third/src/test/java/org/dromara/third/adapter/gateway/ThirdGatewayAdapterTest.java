@@ -12,6 +12,7 @@ import org.dromara.third.port.ThirdConfigSnapshotPort;
 import org.dromara.third.port.ThirdCredentialCryptoPort;
 import org.dromara.third.port.ThirdCredentialStore;
 import org.dromara.third.port.ThirdInvocationRecorderPort;
+import org.dromara.third.port.ThirdOutboundAttempt;
 import org.dromara.third.port.ThirdResiliencePort;
 import org.dromara.third.spi.ThirdProviderAdapterRegistry;
 import org.dromara.third.support.ThirdLimitLease;
@@ -29,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -42,11 +44,13 @@ class ThirdGatewayAdapterTest {
     private AtomicInteger redirectTargetRequests;
     private ThirdConfigSnapshot snapshot;
     private ThirdGatewayAdapter gateway;
+    private List<ThirdOutboundAttempt> outboundAttempts;
 
     @BeforeEach
     void setUp() throws IOException {
         requests = new AtomicInteger();
         redirectTargetRequests = new AtomicInteger();
+        outboundAttempts = new ArrayList<>();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/companies", this::handleCompanyRequest);
         server.createContext("/redirect", this::handleRedirect);
@@ -123,6 +127,9 @@ class ThirdGatewayAdapterTest {
         assertTrue(response.isSuccess());
         assertEquals(200, response.httpStatus());
         assertEquals(1, requests.get());
+        assertEquals(2, outboundAttempts.size());
+        assertEquals(false, outboundAttempts.getFirst().completed());
+        assertEquals(true, outboundAttempts.getLast().completed());
         JsonNode body = (JsonNode) response.body();
         assertNotNull(body);
         assertEquals("ok", body.get("result").asText());
@@ -173,6 +180,16 @@ class ThirdGatewayAdapterTest {
         assertEquals(0, redirectTargetRequests.get());
     }
 
+    @Test
+    void rejectsEndpointAdapterOwnedByAnotherProvider() {
+        snapshot.getEndpoint().setAdapterCode("other-provider-adapter");
+
+        ThirdPartyResponse<Object> response = gateway.execute(ThirdPartyRequest.of("qichacha", "company"));
+
+        assertEquals(ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, response.category());
+        assertEquals(0, requests.get());
+    }
+
     private ThirdGatewayAdapter createGateway(ThirdResiliencePort resilience, ThirdInvocationRecorderPort recorder) {
         ThirdConfigSnapshotPort config = new ThirdConfigSnapshotPort() {
             @Override
@@ -184,8 +201,20 @@ class ThirdGatewayAdapterTest {
             public void evict(String providerCode, String endpointCode) {
             }
         };
+        ThirdInvocationRecorderPort effectiveRecorder = new ThirdInvocationRecorderPort() {
+            @Override
+            public void record(ThirdPartyRequest request, ThirdPartyResponse<?> response, long durationMs, int attempts) {
+                recorder.record(request, response, durationMs, attempts);
+            }
+
+            @Override
+            public void recordAttempt(ThirdOutboundAttempt attempt) {
+                outboundAttempts.add(attempt);
+                recorder.recordAttempt(attempt);
+            }
+        };
         return new ThirdGatewayAdapter(config, new ThirdProviderAdapterRegistry(List.of()), resilience,
-            recorder, (providerId, endpointId) -> List.of(), new NoopCrypto(),
+            effectiveRecorder, (providerId, endpointId) -> List.of(), new NoopCrypto(),
             new org.dromara.third.http.ThirdHttpClientFactory());
     }
 

@@ -7,6 +7,7 @@ import org.dromara.third.api.ThirdPartyResponse;
 import org.dromara.third.domain.ThirdInvocation;
 import org.dromara.third.domain.ThirdStatistic;
 import org.dromara.third.port.ThirdInvocationStore;
+import org.dromara.third.port.ThirdOutboundAttempt;
 import org.dromara.third.port.ThirdStatisticStore;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -63,5 +65,46 @@ class ThirdInvocationRecorderAdapterTest {
         assertEquals("***", ((Map<?, ?>) event.get("parameters")).get("token"));
         assertFalse(String.valueOf(event.get("body")).contains("plain-secret"));
         assertFalse(String.valueOf(event.get("response")).contains("response-secret"));
+    }
+
+    @Test
+    void recordsEachPhysicalAttemptWithSanitizedFields() {
+        List<Map<String, Object>> events = new ArrayList<>();
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        beanFactory.registerSingleton("thirdTestSink", (SysLogEventSink) events::add);
+        ThirdInvocationRecorderAdapter recorder = new ThirdInvocationRecorderAdapter(
+            invocation -> 1, statistic -> 1, beanFactory.getBeanProvider(SysLogEventSink.class));
+        ThirdPartyRequest request = new ThirdPartyRequest("qichacha", "company", Map.of(), Map.of(), Map.of(),
+            jsonMapper.readTree("{\"apiKey\":\"plain-secret\"}"));
+
+        recorder.recordAttempt(new ThirdOutboundAttempt(request, "request-2", 1, "/companies/1",
+            Map.of("Authorization", "Bearer secret-token"), request.body(), null, null, null, 0, false, Set.of()));
+        recorder.recordAttempt(new ThirdOutboundAttempt(request, "request-2", 1, "/companies/1",
+            Map.of("Authorization", "Bearer secret-token"), request.body(), 200, ThirdPartyFailureCategory.NONE,
+            jsonMapper.readTree("{\"token\":\"response-secret\"}"), 4, true, Set.of()));
+
+        assertEquals(2, events.size());
+        assertEquals("THIRD_HTTP_ATTEMPT_START", events.getFirst().get("event"));
+        assertEquals("THIRD_HTTP_ATTEMPT_FINISH", events.getLast().get("event"));
+        assertEquals("***", ((Map<?, ?>) events.getFirst().get("requestHeaders")).get("Authorization"));
+        assertFalse(String.valueOf(events.getLast().get("body")).contains("plain-secret"));
+        assertFalse(String.valueOf(events.getLast().get("response")).contains("response-secret"));
+    }
+
+    @Test
+    void exposesSinkFailureThroughHealthIndicator() {
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        beanFactory.registerSingleton("thirdFailingSink", (SysLogEventSink) event -> {
+            throw new IllegalStateException("sink unavailable");
+        });
+        ThirdInvocationRecorderAdapter recorder = new ThirdInvocationRecorderAdapter(
+            invocation -> 1, statistic -> 1, beanFactory.getBeanProvider(SysLogEventSink.class));
+        ThirdPartyRequest request = ThirdPartyRequest.of("qichacha", "company");
+
+        recorder.recordAttempt(new ThirdOutboundAttempt(request, "request-3", 1, "/companies/1",
+            Map.of(), null, null, null, null, 0, false, Set.of()));
+
+        assertEquals(1, recorder.logSinkFailureCount());
+        assertEquals("DOWN", new ThirdInvocationLogHealthIndicator(recorder).health().getStatus().getCode());
     }
 }

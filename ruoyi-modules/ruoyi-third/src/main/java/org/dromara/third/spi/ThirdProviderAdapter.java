@@ -6,6 +6,20 @@ import org.dromara.third.api.ThirdPartyResponse;
 public interface ThirdProviderAdapter {
     String providerCode();
 
+    /**
+     * Optional endpoint hook identifier. A provider remains a single Spring bean;
+     * this identifier lets endpoint metadata assert that the configured hook is
+     * owned by that provider adapter without enabling class-name reflection.
+     */
+    default String adapterCode() {
+        return providerCode();
+    }
+
+    /** Provider adapters may explicitly limit the endpoint codes they own. */
+    default boolean supportsEndpoint(String endpointCode) {
+        return true;
+    }
+
     default ThirdAdapterRequest prepare(ThirdAdapterRequest request) {
         return request;
     }

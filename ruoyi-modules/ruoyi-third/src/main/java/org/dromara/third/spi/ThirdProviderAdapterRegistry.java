@@ -23,6 +23,24 @@ public class ThirdProviderAdapterRegistry {
         return providerCode == null ? null : adapters.get(providerCode.trim());
     }
 
+    public ThirdProviderAdapter find(String providerCode, String endpointCode, String configuredAdapterCode) {
+        ThirdProviderAdapter adapter = find(providerCode);
+        if (adapter == null) {
+            if (configuredAdapterCode != null && !configuredAdapterCode.isBlank()) {
+                throw new ServiceException("Third endpoint adapter is unavailable");
+            }
+            return null;
+        }
+        if (configuredAdapterCode != null && !configuredAdapterCode.isBlank()
+            && !canonical(configuredAdapterCode).equals(canonical(adapter.adapterCode()))) {
+            throw new ServiceException("Third endpoint adapter is not owned by provider");
+        }
+        if (endpointCode == null || endpointCode.isBlank() || !adapter.supportsEndpoint(endpointCode.trim())) {
+            throw new ServiceException("Third endpoint adapter does not support endpoint");
+        }
+        return adapter;
+    }
+
     private static String canonical(String providerCode) {
         String value = providerCode == null ? "" : providerCode.trim();
         if (value.isBlank()) throw new ServiceException("Third provider adapter code is required");

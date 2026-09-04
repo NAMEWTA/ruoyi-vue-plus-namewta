@@ -14,6 +14,7 @@ import org.dromara.third.port.ThirdConfigSnapshotPort;
 import org.dromara.third.port.ThirdCredentialStore;
 import org.dromara.third.port.ThirdCredentialCryptoPort;
 import org.dromara.third.port.ThirdInvocationRecorderPort;
+import org.dromara.third.port.ThirdOutboundAttempt;
 import org.dromara.third.port.ThirdResiliencePort;
 import org.dromara.third.support.ThirdEndpointSecurity;
 import org.dromara.third.support.ThirdLimitLease;
@@ -41,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Type;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.time.LocalDateTime;
 
@@ -81,23 +83,31 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         String requestId = UUID.randomUUID().toString();
         long startedAt = System.nanoTime();
         ThirdConfigSnapshot snapshot;
+        Set<String> sensitiveFields = Set.of();
         try {
             snapshot = configCache.get(request.providerCode(), request.endpointCode());
         } catch (RuntimeException e) {
-            return failure(request, requestId, ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, 0, null);
+            return failure(request, requestId, ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, 0, null, sensitiveFields);
         }
         try {
             validateSnapshot(snapshot);
+            sensitiveFields = ThirdEndpointSecurity.parseSensitiveFields(snapshot.getEndpoint().getSensitiveFieldsJson());
         } catch (RuntimeException e) {
-            return failure(request, requestId, ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, 0, null);
+            return failure(request, requestId, ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, 0, null, sensitiveFields);
         }
-        if (!"0".equals(snapshot.getProvider().getStatus())) return failure(request, requestId, ThirdPartyFailureCategory.PROVIDER_DISABLED, 0, null);
-        if (!"0".equals(snapshot.getEndpoint().getStatus())) return failure(request, requestId, ThirdPartyFailureCategory.ENDPOINT_DISABLED, 0, null);
+        ThirdProviderAdapter adapter;
+        try {
+            adapter = adapterRegistry.find(request.providerCode(), request.endpointCode(), snapshot.getEndpoint().getAdapterCode());
+        } catch (RuntimeException e) {
+            return failure(request, requestId, ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, 0, null, sensitiveFields);
+        }
+        if (!"0".equals(snapshot.getProvider().getStatus())) return failure(request, requestId, ThirdPartyFailureCategory.PROVIDER_DISABLED, 0, null, sensitiveFields);
+        if (!"0".equals(snapshot.getEndpoint().getStatus())) return failure(request, requestId, ThirdPartyFailureCategory.ENDPOINT_DISABLED, 0, null, sensitiveFields);
         ThirdLimitLease lease;
         try {
             lease = resiliencePolicy.acquire(snapshot.getProvider(), snapshot.getEndpoint());
         } catch (ThirdRejectedException e) {
-            return failure(request, requestId, e.category(), 0, null);
+            return failure(request, requestId, e.category(), 0, null, sensitiveFields);
         }
         int attemptsUsed = 0;
         try {
@@ -109,7 +119,6 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
             mergeEndpointOverrides(headers, snapshot.getEndpoint().getOverrideJson());
             mergeCredentialHeaders(headers, snapshot);
             ThirdAdapterRequest prepared = new ThirdAdapterRequest(request, snapshot, headers, request.body());
-            ThirdProviderAdapter adapter = adapterRegistry.find(request.providerCode());
             if (adapter != null) prepared = adapter.prepare(prepared);
             RestClient client = clientFactory.create(snapshot.getProvider().getBaseUrl(), snapshot.getProvider().getTimeoutConnectMs(), snapshot.getProvider().getTimeoutReadMs());
             ResponseEntity<byte[]> response = null;
@@ -135,19 +144,31 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
                         spec.body(prepared.body() instanceof JsonNode node ? node.toString() : prepared.body());
                     }
                 }
+                long attemptStartedAt = System.nanoTime();
+                recordAttempt(new ThirdOutboundAttempt(request, requestId, attempt, path, headers, prepared.body(), null,
+                    null, null, 0, false, sensitiveFields));
                 try {
                     response = spec.retrieve().toEntity(byte[].class);
+                    recordAttempt(new ThirdOutboundAttempt(request, requestId, attempt, path, headers, prepared.body(),
+                        response.getStatusCode().value(), ThirdPartyFailureCategory.NONE, response.getBody(),
+                        elapsedMs(attemptStartedAt), true, sensitiveFields));
                     break;
                 } catch (RestClientResponseException e) {
+                    recordAttempt(new ThirdOutboundAttempt(request, requestId, attempt, path, headers, prepared.body(),
+                        e.getStatusCode().value(), ThirdPartyFailureCategory.HTTP, e.getResponseBodyAsByteArray(),
+                        elapsedMs(attemptStartedAt), true, sensitiveFields));
                     throw e;
                 } catch (org.springframework.web.client.ResourceAccessException e) {
+                    recordAttempt(new ThirdOutboundAttempt(request, requestId, attempt, path, headers, prepared.body(),
+                        0, isTimeout(e) ? ThirdPartyFailureCategory.TIMEOUT : ThirdPartyFailureCategory.TRANSPORT,
+                        null, elapsedMs(attemptStartedAt), true, sensitiveFields));
                     if (attempt == maxAttempts) throw e;
                 }
             }
             if (response == null) throw new RestClientException("No response from third-party endpoint");
             if (!response.getStatusCode().is2xxSuccessful()) {
                 return failure(request, requestId, ThirdPartyFailureCategory.HTTP,
-                    response.getStatusCode().value(), null, elapsedMs(startedAt), attemptsUsed);
+                    response.getStatusCode().value(), null, elapsedMs(startedAt), attemptsUsed, sensitiveFields);
             }
             Object body = decode(response, snapshot.getEndpoint().getResponseMode());
             ThirdAdapterResponse mappedInput = new ThirdAdapterResponse(request, response.getStatusCode().value(), body,
@@ -155,34 +176,34 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
             if (adapter != null) {
                 ThirdPartyResponse<?> mapped = adapter.mapResponse(mappedInput);
                 if (mapped != null) {
-                    record(request, mapped, elapsedMs(startedAt), attemptsUsed, ThirdEndpointSecurity.parseSensitiveFields(snapshot.getEndpoint().getSensitiveFieldsJson()));
+                    record(request, mapped, elapsedMs(startedAt), attemptsUsed, sensitiveFields);
                     return (ThirdPartyResponse<T>) mapped;
                 }
             }
             ThirdPartyResponse<T> result = new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), response.getStatusCode().value(),
                 ThirdPartyFailureCategory.NONE, null, convert(body, responseType, genericType));
-            record(request, result, elapsedMs(startedAt), attemptsUsed, ThirdEndpointSecurity.parseSensitiveFields(snapshot.getEndpoint().getSensitiveFieldsJson()));
+            record(request, result, elapsedMs(startedAt), attemptsUsed, sensitiveFields);
             return result;
         } catch (RestClientResponseException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.HTTP, e.getStatusCode().value(), null,
-                elapsedMs(startedAt), attemptsUsed);
+                elapsedMs(startedAt), attemptsUsed, sensitiveFields);
         } catch (org.springframework.web.client.ResourceAccessException e) {
             return failure(request, requestId, isTimeout(e) ? ThirdPartyFailureCategory.TIMEOUT : ThirdPartyFailureCategory.TRANSPORT, 0, null,
-                elapsedMs(startedAt), attemptsUsed);
+                elapsedMs(startedAt), attemptsUsed, sensitiveFields);
         } catch (ThirdRejectedException e) {
-            return failure(request, requestId, e.category(), 0, null, elapsedMs(startedAt), attemptsUsed);
+            return failure(request, requestId, e.category(), 0, null, elapsedMs(startedAt), attemptsUsed, sensitiveFields);
         } catch (IllegalArgumentException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.REJECTED, 0, null,
-                elapsedMs(startedAt), attemptsUsed);
+                elapsedMs(startedAt), attemptsUsed, sensitiveFields);
         } catch (RestClientException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.TRANSPORT, 0, null,
-                elapsedMs(startedAt), attemptsUsed);
+                elapsedMs(startedAt), attemptsUsed, sensitiveFields);
         } catch (ThirdDecodeException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.DECODE, 0, null,
-                elapsedMs(startedAt), attemptsUsed);
+                elapsedMs(startedAt), attemptsUsed, sensitiveFields);
         } catch (RuntimeException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.PROVIDER, 0, null,
-                elapsedMs(startedAt), attemptsUsed);
+                elapsedMs(startedAt), attemptsUsed, sensitiveFields);
         } finally {
             lease.close();
         }
@@ -205,6 +226,9 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         ThirdEndpoint endpoint = snapshot.getEndpoint();
         ThirdEndpointSecurity.validateMethod(endpoint.getHttpMethod());
         ThirdEndpointSecurity.validateRelativePath(endpoint.getRelativePath());
+        if (endpoint.getAdapterCode() != null && !endpoint.getAdapterCode().isBlank()) {
+            ThirdEndpointSecurity.validateIdentifier(endpoint.getAdapterCode(), "Adapter code");
+        }
         ThirdEndpointSecurity.validateRequestMode(endpoint.getRequestMode());
         ThirdEndpointSecurity.validateResponseMode(endpoint.getResponseMode());
         ThirdEndpointSecurity.validateMetadataJson(endpoint.getPathSchemaJson(), "Path schema");
@@ -342,6 +366,14 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         }
     }
 
+    private void recordAttempt(ThirdOutboundAttempt attempt) {
+        try {
+            invocationRecorder.recordAttempt(attempt);
+        } catch (RuntimeException ignored) {
+            // Outbound logging is best effort and must not change the gateway result.
+        }
+    }
+
     private static boolean isTimeout(Throwable error) {
         for (Throwable current = error; current != null; current = current.getCause()) {
             if (current instanceof java.net.SocketTimeoutException
@@ -363,10 +395,22 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
 
     private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId,
                                               ThirdPartyFailureCategory category, int status, String message,
+                                              Set<String> additionalSensitiveFields) {
+        return failure(request, requestId, category, status, message, 0, 0, additionalSensitiveFields);
+    }
+
+    private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId,
+                                              ThirdPartyFailureCategory category, int status, String message,
                                               long durationMs, int attempts) {
+        return failure(request, requestId, category, status, message, durationMs, attempts, Set.of());
+    }
+
+    private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId,
+                                              ThirdPartyFailureCategory category, int status, String message,
+                                              long durationMs, int attempts, Set<String> additionalSensitiveFields) {
         ThirdPartyResponse<T> result = new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), status, category, message, null);
         try {
-            invocationRecorder.record(request, result, durationMs, attempts);
+            invocationRecorder.record(request, result, durationMs, attempts, additionalSensitiveFields);
         } catch (RuntimeException ignored) {
             // A logging failure must not replace the stable gateway classification.
         }

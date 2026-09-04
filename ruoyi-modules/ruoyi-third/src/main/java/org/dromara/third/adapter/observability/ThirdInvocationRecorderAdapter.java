@@ -1,12 +1,12 @@
 package org.dromara.third.adapter.observability;
 
-import lombok.RequiredArgsConstructor;
 import org.dromara.common.mybatis.utils.IdGeneratorUtil;
 import org.dromara.common.web.logging.SysLogEventSink;
 import org.dromara.third.api.ThirdPartyFailureCategory;
 import org.dromara.third.api.ThirdPartyRequest;
 import org.dromara.third.api.ThirdPartyResponse;
 import org.dromara.third.port.ThirdInvocationRecorderPort;
+import org.dromara.third.port.ThirdOutboundAttempt;
 import org.dromara.third.port.ThirdInvocationStore;
 import org.dromara.third.port.ThirdStatisticStore;
 import org.dromara.third.adapter.log.ThirdLogSanitizerAdapter;
@@ -22,14 +22,27 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
 
 @Component
-@RequiredArgsConstructor
 public class ThirdInvocationRecorderAdapter implements ThirdInvocationRecorderPort {
     private static final Logger log = LoggerFactory.getLogger(ThirdInvocationRecorderAdapter.class);
     private final ThirdInvocationStore invocationDao;
     private final ThirdStatisticStore statisticDao;
     private final ObjectProvider<SysLogEventSink> logSink;
+    private final LongAdder logSinkFailureCount = new LongAdder();
+
+    public ThirdInvocationRecorderAdapter(ThirdInvocationStore invocationDao,
+                                          ThirdStatisticStore statisticDao,
+                                          ObjectProvider<SysLogEventSink> logSink) {
+        this.invocationDao = invocationDao;
+        this.statisticDao = statisticDao;
+        this.logSink = logSink;
+    }
+
+    public long logSinkFailureCount() {
+        return logSinkFailureCount.sum();
+    }
 
     public void record(ThirdPartyRequest request, ThirdPartyResponse<?> response, long durationMs, int attempts) {
         record(request, response, durationMs, attempts, Set.of());
@@ -50,14 +63,53 @@ public class ThirdInvocationRecorderAdapter implements ThirdInvocationRecorderPo
             statisticDao.upsert(statistic);
             ThirdStatistic providerStatistic = statistic(request, response, attempts, null);
             statisticDao.upsert(providerStatistic);
+        } catch (RuntimeException error) {
+            log.warn("Third-party invocation recording failed provider={} endpoint={} requestId={}", request.providerCode(), request.endpointCode(), response.requestId());
+        }
+        try {
             Map<String, Object> event = new LinkedHashMap<>(); event.put("event", "HTTP_REQUEST"); event.put("requestId", response.requestId());
             event.put("providerCode", request.providerCode()); event.put("endpointCode", request.endpointCode()); event.put("status", response.category().name()); event.put("durationMs", durationMs);
             event.put("attempts", attempts); event.put("parameters", ThirdLogSanitizerAdapter.values(request.query()));
             event.put("requestHeaders", ThirdLogSanitizerAdapter.headers(request.headers())); event.put("body", ThirdLogSanitizerAdapter.json(request.body(), additionalSensitiveFields));
             event.put("response", ThirdLogSanitizerAdapter.value(response.body(), additionalSensitiveFields)); event.put("completed", true);
+            writeLog(event);
+        } catch (RuntimeException error) {
+            log.warn("Third-party invocation log event preparation failed provider={} endpoint={} requestId={}",
+                request.providerCode(), request.endpointCode(), response.requestId());
+        }
+    }
+
+    @Override
+    public void recordAttempt(ThirdOutboundAttempt attempt) {
+        try {
+            Map<String, Object> event = new LinkedHashMap<>();
+            event.put("event", attempt.completed() ? "THIRD_HTTP_ATTEMPT_FINISH" : "THIRD_HTTP_ATTEMPT_START");
+            event.put("requestId", attempt.requestId());
+            event.put("providerCode", attempt.request().providerCode());
+            event.put("endpointCode", attempt.request().endpointCode());
+            event.put("attempt", attempt.attempt());
+            event.put("path", attempt.relativePath());
+            event.put("requestHeaders", ThirdLogSanitizerAdapter.headers(attempt.effectiveHeaders()));
+            event.put("parameters", ThirdLogSanitizerAdapter.values(attempt.request().query()));
+            event.put("body", ThirdLogSanitizerAdapter.value(attempt.requestBody(), attempt.additionalSensitiveFields()));
+            event.put("status", attempt.category() == null ? null : attempt.category().name());
+            event.put("httpStatus", attempt.httpStatus());
+            event.put("response", ThirdLogSanitizerAdapter.value(attempt.responseBody(), attempt.additionalSensitiveFields()));
+            event.put("durationMs", attempt.durationMs());
+            event.put("completed", attempt.completed());
+            writeLog(event);
+        } catch (RuntimeException error) {
+            log.warn("Third-party attempt recording failed provider={} endpoint={} requestId={}",
+                attempt.request().providerCode(), attempt.request().endpointCode(), attempt.requestId());
+        }
+    }
+
+    private void writeLog(Map<String, Object> event) {
+        try {
             logSink.ifAvailable(sink -> sink.write(event));
         } catch (RuntimeException error) {
-            log.warn("Third-party invocation recording failed provider={} endpoint={} requestId={}", request.providerCode(), request.endpointCode(), response.requestId());
+            logSinkFailureCount.increment();
+            log.warn("Third-party outbound log sink failed requestId={} event={}", event.get("requestId"), event.get("event"));
         }
     }
 

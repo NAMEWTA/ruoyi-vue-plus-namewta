@@ -73,7 +73,8 @@ public class ThirdEndpointService {
         entity.setConcurrencyLimit(capped(nonNegative(bo.getConcurrencyLimit()), provider.getConcurrencyLimit()));
         entity.setRetryCount(Math.min(nonNegative(bo.getRetryCount()), Boolean.TRUE.equals(bo.getIdempotent()) ? 3 : 0));
         entity.setSensitiveFieldsJson(bo.getSensitiveFieldsJson());
-        entity.setAdapterCode(bo.getAdapterCode());
+        entity.setAdapterCode(bo.getAdapterCode() == null || bo.getAdapterCode().isBlank()
+            ? null : ThirdEndpointSecurity.validateIdentifier(bo.getAdapterCode(), "Adapter code"));
         int changed = bo.getEndpointId() == null ? endpointDao.insert(entity) : endpointDao.update(entity);
         if (changed != 1) throw new ServiceException("Endpoint save failed");
         configCache.evict(entity.getProviderCode(), entity.getEndpointCode());
