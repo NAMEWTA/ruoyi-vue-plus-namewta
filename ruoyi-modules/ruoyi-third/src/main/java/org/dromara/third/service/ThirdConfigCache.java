@@ -1,14 +1,13 @@
 package org.dromara.third.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.redis.utils.RedisUtils;
+import org.dromara.third.dao.ThirdEndpointDao;
+import org.dromara.third.dao.ThirdProviderDao;
 import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.domain.ThirdProvider;
-import org.dromara.third.mapper.ThirdEndpointMapper;
-import org.dromara.third.mapper.ThirdProviderMapper;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -18,8 +17,8 @@ import java.time.Duration;
 public class ThirdConfigCache {
     private static final String PREFIX = "third:config:";
     private static final String CHANNEL = "third:config:invalidation";
-    private final ThirdProviderMapper providerMapper;
-    private final ThirdEndpointMapper endpointMapper;
+    private final ThirdProviderDao providerDao;
+    private final ThirdEndpointDao endpointDao;
 
     public ThirdConfigSnapshot get(String providerCode, String endpointCode) {
         String key = key(providerCode, endpointCode);
@@ -32,10 +31,8 @@ public class ThirdConfigCache {
         } catch (Throwable e) {
             throw unavailable(e);
         }
-        ThirdProvider provider = providerMapper.selectOne(new LambdaQueryWrapper<ThirdProvider>()
-            .eq(ThirdProvider::getProviderCode, providerCode).eq(ThirdProvider::getDelFlag, "0"));
-        ThirdEndpoint endpoint = endpointMapper.selectOne(new LambdaQueryWrapper<ThirdEndpoint>()
-            .eq(ThirdEndpoint::getProviderCode, providerCode).eq(ThirdEndpoint::getEndpointCode, endpointCode).eq(ThirdEndpoint::getDelFlag, "0"));
+        ThirdProvider provider = providerDao.findActiveByCode(providerCode);
+        ThirdEndpoint endpoint = provider == null ? null : endpointDao.findActiveByProviderAndCode(provider.getProviderId(), endpointCode);
         if (provider == null || endpoint == null || !provider.getProviderId().equals(endpoint.getProviderId())) {
             throw new ServiceException("第三方接口配置不存在");
         }
@@ -53,8 +50,7 @@ public class ThirdConfigCache {
             if (providerCode != null && endpointCode != null) {
                 RedisUtils.deleteObject(key(providerCode, endpointCode));
             } else if (providerCode != null) {
-                endpointMapper.selectList(new LambdaQueryWrapper<ThirdEndpoint>()
-                    .eq(ThirdEndpoint::getProviderCode, providerCode)).forEach(endpoint ->
+                endpointDao.findAllByProviderCode(providerCode).forEach(endpoint ->
                     RedisUtils.deleteObject(key(providerCode, endpoint.getEndpointCode())));
             }
             RedisUtils.publish(CHANNEL, providerCode + ":" + (endpointCode == null ? "*" : endpointCode));

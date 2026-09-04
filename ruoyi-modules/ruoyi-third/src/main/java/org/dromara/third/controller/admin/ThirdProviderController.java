@@ -1,4 +1,4 @@
-package org.dromara.third.controller;
+package org.dromara.third.controller.admin;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import jakarta.validation.Valid;
@@ -8,7 +8,7 @@ import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
 import org.dromara.third.domain.bo.ThirdProviderBo;
 import org.dromara.third.domain.vo.ThirdProviderVo;
-import org.dromara.third.service.ThirdProviderUseCase;
+import org.dromara.third.usecase.ThirdProviderUseCase;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 

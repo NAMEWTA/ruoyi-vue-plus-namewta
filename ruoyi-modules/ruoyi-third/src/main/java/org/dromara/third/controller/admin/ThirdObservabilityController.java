@@ -1,4 +1,4 @@
-package org.dromara.third.controller;
+package org.dromara.third.controller.admin;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import lombok.RequiredArgsConstructor;

@@ -1,4 +1,4 @@
-package org.dromara.third.service;
+package org.dromara.third.usecase;
 
 import org.dromara.third.domain.bo.ThirdCredentialBo;
 import org.dromara.third.domain.vo.ThirdCredentialVo;

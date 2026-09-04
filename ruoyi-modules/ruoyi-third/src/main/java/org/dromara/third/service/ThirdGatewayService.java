@@ -7,9 +7,7 @@ import org.dromara.third.api.ThirdPartyGateway;
 import org.dromara.third.api.ThirdPartyRequest;
 import org.dromara.third.api.ThirdPartyResponse;
 import org.dromara.third.domain.ThirdCredential;
-import org.dromara.third.mapper.ThirdCredentialMapper;
-import org.dromara.third.mapper.ThirdEndpointMapper;
-import org.dromara.third.mapper.ThirdProviderMapper;
+import org.dromara.third.dao.ThirdCredentialDao;
 import org.dromara.third.http.ThirdHttpClientFactory;
 import org.dromara.third.spi.ThirdAdapterRequest;
 import org.dromara.third.spi.ThirdAdapterResponse;
@@ -42,7 +40,7 @@ public class ThirdGatewayService implements ThirdPartyGateway {
     private final ThirdProviderAdapterRegistry adapterRegistry;
     private final ThirdResiliencePolicy resiliencePolicy;
     private final ThirdInvocationRecorder invocationRecorder;
-    private final ThirdCredentialMapper credentialMapper;
+    private final ThirdCredentialDao credentialDao;
     private final ThirdCredentialCrypto credentialCrypto;
     private final ThirdHttpClientFactory clientFactory = new ThirdHttpClientFactory();
 
@@ -199,9 +197,7 @@ public class ThirdGatewayService implements ThirdPartyGateway {
     }
 
     private void mergeCredentialHeaders(Map<String, String> target, ThirdConfigSnapshot snapshot) {
-        java.util.List<ThirdCredential> credentials = credentialMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ThirdCredential>()
-            .eq(ThirdCredential::getProviderId, snapshot.getProvider().getProviderId()).eq(ThirdCredential::getDelFlag, "0")
-            .and(query -> query.isNull(ThirdCredential::getEndpointId).or().eq(ThirdCredential::getEndpointId, snapshot.getEndpoint().getEndpointId())));
+        java.util.List<ThirdCredential> credentials = credentialDao.findByScopes(snapshot.getProvider().getProviderId(), snapshot.getEndpoint().getEndpointId());
         java.util.Map<String, ThirdCredential> byType = new java.util.LinkedHashMap<>();
         credentials.forEach(credential -> byType.putIfAbsent(credential.getCredentialType(), credential));
         credentials.forEach(credential -> { if (credential.getEndpointId() != null) byType.put(credential.getCredentialType(), credential); });

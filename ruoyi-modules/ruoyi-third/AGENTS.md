@@ -2,9 +2,9 @@
 
 统一管理第三方 HTTP Provider 和 Endpoint。数据库是配置事实源，业务调用只能依赖 `ruoyi-api` 的 `ThirdPartyGateway` 合同。
 
-## 结构
+## Structure
 
-生产代码按 `controller/listener/api adapter -> usecase -> service -> dao -> mapper -> XML` 组织；凭据、URI 白名单、缓存快照、执行 Pipeline 和观测代码均属于本模块。
+Production code follows `controller/admin -> usecase/impl -> service -> dao -> mapper -> XML`; HTTP/SPI adapters and runtime policies remain module-owned ports. Persistence entities, read models, BOs, and VOs are separate; only the stable gateway contract crosses the module boundary. Credential, URI allowlist, cache snapshots, execution pipeline, and observability are module-owned.
 
 ## 约束
 
