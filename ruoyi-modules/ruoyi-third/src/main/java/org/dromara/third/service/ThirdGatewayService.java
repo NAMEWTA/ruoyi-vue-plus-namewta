@@ -33,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -117,7 +118,11 @@ public class ThirdGatewayService implements ThirdPartyGateway {
             return failure(request, requestId, ThirdPartyFailureCategory.HTTP, e.getStatusCode().value(), null);
         } catch (org.springframework.web.client.ResourceAccessException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.TIMEOUT, 0, null);
-        } catch (RestClientException | IllegalArgumentException e) {
+        } catch (ThirdRejectedException e) {
+            return failure(request, requestId, e.category(), 0, null);
+        } catch (IllegalArgumentException e) {
+            return failure(request, requestId, ThirdPartyFailureCategory.REJECTED, 0, null);
+        } catch (RestClientException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.TRANSPORT, 0, null);
         } finally {
             lease.close();
@@ -186,6 +191,9 @@ public class ThirdGatewayService implements ThirdPartyGateway {
         credentials.forEach(credential -> byType.putIfAbsent(credential.getCredentialType(), credential));
         credentials.forEach(credential -> { if (credential.getEndpointId() != null) byType.put(credential.getCredentialType(), credential); });
         byType.values().forEach(credential -> {
+            if (credential.getExpiresAt() != null && credential.getExpiresAt().isBefore(LocalDateTime.now())) {
+                throw new ThirdRejectedException(ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, "Third-party credential expired");
+            }
             JsonNode node = JsonUtils.getJsonMapper().readTree(credentialCrypto.decrypt(credential));
             if (node != null && node.isObject() && node.get("headers") != null && node.get("headers").isObject()) {
                 node.get("headers").properties().forEach(entry -> target.putIfAbsent(entry.getKey(), entry.getValue().asText()));

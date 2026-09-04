@@ -42,6 +42,16 @@ public class ThirdInvocationRecorder {
         statistic.setQuotaValue(0L); statisticMapper.upsert(statistic);
         Map<String, Object> event = new LinkedHashMap<>(); event.put("event", "HTTP_REQUEST"); event.put("requestId", response.requestId());
         event.put("providerCode", request.providerCode()); event.put("endpointCode", request.endpointCode()); event.put("status", response.category().name()); event.put("durationMs", durationMs);
+        event.put("parameters", request.query()); event.put("requestHeaders", ThirdLogSanitizer.headers(request.headers()));
+        event.put("body", ThirdLogSanitizer.json(request.body())); event.put("completed", response.category() != ThirdPartyFailureCategory.NONE || response.isSuccess());
         logSink.ifAvailable(sink -> sink.write(event));
+        if (response.isSuccess() || response.category() != ThirdPartyFailureCategory.NONE) {
+            ThirdStatistic providerStatistic = new ThirdStatistic(); providerStatistic.setStatisticId(IdGeneratorUtil.nextLongId());
+            providerStatistic.setProviderCode(request.providerCode()); providerStatistic.setEndpointCode(null); providerStatistic.setStatDate(LocalDate.now());
+            providerStatistic.setAttemptCount((long) attempts); providerStatistic.setSuccessCount(response.isSuccess() ? 1L : 0L);
+            providerStatistic.setFailureCount(response.isSuccess() ? 0L : 1L); providerStatistic.setTimeoutCount(response.category() == ThirdPartyFailureCategory.TIMEOUT ? 1L : 0L);
+            providerStatistic.setRejectedCount(response.category() == ThirdPartyFailureCategory.RATE_LIMITED || response.category() == ThirdPartyFailureCategory.REJECTED ? 1L : 0L);
+            providerStatistic.setQuotaValue(0L); statisticMapper.upsert(providerStatistic);
+        }
     }
 }
