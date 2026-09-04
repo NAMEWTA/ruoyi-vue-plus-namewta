@@ -50,4 +50,12 @@ class ThirdEndpointSecurityTest {
         assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateOverrideJson("{\"baseUrl\":\"https://evil.example\"}"));
         assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateOverrideJson("{\"headers\":{\"X-Version\":\"bad\\nvalue\"}}"));
     }
+
+    @Test
+    void validatesProviderOriginAtRuntime() {
+        assertEquals("https://api.example", ThirdEndpointSecurity.validateBaseUrl("https://api.example/"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateBaseUrl("https://api.example/v1"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateBaseUrl("https://api.example?redirect=https://evil.example"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateBaseUrl("//evil.example"));
+    }
 }

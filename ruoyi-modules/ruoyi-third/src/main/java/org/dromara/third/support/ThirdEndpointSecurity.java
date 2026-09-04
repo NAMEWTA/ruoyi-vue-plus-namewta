@@ -32,6 +32,25 @@ public final class ThirdEndpointSecurity {
         return value;
     }
 
+    /** Provider origins are trusted configuration, but still revalidated at runtime. */
+    public static String validateBaseUrl(String value) {
+        if (value == null || value.isBlank() || value.length() > 2048 || value.matches(".*[\\r\\n<>\\$].*")) {
+            throw new ServiceException("Base URL must be an http(s) origin");
+        }
+        String normalized = value.trim();
+        try {
+            URI uri = URI.create(normalized);
+            if (!Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null
+                || uri.getUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null
+                || (uri.getRawPath() != null && !uri.getRawPath().isEmpty() && !"/".equals(uri.getRawPath()))) {
+                throw new ServiceException("Base URL must be an http(s) origin");
+            }
+            return normalized.replaceAll("/+$", "");
+        } catch (IllegalArgumentException ex) {
+            throw new ServiceException("Base URL is invalid");
+        }
+    }
+
     public static String validateRelativePath(String path) {
         if (path == null || path.isBlank() || path.length() > 512 || path.contains("\\") || path.contains("..")
             || path.startsWith("//") || path.matches(".*[\\r\\n<>\\$].*")) {

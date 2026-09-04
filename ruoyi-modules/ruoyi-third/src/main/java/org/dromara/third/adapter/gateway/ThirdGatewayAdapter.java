@@ -196,6 +196,7 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
     }
 
     private static void validateSnapshot(ThirdConfigSnapshot snapshot) {
+        ThirdEndpointSecurity.validateBaseUrl(snapshot.getProvider().getBaseUrl());
         ThirdEndpointSecurity.validateSharedHeadersJson(snapshot.getProvider().getSharedHeadersJson());
         ThirdEndpoint endpoint = snapshot.getEndpoint();
         ThirdEndpointSecurity.validateMethod(endpoint.getHttpMethod());

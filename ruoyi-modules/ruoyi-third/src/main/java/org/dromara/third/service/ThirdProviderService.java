@@ -11,9 +11,7 @@ import org.dromara.third.port.ThirdConfigSnapshotPort;
 import org.dromara.third.support.ThirdEndpointSecurity;
 import org.springframework.stereotype.Service;
 
-import java.net.URI;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -73,17 +71,7 @@ public class ThirdProviderService {
     }
 
     private static String normalizeBaseUrl(String url) {
-        try {
-            URI uri = URI.create(url.trim());
-            if (!Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null
-                || uri.getRawQuery() != null || uri.getRawFragment() != null || uri.getUserInfo() != null
-                || (uri.getRawPath() != null && !uri.getRawPath().isEmpty() && !"/".equals(uri.getRawPath()))) {
-                throw new ServiceException("Base URL must be an http(s) origin");
-            }
-            return url.trim().replaceAll("/+$", "");
-        } catch (IllegalArgumentException e) {
-            throw new ServiceException("Base URL is invalid");
-        }
+        return ThirdEndpointSecurity.validateBaseUrl(url);
     }
 
     private static String normalizeStatus(String status) {
