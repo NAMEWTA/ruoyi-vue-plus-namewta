@@ -12,7 +12,7 @@ import java.util.Set;
 
 public final class ThirdLogSanitizerAdapter {
     private static final int MAX_BYTES = 16 * 1024;
-    private static final Set<String> BLOCKED = Set.of("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key", "apikey", "secret", "private-key", "signature", "token", "password", "encryption", "passphrase", "credential");
+    private static final Set<String> BLOCKED = Set.of("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key", "apikey", "appkey", "access-key", "key", "secret", "private-key", "signature", "token", "password", "encryption", "passphrase", "credential");
 
     private ThirdLogSanitizerAdapter() {
     }

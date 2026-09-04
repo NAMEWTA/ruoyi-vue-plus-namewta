@@ -78,15 +78,16 @@ class ThirdInvocationRecorderAdapterTest {
             jsonMapper.readTree("{\"apiKey\":\"plain-secret\"}"));
 
         recorder.recordAttempt(new ThirdOutboundAttempt(request, "request-2", 1, "/companies/1",
-            Map.of("Authorization", "Bearer secret-token"), request.body(), null, null, null, 0, false, Set.of()));
+            Map.of("Authorization", "Bearer secret-token", "X-QCC-Key", "plain-key"), request.body(), null, null, null, 0, false, Set.of()));
         recorder.recordAttempt(new ThirdOutboundAttempt(request, "request-2", 1, "/companies/1",
-            Map.of("Authorization", "Bearer secret-token"), request.body(), 200, ThirdPartyFailureCategory.NONE,
+            Map.of("Authorization", "Bearer secret-token", "X-QCC-Key", "plain-key"), request.body(), 200, ThirdPartyFailureCategory.NONE,
             jsonMapper.readTree("{\"token\":\"response-secret\"}"), 4, true, Set.of()));
 
         assertEquals(2, events.size());
         assertEquals("THIRD_HTTP_ATTEMPT_START", events.getFirst().get("event"));
         assertEquals("THIRD_HTTP_ATTEMPT_FINISH", events.getLast().get("event"));
         assertEquals("***", ((Map<?, ?>) events.getFirst().get("requestHeaders")).get("Authorization"));
+        assertEquals("***", ((Map<?, ?>) events.getFirst().get("requestHeaders")).get("X-QCC-Key"));
         assertFalse(String.valueOf(events.getLast().get("body")).contains("plain-secret"));
         assertFalse(String.valueOf(events.getLast().get("response")).contains("response-secret"));
     }
