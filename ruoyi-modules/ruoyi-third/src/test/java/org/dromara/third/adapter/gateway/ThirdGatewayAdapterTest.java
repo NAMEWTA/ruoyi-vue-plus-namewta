@@ -39,14 +39,18 @@ class ThirdGatewayAdapterTest {
     private final JsonMapper jsonMapper = new JsonMapper();
     private HttpServer server;
     private AtomicInteger requests;
+    private AtomicInteger redirectTargetRequests;
     private ThirdConfigSnapshot snapshot;
     private ThirdGatewayAdapter gateway;
 
     @BeforeEach
     void setUp() throws IOException {
         requests = new AtomicInteger();
+        redirectTargetRequests = new AtomicInteger();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/companies", this::handleCompanyRequest);
+        server.createContext("/redirect", this::handleRedirect);
+        server.createContext("/redirect-target", this::handleRedirectTarget);
         server.start();
 
         ThirdProvider provider = new ThirdProvider();
@@ -100,22 +104,8 @@ class ThirdGatewayAdapterTest {
                 return 1;
             }
         };
-        ThirdInvocationRecorderPort recorder = (request, response, durationMs, attempts) -> {
-        };
-        ThirdCredentialStore credentials = (providerId, endpointId) -> List.of();
-        ThirdCredentialCryptoPort crypto = new ThirdCredentialCryptoPort() {
-            @Override
-            public EncryptedSecret encrypt(String scopeType, String credentialType, String json) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public String decrypt(org.dromara.third.domain.ThirdCredential credential) {
-                throw new UnsupportedOperationException();
-            }
-        };
-        gateway = new ThirdGatewayAdapter(config, new ThirdProviderAdapterRegistry(List.of()), resilience,
-            recorder, credentials, crypto, new org.dromara.third.http.ThirdHttpClientFactory());
+        gateway = createGateway(resilience, (request, response, durationMs, attempts) -> {
+        });
     }
 
     @AfterEach
@@ -162,6 +152,28 @@ class ThirdGatewayAdapterTest {
                 return 1;
             }
         };
+        gateway = createGateway(rejecting, (request, response, durationMs, attempts) -> {
+        });
+
+        ThirdPartyResponse<Object> response = gateway.execute(ThirdPartyRequest.of("qichacha", "company"));
+
+        assertEquals(ThirdPartyFailureCategory.RATE_LIMITED, response.category());
+        assertEquals(0, requests.get());
+    }
+
+    @Test
+    void refusesRedirectResponseWithoutFollowingIt() {
+        snapshot.getEndpoint().setRelativePath("/redirect");
+        snapshot.getEndpoint().setHttpMethod("GET");
+
+        ThirdPartyResponse<Object> response = gateway.execute(ThirdPartyRequest.of("qichacha", "company"));
+
+        assertEquals(ThirdPartyFailureCategory.HTTP, response.category());
+        assertEquals(302, response.httpStatus());
+        assertEquals(0, redirectTargetRequests.get());
+    }
+
+    private ThirdGatewayAdapter createGateway(ThirdResiliencePort resilience, ThirdInvocationRecorderPort recorder) {
         ThirdConfigSnapshotPort config = new ThirdConfigSnapshotPort() {
             @Override
             public ThirdConfigSnapshot get(String providerCode, String endpointCode) {
@@ -172,15 +184,9 @@ class ThirdGatewayAdapterTest {
             public void evict(String providerCode, String endpointCode) {
             }
         };
-        gateway = new ThirdGatewayAdapter(config, new ThirdProviderAdapterRegistry(List.of()), rejecting,
-            (request, response, durationMs, attempts) -> {
-            }, (providerId, endpointId) -> List.of(), new NoopCrypto(),
+        return new ThirdGatewayAdapter(config, new ThirdProviderAdapterRegistry(List.of()), resilience,
+            recorder, (providerId, endpointId) -> List.of(), new NoopCrypto(),
             new org.dromara.third.http.ThirdHttpClientFactory());
-
-        ThirdPartyResponse<Object> response = gateway.execute(ThirdPartyRequest.of("qichacha", "company"));
-
-        assertEquals(ThirdPartyFailureCategory.RATE_LIMITED, response.category());
-        assertEquals(0, requests.get());
     }
 
     private void handleCompanyRequest(HttpExchange exchange) throws IOException {
@@ -193,6 +199,21 @@ class ThirdGatewayAdapterTest {
         assertTrue(requestBody.contains("\"name\":\"Acme\""));
         byte[] response = "{\"result\":\"ok\"}".getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, response.length);
+        try (OutputStream output = exchange.getResponseBody()) {
+            output.write(response);
+        }
+    }
+
+    private void handleRedirect(HttpExchange exchange) throws IOException {
+        exchange.getResponseHeaders().set("Location", "http://example.invalid/blocked");
+        exchange.sendResponseHeaders(302, -1);
+        exchange.close();
+    }
+
+    private void handleRedirectTarget(HttpExchange exchange) throws IOException {
+        redirectTargetRequests.incrementAndGet();
+        byte[] response = "{\"result\":\"unexpected\"}".getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(200, response.length);
         try (OutputStream output = exchange.getResponseBody()) {
             output.write(response);

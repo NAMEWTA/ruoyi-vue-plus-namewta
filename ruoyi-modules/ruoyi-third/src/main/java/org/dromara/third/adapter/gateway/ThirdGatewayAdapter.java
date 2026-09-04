@@ -145,6 +145,10 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
                 }
             }
             if (response == null) throw new RestClientException("No response from third-party endpoint");
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                return failure(request, requestId, ThirdPartyFailureCategory.HTTP,
+                    response.getStatusCode().value(), null, elapsedMs(startedAt), attemptsUsed);
+            }
             Object body = decode(response, snapshot.getEndpoint().getResponseMode());
             ThirdAdapterResponse mappedInput = new ThirdAdapterResponse(request, response.getStatusCode().value(), body,
                 (System.nanoTime() - startedAt) / 1_000_000, requestId);
