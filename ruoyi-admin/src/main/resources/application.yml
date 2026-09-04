@@ -505,3 +505,9 @@ spring.ai.mcp:
             - -y
             - '@modelcontextprotocol/server-filesystem'
             - D:/data
+
+--- # Third-party HTTP integration
+third:
+  crypto:
+    # AES-GCM master key; provide a 16/24/32-byte value via deployment secret.
+    master-key: ${THIRD_CRYPTO_MASTER_KEY:}
