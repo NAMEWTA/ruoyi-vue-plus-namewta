@@ -143,15 +143,19 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
             invocationRecorder.record(request, result, (System.nanoTime() - startedAt) / 1_000_000, attemptsUsed);
             return result;
         } catch (RestClientResponseException e) {
-            return failure(request, requestId, ThirdPartyFailureCategory.HTTP, e.getStatusCode().value(), null);
+            return failure(request, requestId, ThirdPartyFailureCategory.HTTP, e.getStatusCode().value(), null,
+                elapsedMs(startedAt), attemptsUsed);
         } catch (org.springframework.web.client.ResourceAccessException e) {
-            return failure(request, requestId, ThirdPartyFailureCategory.TIMEOUT, 0, null);
+            return failure(request, requestId, ThirdPartyFailureCategory.TIMEOUT, 0, null,
+                elapsedMs(startedAt), attemptsUsed);
         } catch (ThirdRejectedException e) {
-            return failure(request, requestId, e.category(), 0, null);
+            return failure(request, requestId, e.category(), 0, null, elapsedMs(startedAt), attemptsUsed);
         } catch (IllegalArgumentException e) {
-            return failure(request, requestId, ThirdPartyFailureCategory.REJECTED, 0, null);
+            return failure(request, requestId, ThirdPartyFailureCategory.REJECTED, 0, null,
+                elapsedMs(startedAt), attemptsUsed);
         } catch (RestClientException e) {
-            return failure(request, requestId, ThirdPartyFailureCategory.TRANSPORT, 0, null);
+            return failure(request, requestId, ThirdPartyFailureCategory.TRANSPORT, 0, null,
+                elapsedMs(startedAt), attemptsUsed);
         } finally {
             lease.close();
         }
@@ -240,10 +244,21 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         body.propertyNames().forEach(name -> { if (!allowed.contains(name.toLowerCase())) throw new IllegalArgumentException("Body field is not declared"); });
     }
 
-    private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId, ThirdPartyFailureCategory category, int status, String message) {
+    private static long elapsedMs(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
+    }
+
+    private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId,
+                                              ThirdPartyFailureCategory category, int status, String message) {
+        return failure(request, requestId, category, status, message, 0, 0);
+    }
+
+    private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId,
+                                              ThirdPartyFailureCategory category, int status, String message,
+                                              long durationMs, int attempts) {
         ThirdPartyResponse<T> result = new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), status, category, message, null);
         try {
-            invocationRecorder.record(request, result, 0, 0);
+            invocationRecorder.record(request, result, durationMs, attempts);
         } catch (RuntimeException ignored) {
             // A logging failure must not replace the stable gateway classification.
         }
