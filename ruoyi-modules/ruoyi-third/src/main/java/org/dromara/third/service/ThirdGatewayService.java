@@ -35,6 +35,7 @@ import java.util.UUID;
 public class ThirdGatewayService implements ThirdPartyGateway {
     private final ThirdConfigCache configCache;
     private final ThirdProviderAdapterRegistry adapterRegistry;
+    private final ThirdResiliencePolicy resiliencePolicy;
     private final ThirdHttpClientFactory clientFactory = new ThirdHttpClientFactory();
 
     @Override
@@ -64,6 +65,12 @@ public class ThirdGatewayService implements ThirdPartyGateway {
         }
         if (!"0".equals(snapshot.getProvider().getStatus())) return failure(request, requestId, ThirdPartyFailureCategory.PROVIDER_DISABLED, 0, null);
         if (!"0".equals(snapshot.getEndpoint().getStatus())) return failure(request, requestId, ThirdPartyFailureCategory.ENDPOINT_DISABLED, 0, null);
+        ThirdLimitLease lease;
+        try {
+            lease = resiliencePolicy.acquire(snapshot.getProvider(), snapshot.getEndpoint());
+        } catch (ThirdRejectedException e) {
+            return failure(request, requestId, e.category(), 0, null);
+        }
         try {
             String path = expandPath(snapshot.getEndpoint().getRelativePath(), request.path());
             Map<String, String> headers = declaredHeaders(snapshot.getEndpoint().getHeaderSchemaJson(), request.headers());
@@ -100,6 +107,8 @@ public class ThirdGatewayService implements ThirdPartyGateway {
             return failure(request, requestId, ThirdPartyFailureCategory.TIMEOUT, 0, null);
         } catch (RestClientException | IllegalArgumentException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.TRANSPORT, 0, null);
+        } finally {
+            lease.close();
         }
     }
 
