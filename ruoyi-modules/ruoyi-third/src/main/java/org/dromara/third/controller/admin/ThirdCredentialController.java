@@ -32,7 +32,7 @@ public class ThirdCredentialController {
         return R.ok();
     }
 
-    @DeleteMapping("/{credentialId}")
+    @PostMapping("/{credentialId}/remove")
     @Log(title = "第三方凭据", businessType = BusinessType.DELETE)
     @SaCheckPermission("third:credential:remove")
     public R<Void> remove(@PathVariable Long credentialId) {

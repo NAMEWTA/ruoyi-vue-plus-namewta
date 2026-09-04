@@ -24,4 +24,14 @@ class ThirdEndpointSecurityTest {
         assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateRequestMode("SCRIPT"));
         assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateResponseMode("XML"));
     }
+
+    @Test
+    void rejectsCallerConnectionAndExecutableMetadata() {
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateHeaderName("Authorization"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateHeaderName("Host"));
+        assertEquals("Authorization", ThirdEndpointSecurity.validateConfiguredHeaderName("Authorization"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateMetadataJson("{\"expression\":\"#{evil}\"}", "schema"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateRelativePath("/%2e%2e/secret"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateRelativePath("/resource#fragment"));
+    }
 }

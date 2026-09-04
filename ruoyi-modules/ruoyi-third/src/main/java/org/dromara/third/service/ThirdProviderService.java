@@ -8,6 +8,7 @@ import org.dromara.third.domain.ThirdProvider;
 import org.dromara.third.domain.bo.ThirdProviderBo;
 import org.dromara.third.domain.vo.ThirdProviderVo;
 import org.dromara.third.port.ThirdConfigSnapshotPort;
+import org.dromara.third.support.ThirdEndpointSecurity;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -29,17 +30,19 @@ public class ThirdProviderService {
 
     public void save(ThirdProviderBo bo) {
         ThirdProvider current = bo.getProviderId() == null ? null : required(bo.getProviderId());
-        if (providerDao.existsCode(bo.getProviderCode(), bo.getProviderId())) throw new ServiceException("Provider code already exists");
+        String providerCode = ThirdEndpointSecurity.validateIdentifier(bo.getProviderCode(), "Provider code");
+        if (providerDao.existsCode(providerCode, bo.getProviderId())) throw new ServiceException("Provider code already exists");
         ThirdProvider entity = current == null ? new ThirdProvider() : current;
         if (current == null) { entity.setProviderId(IdGeneratorUtil.nextLongId()); entity.setVersion(0); entity.setDelFlag("0"); }
-        entity.setProviderCode(bo.getProviderCode().trim());
+        entity.setProviderCode(providerCode);
         entity.setProviderName(bo.getProviderName().trim());
         entity.setBaseUrl(normalizeBaseUrl(bo.getBaseUrl()));
-        entity.setStatus(bo.getStatus());
-        entity.setTimeoutConnectMs(bo.getTimeoutConnectMs());
-        entity.setTimeoutReadMs(bo.getTimeoutReadMs());
-        entity.setRateLimit(bo.getRateLimit());
-        entity.setConcurrencyLimit(bo.getConcurrencyLimit());
+        entity.setStatus(normalizeStatus(bo.getStatus()));
+        entity.setTimeoutConnectMs(positive(bo.getTimeoutConnectMs(), 3000));
+        entity.setTimeoutReadMs(positive(bo.getTimeoutReadMs(), 10000));
+        entity.setRateLimit(nonNegative(bo.getRateLimit()));
+        entity.setConcurrencyLimit(nonNegative(bo.getConcurrencyLimit()));
+        ThirdEndpointSecurity.validateSharedHeadersJson(bo.getSharedHeadersJson());
         entity.setSharedHeadersJson(bo.getSharedHeadersJson());
         entity.setRemark(bo.getRemark());
         int changed = current == null ? providerDao.insert(entity) : providerDao.update(entity);
@@ -73,13 +76,31 @@ public class ThirdProviderService {
         try {
             URI uri = URI.create(url.trim());
             if (!Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null
-                || uri.getRawQuery() != null || uri.getRawFragment() != null || uri.getUserInfo() != null) {
+                || uri.getRawQuery() != null || uri.getRawFragment() != null || uri.getUserInfo() != null
+                || (uri.getRawPath() != null && !uri.getRawPath().isEmpty() && !"/".equals(uri.getRawPath()))) {
                 throw new ServiceException("Base URL must be an http(s) origin");
             }
             return url.trim().replaceAll("/+$", "");
         } catch (IllegalArgumentException e) {
             throw new ServiceException("Base URL is invalid");
         }
+    }
+
+    private static String normalizeStatus(String status) {
+        if (!"0".equals(status) && !"1".equals(status)) throw new ServiceException("Provider status is invalid");
+        return status;
+    }
+
+    private static int positive(Integer value, int fallback) {
+        if (value == null) return fallback;
+        if (value < 100) throw new ServiceException("Timeout must be at least 100 ms");
+        return value;
+    }
+
+    private static int nonNegative(Integer value) {
+        if (value == null) return 0;
+        if (value < 0) throw new ServiceException("Limit cannot be negative");
+        return value;
     }
 
     private static ThirdProviderVo toVo(ThirdProvider x) {

@@ -24,6 +24,7 @@ import org.dromara.third.spi.ThirdProviderAdapterRegistry;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -51,7 +52,7 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
     private final ThirdInvocationRecorderPort invocationRecorder;
     private final ThirdCredentialStore credentialStore;
     private final ThirdCredentialCryptoPort credentialCrypto;
-    private final ThirdHttpClientFactory clientFactory = new ThirdHttpClientFactory();
+    private final ThirdHttpClientFactory clientFactory;
 
     @Override
     public ThirdPartyResponse<Object> execute(ThirdPartyRequest request) {
@@ -108,13 +109,20 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
             int maxAttempts = resiliencePolicy.maxAttempts(snapshot.getEndpoint());
             for (int attempt = 1; attempt <= maxAttempts; attempt++) {
                 attemptsUsed = attempt;
+                if (prepared.body() != null && !"GET".equals(snapshot.getEndpoint().getHttpMethod())) {
+                    headers.putIfAbsent(HttpHeaders.CONTENT_TYPE, "FORM".equals(snapshot.getEndpoint().getRequestMode())
+                        ? MediaType.APPLICATION_FORM_URLENCODED_VALUE : MediaType.APPLICATION_JSON_VALUE);
+                }
                 RestClient.RequestBodySpec spec = client.method(HttpMethod.valueOf(snapshot.getEndpoint().getHttpMethod()))
                     .uri(uriBuilder -> uriBuilder.path(path).queryParams(query(request.query())).build())
                     .headers(h -> headers.forEach(h::set));
                 if (prepared.body() != null && !"GET".equals(snapshot.getEndpoint().getHttpMethod())) {
                     if ("FORM".equals(snapshot.getEndpoint().getRequestMode())) {
                         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-                        request.query().forEach((key, value) -> form.add(key, String.valueOf(value)));
+                        if (!(prepared.body() instanceof JsonNode bodyNode) || !bodyNode.isObject()) {
+                            throw new IllegalArgumentException("FORM body must be a JSON object");
+                        }
+                        bodyNode.properties().forEach(entry -> form.add(entry.getKey(), entry.getValue().isNull() ? "" : entry.getValue().asText()));
                         spec.body(form);
                     } else {
                         spec.body(prepared.body() instanceof JsonNode node ? node.toString() : prepared.body());
@@ -123,7 +131,9 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
                 try {
                     response = spec.retrieve().toEntity(byte[].class);
                     break;
-                } catch (RestClientResponseException | org.springframework.web.client.ResourceAccessException e) {
+                } catch (RestClientResponseException e) {
+                    throw e;
+                } catch (org.springframework.web.client.ResourceAccessException e) {
                     if (attempt == maxAttempts) throw e;
                 }
             }
@@ -134,19 +144,19 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
             if (adapter != null) {
                 ThirdPartyResponse<?> mapped = adapter.mapResponse(mappedInput);
                 if (mapped != null) {
-                    invocationRecorder.record(request, mapped, (System.nanoTime() - startedAt) / 1_000_000, attemptsUsed);
+                    record(request, mapped, elapsedMs(startedAt), attemptsUsed, ThirdEndpointSecurity.parseSensitiveFields(snapshot.getEndpoint().getSensitiveFieldsJson()));
                     return (ThirdPartyResponse<T>) mapped;
                 }
             }
             ThirdPartyResponse<T> result = new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), response.getStatusCode().value(),
                 ThirdPartyFailureCategory.NONE, null, convert(body, responseType, genericType));
-            invocationRecorder.record(request, result, (System.nanoTime() - startedAt) / 1_000_000, attemptsUsed);
+            record(request, result, elapsedMs(startedAt), attemptsUsed, ThirdEndpointSecurity.parseSensitiveFields(snapshot.getEndpoint().getSensitiveFieldsJson()));
             return result;
         } catch (RestClientResponseException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.HTTP, e.getStatusCode().value(), null,
                 elapsedMs(startedAt), attemptsUsed);
         } catch (org.springframework.web.client.ResourceAccessException e) {
-            return failure(request, requestId, ThirdPartyFailureCategory.TIMEOUT, 0, null,
+            return failure(request, requestId, isTimeout(e) ? ThirdPartyFailureCategory.TIMEOUT : ThirdPartyFailureCategory.TRANSPORT, 0, null,
                 elapsedMs(startedAt), attemptsUsed);
         } catch (ThirdRejectedException e) {
             return failure(request, requestId, e.category(), 0, null, elapsedMs(startedAt), attemptsUsed);
@@ -155,6 +165,12 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
                 elapsedMs(startedAt), attemptsUsed);
         } catch (RestClientException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.TRANSPORT, 0, null,
+                elapsedMs(startedAt), attemptsUsed);
+        } catch (ThirdDecodeException e) {
+            return failure(request, requestId, ThirdPartyFailureCategory.DECODE, 0, null,
+                elapsedMs(startedAt), attemptsUsed);
+        } catch (RuntimeException e) {
+            return failure(request, requestId, ThirdPartyFailureCategory.PROVIDER, 0, null,
                 elapsedMs(startedAt), attemptsUsed);
         } finally {
             lease.close();
@@ -165,14 +181,22 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         byte[] body = response.getBody() == null ? new byte[0] : response.getBody();
         if ("BYTES".equals(mode)) return body;
         if ("TEXT".equals(mode)) return new String(body, StandardCharsets.UTF_8);
-        return body.length == 0 ? null : JsonUtils.getJsonMapper().readTree(body);
+        try {
+            return body.length == 0 ? null : JsonUtils.getJsonMapper().readTree(body);
+        } catch (RuntimeException e) {
+            throw new ThirdDecodeException(e);
+        }
     }
 
     private static <T> T convert(Object body, Class<T> type, Type genericType) {
         if (body == null || (type == Object.class && genericType == Object.class)) return type.cast(body);
         if (genericType == type && type.isInstance(body)) return type.cast(body);
         if (genericType == Object.class) return type.cast(body);
-        return (T) JsonUtils.getJsonMapper().convertValue(body, JsonUtils.getJsonMapper().constructType(genericType));
+        try {
+            return (T) JsonUtils.getJsonMapper().convertValue(body, JsonUtils.getJsonMapper().constructType(genericType));
+        } catch (RuntimeException e) {
+            throw new ThirdDecodeException(e);
+        }
     }
 
     private static String expandPath(String template, Map<String, ?> values) {
@@ -188,10 +212,12 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
 
     private static Map<String, String> declaredHeaders(String schema, Map<String, String> input) {
         Map<String, String> result = new LinkedHashMap<>();
-        java.util.Set<String> allowed = schema == null ? java.util.Set.of() : parseNames(schema);
+        java.util.Set<String> allowed = schema == null ? java.util.Set.of() : ThirdEndpointSecurity.parseAllowedNames(schema);
         for (Map.Entry<String, String> entry : input.entrySet()) {
-            if (!allowed.contains(entry.getKey().toLowerCase())) throw new IllegalArgumentException("Header is not declared");
-            result.put(entry.getKey(), entry.getValue());
+            String name = ThirdEndpointSecurity.validateHeaderName(entry.getKey());
+            if (!allowed.contains(name.toLowerCase())) throw new IllegalArgumentException("Header is not declared");
+            if (entry.getValue() == null || entry.getValue().indexOf('\r') >= 0 || entry.getValue().indexOf('\n') >= 0) throw new IllegalArgumentException("Header value is invalid");
+            result.put(name, entry.getValue());
         }
         return result;
     }
@@ -207,7 +233,10 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
     private static void mergeSharedHeaders(Map<String, String> target, String json) {
         if (json == null || json.isBlank()) return;
         JsonNode node = JsonUtils.getJsonMapper().readTree(json);
-        if (node != null && node.isObject()) node.properties().forEach(entry -> target.putIfAbsent(entry.getKey(), entry.getValue().asText()));
+        if (node != null && node.isObject()) node.properties().forEach(entry -> {
+            String name = ThirdEndpointSecurity.validateConfiguredHeaderName(entry.getKey());
+            if (entry.getValue().isValueNode()) target.putIfAbsent(name, entry.getValue().asText());
+        });
     }
 
     private static MultiValueMap<String, String> query(Map<String, ?> values) {
@@ -227,25 +256,51 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
             }
             JsonNode node = JsonUtils.getJsonMapper().readTree(credentialCrypto.decrypt(credential));
             if (node != null && node.isObject() && node.get("headers") != null && node.get("headers").isObject()) {
-                node.get("headers").properties().forEach(entry -> target.putIfAbsent(entry.getKey(), entry.getValue().asText()));
+                node.get("headers").properties().forEach(entry -> {
+                    String name = ThirdEndpointSecurity.validateConfiguredHeaderName(entry.getKey());
+                    if (entry.getValue().isValueNode()) target.put(name, entry.getValue().asText());
+                });
             }
         });
     }
 
     private static void validateDeclaredValues(String schema, Map<String, ?> values) {
         if (values.isEmpty() || schema == null || schema.isBlank()) return;
-        java.util.Set<String> allowed = parseNames(schema);
+        java.util.Set<String> allowed = ThirdEndpointSecurity.parseAllowedNames(schema);
         if (values.keySet().stream().anyMatch(key -> !allowed.contains(key.toLowerCase()))) throw new IllegalArgumentException("Parameter is not declared");
     }
 
     private static void validateBody(String schema, JsonNode body) {
         if (body == null || !body.isObject() || schema == null || schema.isBlank()) return;
-        java.util.Set<String> allowed = parseNames(schema);
+        java.util.Set<String> allowed = ThirdEndpointSecurity.parseAllowedNames(schema);
         body.propertyNames().forEach(name -> { if (!allowed.contains(name.toLowerCase())) throw new IllegalArgumentException("Body field is not declared"); });
     }
 
     private static long elapsedMs(long startedAt) {
         return (System.nanoTime() - startedAt) / 1_000_000;
+    }
+
+    private void record(ThirdPartyRequest request, ThirdPartyResponse<?> response, long durationMs, int attempts,
+                        java.util.Set<String> additionalSensitiveFields) {
+        try {
+            invocationRecorder.record(request, response, durationMs, attempts, additionalSensitiveFields);
+        } catch (RuntimeException ignored) {
+            // Observability is best effort and must not change the synchronous gateway result.
+        }
+    }
+
+    private static boolean isTimeout(Throwable error) {
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (current instanceof java.net.SocketTimeoutException
+                || current instanceof java.net.http.HttpTimeoutException
+                || current instanceof java.util.concurrent.TimeoutException
+                || current instanceof java.nio.channels.InterruptedByTimeoutException) return true;
+        }
+        return false;
+    }
+
+    private static final class ThirdDecodeException extends RuntimeException {
+        private ThirdDecodeException(Throwable cause) { super(cause); }
     }
 
     private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId,

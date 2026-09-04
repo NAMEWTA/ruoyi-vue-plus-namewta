@@ -13,9 +13,11 @@ import org.dromara.third.domain.bo.ThirdCredentialBo;
 import org.dromara.third.domain.vo.ThirdCredentialVo;
 import org.dromara.third.port.ThirdConfigSnapshotPort;
 import org.dromara.third.port.ThirdCredentialCryptoPort;
+import org.dromara.third.support.ThirdEndpointSecurity;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +32,7 @@ public class ThirdCredentialService {
         ThirdProvider provider = provider(providerCode);
         Long endpointId = endpointCode == null || endpointCode.isBlank() ? null : endpoint(provider.getProviderId(), endpointCode).getEndpointId();
         return credentialDao.findByScope(provider.getProviderId(), endpointId).stream()
-            .map(c -> new ThirdCredentialVo(c.getCredentialId(), providerCode, endpointCode, c.getScopeType(), c.getCredentialType(),
+            .map(c -> new ThirdCredentialVo(c.getCredentialId(), provider.getProviderCode(), endpointCode, c.getScopeType(), c.getCredentialType(),
                 c.getKekVersion(), c.getExpiresAt(), c.getVersion(), c.getDelFlag())).toList();
     }
 
@@ -38,14 +40,18 @@ public class ThirdCredentialService {
         ThirdProvider provider = provider(bo.getProviderCode());
         ThirdEndpoint endpoint = bo.getEndpointCode() == null || bo.getEndpointCode().isBlank() ? null : endpoint(provider.getProviderId(), bo.getEndpointCode());
         String scope = endpoint == null ? "PROVIDER" : "ENDPOINT";
+        String credentialType = ThirdEndpointSecurity.validateIdentifier(bo.getCredentialType(), "Credential type");
+        if (bo.getSecretJson() == null || bo.getSecretJson().isBlank()) throw new ServiceException("Credential secret is required");
         ThirdCredential credential = bo.getCredentialId() == null ? new ThirdCredential() : credentialDao.findById(bo.getCredentialId());
         if (bo.getCredentialId() != null && credential == null) throw new ServiceException("Credential not found");
+        if (credential != null && credential.getProviderId() != null && !provider.getProviderId().equals(credential.getProviderId())) throw new ServiceException("Credential does not belong to provider");
+        if (bo.getCredentialId() != null && !Objects.equals(credential.getEndpointId(), endpoint == null ? null : endpoint.getEndpointId())) throw new ServiceException("Credential scope cannot be changed");
         if (credential.getCredentialId() == null) credential.setCredentialId(IdGeneratorUtil.nextLongId());
         credential.setProviderId(provider.getProviderId());
         credential.setEndpointId(endpoint == null ? null : endpoint.getEndpointId());
         credential.setScopeType(scope);
-        credential.setCredentialType(bo.getCredentialType().trim());
-        ThirdCredentialCryptoPort.EncryptedSecret encrypted = crypto.encrypt(scope, bo.getCredentialType().trim(), bo.getSecretJson());
+        credential.setCredentialType(credentialType);
+        ThirdCredentialCryptoPort.EncryptedSecret encrypted = crypto.encrypt(scope, credentialType, bo.getSecretJson());
         credential.setCiphertext(encrypted.ciphertext());
         credential.setNonce(encrypted.nonce());
         credential.setAuthTag(encrypted.authTag());
@@ -61,10 +67,14 @@ public class ThirdCredentialService {
     public void remove(Long credentialId) {
         ThirdCredential credential = credentialDao.findById(credentialId);
         if (credential == null) throw new ServiceException("Credential not found");
+        if (!"0".equals(credential.getDelFlag())) throw new ServiceException("Credential not found");
         credential.setDelFlag("1");
         credentialDao.update(credential);
         ThirdProvider provider = providerDao.findActiveById(credential.getProviderId());
-        configCache.evict(provider == null ? null : provider.getProviderCode(), null);
+        if (provider == null) throw new ServiceException("Provider not found");
+        ThirdEndpoint endpoint = credential.getEndpointId() == null ? null : endpointDao.findActiveById(credential.getEndpointId());
+        String endpointCode = endpoint == null ? null : endpoint.getEndpointCode();
+        configCache.evict(provider.getProviderCode(), endpointCode);
     }
 
     private ThirdProvider provider(String code) {
