@@ -14,12 +14,18 @@ public class ThirdProviderAdapterRegistry {
 
     public ThirdProviderAdapterRegistry(List<ThirdProviderAdapter> values) {
         this.adapters = values.stream().collect(Collectors.toUnmodifiableMap(
-            value -> value.providerCode().trim(), Function.identity(), (left, right) -> {
+            value -> canonical(value.providerCode()), Function.identity(), (left, right) -> {
                 throw new ServiceException("Duplicate third provider adapter: " + left.providerCode());
             }));
     }
 
     public ThirdProviderAdapter find(String providerCode) {
-        return adapters.get(providerCode);
+        return providerCode == null ? null : adapters.get(providerCode.trim());
+    }
+
+    private static String canonical(String providerCode) {
+        String value = providerCode == null ? "" : providerCode.trim();
+        if (value.isBlank()) throw new ServiceException("Third provider adapter code is required");
+        return value;
     }
 }
