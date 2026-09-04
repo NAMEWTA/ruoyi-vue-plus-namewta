@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  * 创建档案材料业务服务。
  */
 @Service
-public class ProfileMaterialService {
+public class ProfileMaterialService implements IProfileMaterialService {
     static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
     static final int MAX_FILE_COUNT = 10;
     private static final String REFERENCE_TABLE = "profile_material_ref";
