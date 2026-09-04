@@ -36,6 +36,7 @@ public class ThirdGatewayService implements ThirdPartyGateway {
     private final ThirdConfigCache configCache;
     private final ThirdProviderAdapterRegistry adapterRegistry;
     private final ThirdResiliencePolicy resiliencePolicy;
+    private final ThirdInvocationRecorder invocationRecorder;
     private final ThirdHttpClientFactory clientFactory = new ThirdHttpClientFactory();
 
     @Override
@@ -99,8 +100,10 @@ public class ThirdGatewayService implements ThirdPartyGateway {
                 ThirdPartyResponse<?> mapped = adapter.mapResponse(mappedInput);
                 if (mapped != null) return (ThirdPartyResponse<T>) mapped;
             }
-            return new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), response.getStatusCode().value(),
+            ThirdPartyResponse<T> result = new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), response.getStatusCode().value(),
                 ThirdPartyFailureCategory.NONE, null, convert(body, responseType));
+            invocationRecorder.record(request, result, (System.nanoTime() - startedAt) / 1_000_000, 1);
+            return result;
         } catch (RestClientResponseException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.HTTP, e.getStatusCode().value(), null);
         } catch (org.springframework.web.client.ResourceAccessException e) {
@@ -166,7 +169,13 @@ public class ThirdGatewayService implements ThirdPartyGateway {
         return result;
     }
 
-    private static <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId, ThirdPartyFailureCategory category, int status, String message) {
-        return new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), status, category, message, null);
+    private <T> ThirdPartyResponse<T> failure(ThirdPartyRequest request, String requestId, ThirdPartyFailureCategory category, int status, String message) {
+        ThirdPartyResponse<T> result = new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), status, category, message, null);
+        try {
+            invocationRecorder.record(request, result, 0, 0);
+        } catch (RuntimeException ignored) {
+            // A logging failure must not replace the stable gateway classification.
+        }
+        return result;
     }
 }
