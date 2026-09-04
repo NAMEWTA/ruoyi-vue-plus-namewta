@@ -1,9 +1,12 @@
 package org.dromara.third.adapter.store;
 
-import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.redis.utils.RedisUtils;
+import org.dromara.common.redis.cache.CacheInvalidationHandler;
+import org.dromara.common.redis.cache.ClusterCacheInvalidationCoordinator;
 import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.domain.ThirdProvider;
 import org.dromara.third.port.ThirdConfigSnapshot;
@@ -13,14 +16,52 @@ import org.dromara.third.port.ThirdProviderConfigStore;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-@RequiredArgsConstructor
 public class ThirdConfigCacheAdapter implements ThirdConfigSnapshotPort {
     private static final String PREFIX = "third:config:";
-    private static final String CHANNEL = "third:config:invalidation";
+    private static final String INVALIDATION_NAMESPACE = "third:config";
     private final ThirdProviderConfigStore providerStore;
     private final ThirdEndpointConfigStore endpointStore;
+    private final ClusterCacheInvalidationCoordinator invalidationCoordinator;
+    private final Map<String, String> knownKeys = new ConcurrentHashMap<>();
+    private AutoCloseable invalidationRegistration;
+
+    public ThirdConfigCacheAdapter(ThirdProviderConfigStore providerStore,
+                                   ThirdEndpointConfigStore endpointStore,
+                                   ClusterCacheInvalidationCoordinator invalidationCoordinator) {
+        this.providerStore = providerStore;
+        this.endpointStore = endpointStore;
+        this.invalidationCoordinator = invalidationCoordinator;
+    }
+
+    @PostConstruct
+    void registerInvalidationHandler() {
+        invalidationRegistration = invalidationCoordinator.register(INVALIDATION_NAMESPACE,
+            new CacheInvalidationHandler() {
+                @Override
+                public void invalidate(String keyFingerprint) {
+                    knownKeys.remove(keyFingerprint);
+                }
+
+                @Override
+                public void clear() {
+                    knownKeys.clear();
+                }
+            });
+    }
+
+    @PreDestroy
+    void unregisterInvalidationHandler() {
+        if (invalidationRegistration == null) return;
+        try {
+            invalidationRegistration.close();
+        } catch (Exception ignored) {
+            // Coordinator owns the subscription lifecycle.
+        }
+    }
 
     public ThirdConfigSnapshot get(String providerCode, String endpointCode) {
         String key = key(providerCode, endpointCode);
@@ -28,7 +69,10 @@ public class ThirdConfigCacheAdapter implements ThirdConfigSnapshotPort {
             String cached = RedisUtils.getCacheObject(key);
             if (cached != null && !cached.isBlank()) {
                 ThirdConfigSnapshot snapshot = JsonUtils.parseObject(cached, ThirdConfigSnapshot.class);
-                if (snapshot != null && snapshot.getProvider() != null && snapshot.getEndpoint() != null) return snapshot;
+                if (snapshot != null && snapshot.getProvider() != null && snapshot.getEndpoint() != null) {
+                    remember(key);
+                    return snapshot;
+                }
             }
         } catch (Throwable e) {
             throw unavailable(e);
@@ -41,6 +85,7 @@ public class ThirdConfigCacheAdapter implements ThirdConfigSnapshotPort {
         ThirdConfigSnapshot snapshot = new ThirdConfigSnapshot(provider, endpoint);
         try {
             RedisUtils.setCacheObject(key, JsonUtils.toJsonString(snapshot), Duration.ofMinutes(10));
+            remember(key);
         } catch (Throwable e) {
             throw unavailable(e);
         }
@@ -51,11 +96,16 @@ public class ThirdConfigCacheAdapter implements ThirdConfigSnapshotPort {
         try {
             if (providerCode != null && endpointCode != null) {
                 RedisUtils.deleteObject(key(providerCode, endpointCode));
+                forget(key(providerCode, endpointCode));
+                invalidationCoordinator.invalidate(INVALIDATION_NAMESPACE, key(providerCode, endpointCode));
             } else if (providerCode != null) {
                 endpointStore.findAllByProviderCode(providerCode).forEach(endpoint ->
-                    RedisUtils.deleteObject(key(providerCode, endpoint.getEndpointCode())));
+                    evictLocalKey(key(providerCode, endpoint.getEndpointCode())));
+                invalidationCoordinator.clear(INVALIDATION_NAMESPACE);
+            } else {
+                knownKeys.clear();
+                invalidationCoordinator.clear(INVALIDATION_NAMESPACE);
             }
-            RedisUtils.publish(CHANNEL, providerCode + ":" + (endpointCode == null ? "*" : endpointCode));
         } catch (RuntimeException e) {
             throw unavailable(e);
         }
@@ -63,6 +113,19 @@ public class ThirdConfigCacheAdapter implements ThirdConfigSnapshotPort {
 
     public static String key(String providerCode, String endpointCode) {
         return PREFIX + providerCode + ":" + endpointCode;
+    }
+
+    private void evictLocalKey(String key) {
+        RedisUtils.deleteObject(key);
+        forget(key);
+    }
+
+    private void remember(String key) {
+        knownKeys.put(ClusterCacheInvalidationCoordinator.fingerprint(key), key);
+    }
+
+    private void forget(String key) {
+        knownKeys.remove(ClusterCacheInvalidationCoordinator.fingerprint(key));
     }
 
     private static ServiceException unavailable(Throwable cause) {
