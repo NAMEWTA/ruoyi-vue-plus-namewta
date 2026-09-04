@@ -12,6 +12,7 @@ import org.dromara.third.domain.vo.ThirdProviderVo;
 import org.dromara.third.mapper.ThirdEndpointMapper;
 import org.dromara.third.mapper.ThirdProviderMapper;
 import org.dromara.third.service.ThirdProviderUseCase;
+import org.dromara.third.service.ThirdConfigCache;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -23,6 +24,7 @@ public class ThirdProviderService implements ThirdProviderUseCase {
     private static final String ENABLED = "0";
     private final ThirdProviderMapper providerMapper;
     private final ThirdEndpointMapper endpointMapper;
+    private final ThirdConfigCache configCache;
 
     @Override
     public List<ThirdProviderVo> list(String keyword) {
@@ -51,11 +53,12 @@ public class ThirdProviderService implements ThirdProviderUseCase {
         entity.setStatus(bo.getStatus()); entity.setTimeoutConnectMs(bo.getTimeoutConnectMs()); entity.setTimeoutReadMs(bo.getTimeoutReadMs());
         entity.setRateLimit(bo.getRateLimit()); entity.setConcurrencyLimit(bo.getConcurrencyLimit()); entity.setSharedHeadersJson(bo.getSharedHeadersJson()); entity.setRemark(bo.getRemark());
         if ((current == null ? providerMapper.insert(entity) : providerMapper.updateById(entity)) != 1) throw new ServiceException("Provider save failed");
+        configCache.evict(entity.getProviderCode(), null);
     }
 
     @Override
     @DSTransactional
-    public void changeStatus(Long providerId, String status) { ThirdProvider entity = required(providerId); entity.setStatus("1".equals(status) ? "1" : ENABLED); providerMapper.updateById(entity); }
+    public void changeStatus(Long providerId, String status) { ThirdProvider entity = required(providerId); entity.setStatus("1".equals(status) ? "1" : ENABLED); providerMapper.updateById(entity); configCache.evict(entity.getProviderCode(), null); }
 
     @Override
     @DSTransactional
@@ -64,7 +67,7 @@ public class ThirdProviderService implements ThirdProviderUseCase {
         if (!"1".equals(entity.getStatus())) throw new ServiceException("Disable provider before deleting");
         long activeEndpoints = endpointMapper.selectCount(new LambdaQueryWrapper<ThirdEndpoint>().eq(ThirdEndpoint::getProviderId, providerId).eq(ThirdEndpoint::getDelFlag, "0"));
         if (activeEndpoints > 0) throw new ServiceException("Remove endpoints before deleting provider");
-        entity.setDelFlag("1"); providerMapper.updateById(entity);
+        entity.setDelFlag("1"); providerMapper.updateById(entity); configCache.evict(entity.getProviderCode(), null);
     }
 
     private ThirdProvider required(Long id) { ThirdProvider value = providerMapper.selectOne(new LambdaQueryWrapper<ThirdProvider>().eq(ThirdProvider::getProviderId, id).eq(ThirdProvider::getDelFlag, "0")); if (value == null) throw new ServiceException("Provider not found"); return value; }

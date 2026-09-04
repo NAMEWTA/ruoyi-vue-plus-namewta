@@ -13,6 +13,7 @@ import org.dromara.third.mapper.ThirdEndpointMapper;
 import org.dromara.third.mapper.ThirdProviderMapper;
 import org.dromara.third.service.ThirdEndpointSecurity;
 import org.dromara.third.service.ThirdEndpointUseCase;
+import org.dromara.third.service.ThirdConfigCache;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,6 +23,7 @@ import java.util.List;
 public class ThirdEndpointService implements ThirdEndpointUseCase {
     private final ThirdEndpointMapper endpointMapper;
     private final ThirdProviderMapper providerMapper;
+    private final ThirdConfigCache configCache;
 
     @Override
     public List<ThirdEndpointVo> list(Long providerId, String keyword) {
@@ -53,15 +55,16 @@ public class ThirdEndpointService implements ThirdEndpointUseCase {
         entity.setRateLimit(Math.min(nonNegative(bo.getRateLimit()), nonNegative(provider.getRateLimit()))); entity.setConcurrencyLimit(Math.min(nonNegative(bo.getConcurrencyLimit()), nonNegative(provider.getConcurrencyLimit())));
         entity.setRetryCount(Math.min(nonNegative(bo.getRetryCount()), Boolean.TRUE.equals(bo.getIdempotent()) ? 3 : 0)); entity.setSensitiveFieldsJson(bo.getSensitiveFieldsJson()); entity.setAdapterCode(bo.getAdapterCode());
         if ((bo.getEndpointId() == null ? endpointMapper.insert(entity) : endpointMapper.updateById(entity)) != 1) throw new ServiceException("Endpoint save failed");
+        configCache.evict(entity.getProviderCode(), entity.getEndpointCode());
     }
 
     @Override
     @DSTransactional
-    public void changeStatus(Long endpointId, String status) { ThirdEndpoint entity = required(endpointId); entity.setStatus("1".equals(status) ? "1" : "0"); endpointMapper.updateById(entity); }
+    public void changeStatus(Long endpointId, String status) { ThirdEndpoint entity = required(endpointId); entity.setStatus("1".equals(status) ? "1" : "0"); endpointMapper.updateById(entity); configCache.evict(entity.getProviderCode(), entity.getEndpointCode()); }
 
     @Override
     @DSTransactional
-    public void remove(Long endpointId) { ThirdEndpoint entity = required(endpointId); if (!"1".equals(entity.getStatus())) throw new ServiceException("Disable endpoint before deleting"); entity.setDelFlag("1"); endpointMapper.updateById(entity); }
+    public void remove(Long endpointId) { ThirdEndpoint entity = required(endpointId); if (!"1".equals(entity.getStatus())) throw new ServiceException("Disable endpoint before deleting"); entity.setDelFlag("1"); endpointMapper.updateById(entity); configCache.evict(entity.getProviderCode(), entity.getEndpointCode()); }
 
     private ThirdEndpoint required(Long id) { ThirdEndpoint value = endpointMapper.selectOne(new LambdaQueryWrapper<ThirdEndpoint>().eq(ThirdEndpoint::getEndpointId, id).eq(ThirdEndpoint::getDelFlag, "0")); if (value == null) throw new ServiceException("Endpoint not found"); return value; }
     private static int nonNegative(Integer value) { return value == null ? 0 : Math.max(value, 0); }
