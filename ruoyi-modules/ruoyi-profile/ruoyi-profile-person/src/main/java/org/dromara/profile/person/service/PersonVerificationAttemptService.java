@@ -18,6 +18,7 @@ import org.dromara.profile.person.port.provider.PersonVerificationProviderRegist
 import org.dromara.profile.person.adapter.codec.PersonVerificationEvidenceCodec;
 import org.dromara.profile.person.port.verification.PersonVerificationService;
 import org.dromara.common.mybatis.utils.IdGeneratorUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import java.util.Optional;
@@ -29,6 +30,17 @@ public class PersonVerificationAttemptService implements PersonVerificationServi
     private final PersonVerificationProviderRegistryPort providerRegistry;
     private final PersonVerificationAttemptDao dao;
     private final PersonVerificationEvidenceCodec evidenceCodec;
+
+    /** Spring 生产装配入口，不依赖测试审计记录器占位参数。 */
+    @Autowired
+    public PersonVerificationAttemptService(PersonVerificationProviderRegistryPort providerRegistry,
+                                                PersonVerificationAttemptDao dao,
+                                                PersonVerificationEvidenceCodec evidenceCodec) {
+        this.providerRegistry = providerRegistry;
+        this.dao = dao;
+        this.evidenceCodec = evidenceCodec;
+    }
+
     /**
      * 处理personverificationattemptcoordinator。
      */
@@ -36,9 +48,7 @@ public class PersonVerificationAttemptService implements PersonVerificationServi
                                                 PersonVerificationAttemptDao dao,
                                                 PersonVerificationEvidenceCodec evidenceCodec,
                                                 Object ignoredAuditRecorder) {
-        this.providerRegistry = providerRegistry;
-        this.dao = dao;
-        this.evidenceCodec = evidenceCodec;
+        this(providerRegistry, dao, evidenceCodec);
     }
     /**
      * 启动认证尝试

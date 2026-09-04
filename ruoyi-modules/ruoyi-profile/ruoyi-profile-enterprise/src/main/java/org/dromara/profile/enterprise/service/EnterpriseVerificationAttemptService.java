@@ -18,6 +18,7 @@ import org.dromara.profile.enterprise.port.provider.EnterpriseVerificationProvid
 import org.dromara.profile.enterprise.adapter.codec.EnterpriseVerificationEvidenceCodec;
 import org.dromara.profile.enterprise.port.verification.EnterpriseVerificationService;
 import org.dromara.common.mybatis.utils.IdGeneratorUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import java.util.Optional;
@@ -29,6 +30,17 @@ public class EnterpriseVerificationAttemptService implements EnterpriseVerificat
     private final EnterpriseVerificationProviderRegistryPort providerRegistry;
     private final EnterpriseVerificationAttemptDao dao;
     private final EnterpriseVerificationEvidenceCodec evidenceCodec;
+
+    /** Spring 生产装配入口，不依赖测试审计记录器占位参数。 */
+    @Autowired
+    public EnterpriseVerificationAttemptService(EnterpriseVerificationProviderRegistryPort providerRegistry,
+                                                     EnterpriseVerificationAttemptDao dao,
+                                                     EnterpriseVerificationEvidenceCodec evidenceCodec) {
+        this.providerRegistry = providerRegistry;
+        this.dao = dao;
+        this.evidenceCodec = evidenceCodec;
+    }
+
     /**
      * 处理enterpriseverificationattemptcoordinator。
      */
@@ -36,9 +48,7 @@ public class EnterpriseVerificationAttemptService implements EnterpriseVerificat
                                                      EnterpriseVerificationAttemptDao dao,
                                                      EnterpriseVerificationEvidenceCodec evidenceCodec,
                                                      Object ignoredAuditRecorder) {
-        this.providerRegistry = providerRegistry;
-        this.dao = dao;
-        this.evidenceCodec = evidenceCodec;
+        this(providerRegistry, dao, evidenceCodec);
     }
     /**
      * 启动认证尝试
