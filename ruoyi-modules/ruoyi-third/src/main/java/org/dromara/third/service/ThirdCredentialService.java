@@ -44,6 +44,9 @@ public class ThirdCredentialService {
         if (bo.getSecretJson() == null || bo.getSecretJson().isBlank()) throw new ServiceException("Credential secret is required");
         ThirdCredential credential = bo.getCredentialId() == null ? new ThirdCredential() : credentialDao.findById(bo.getCredentialId());
         if (bo.getCredentialId() != null && credential == null) throw new ServiceException("Credential not found");
+        if (bo.getCredentialId() != null && !"0".equals(credential.getDelFlag())) {
+            throw new ServiceException("Credential not found");
+        }
         if (credential != null && credential.getProviderId() != null && !provider.getProviderId().equals(credential.getProviderId())) throw new ServiceException("Credential does not belong to provider");
         if (bo.getCredentialId() != null && !Objects.equals(credential.getEndpointId(), endpoint == null ? null : endpoint.getEndpointId())) throw new ServiceException("Credential scope cannot be changed");
         if (credential.getCredentialId() == null) credential.setCredentialId(IdGeneratorUtil.nextLongId());

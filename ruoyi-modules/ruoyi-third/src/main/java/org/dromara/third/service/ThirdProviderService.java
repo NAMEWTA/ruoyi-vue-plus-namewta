@@ -29,6 +29,9 @@ public class ThirdProviderService {
     public void save(ThirdProviderBo bo) {
         ThirdProvider current = bo.getProviderId() == null ? null : required(bo.getProviderId());
         String providerCode = ThirdEndpointSecurity.validateIdentifier(bo.getProviderCode(), "Provider code");
+        if (current != null && !current.getProviderCode().equals(providerCode)) {
+            throw new ServiceException("Provider code cannot be changed");
+        }
         if (providerDao.existsCode(providerCode, bo.getProviderId())) throw new ServiceException("Provider code already exists");
         ThirdProvider entity = current == null ? new ThirdProvider() : current;
         if (current == null) { entity.setProviderId(IdGeneratorUtil.nextLongId()); entity.setVersion(0); entity.setDelFlag("0"); }
