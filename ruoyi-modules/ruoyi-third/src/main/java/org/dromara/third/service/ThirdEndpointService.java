@@ -53,6 +53,11 @@ public class ThirdEndpointService {
         ThirdEndpointSecurity.validateMetadataJson(bo.getResponseSchemaJson(), "Response schema");
         ThirdEndpointSecurity.validateMetadataJson(bo.getOverrideJson(), "Override");
         ThirdEndpointSecurity.validateMetadataJson(bo.getSensitiveFieldsJson(), "Sensitive fields");
+        ThirdEndpointSecurity.parseAllowedNames(bo.getPathSchemaJson());
+        ThirdEndpointSecurity.parseAllowedNames(bo.getQuerySchemaJson());
+        ThirdEndpointSecurity.parseAllowedNames(bo.getHeaderSchemaJson());
+        ThirdEndpointSecurity.parseAllowedNames(bo.getBodySchemaJson());
+        ThirdEndpointSecurity.parseSensitiveFields(bo.getSensitiveFieldsJson());
         entity.setPathSchemaJson(bo.getPathSchemaJson());
         entity.setQuerySchemaJson(bo.getQuerySchemaJson());
         entity.setHeaderSchemaJson(bo.getHeaderSchemaJson());
@@ -61,7 +66,7 @@ public class ThirdEndpointService {
         entity.setOverrideJson(bo.getOverrideJson());
         if (!"0".equals(bo.getStatus()) && !"1".equals(bo.getStatus())) throw new ServiceException("Endpoint status is invalid");
         entity.setStatus(bo.getStatus());
-        entity.setIdempotent(bo.getIdempotent());
+        entity.setIdempotent(Boolean.TRUE.equals(bo.getIdempotent()));
         if (bo.getRetryCount() != null && bo.getRetryCount() > 0 && !Boolean.TRUE.equals(bo.getIdempotent())) throw new ServiceException("Only idempotent endpoints may retry");
         entity.setRateLimit(capped(nonNegative(bo.getRateLimit()), provider.getRateLimit()));
         entity.setConcurrencyLimit(capped(nonNegative(bo.getConcurrencyLimit()), provider.getConcurrencyLimit()));
@@ -94,7 +99,11 @@ public class ThirdEndpointService {
         return value;
     }
 
-    private static int nonNegative(Integer value) { return value == null ? 0 : Math.max(value, 0); }
+    private static int nonNegative(Integer value) {
+        if (value == null) return 0;
+        if (value < 0) throw new ServiceException("Limit cannot be negative");
+        return value;
+    }
 
     private static int capped(int child, Integer parent) {
         return parent == null || parent <= 0 ? child : Math.min(child, parent);

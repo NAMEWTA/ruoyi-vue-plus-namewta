@@ -7,6 +7,7 @@ import org.dromara.third.api.ThirdPartyGateway;
 import org.dromara.third.api.ThirdPartyRequest;
 import org.dromara.third.api.ThirdPartyResponse;
 import org.dromara.third.domain.ThirdCredential;
+import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.http.ThirdHttpClientFactory;
 import org.dromara.third.port.ThirdConfigSnapshot;
 import org.dromara.third.port.ThirdConfigSnapshotPort;
@@ -85,6 +86,11 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         } catch (RuntimeException e) {
             return failure(request, requestId, ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, 0, null);
         }
+        try {
+            validateSnapshot(snapshot);
+        } catch (RuntimeException e) {
+            return failure(request, requestId, ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, 0, null);
+        }
         if (!"0".equals(snapshot.getProvider().getStatus())) return failure(request, requestId, ThirdPartyFailureCategory.PROVIDER_DISABLED, 0, null);
         if (!"0".equals(snapshot.getEndpoint().getStatus())) return failure(request, requestId, ThirdPartyFailureCategory.ENDPOINT_DISABLED, 0, null);
         ThirdLimitLease lease;
@@ -95,7 +101,7 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         }
         int attemptsUsed = 0;
         try {
-            String path = expandPath(snapshot.getEndpoint().getRelativePath(), request.path());
+            String path = expandPath(snapshot.getEndpoint().getRelativePath(), snapshot.getEndpoint().getPathSchemaJson(), request.path());
             validateDeclaredValues(snapshot.getEndpoint().getQuerySchemaJson(), request.query());
             validateBody(snapshot.getEndpoint().getBodySchemaJson(), request.body());
             Map<String, String> headers = declaredHeaders(snapshot.getEndpoint().getHeaderSchemaJson(), request.headers());
@@ -188,6 +194,27 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         }
     }
 
+    private static void validateSnapshot(ThirdConfigSnapshot snapshot) {
+        ThirdEndpointSecurity.validateSharedHeadersJson(snapshot.getProvider().getSharedHeadersJson());
+        ThirdEndpoint endpoint = snapshot.getEndpoint();
+        ThirdEndpointSecurity.validateMethod(endpoint.getHttpMethod());
+        ThirdEndpointSecurity.validateRelativePath(endpoint.getRelativePath());
+        ThirdEndpointSecurity.validateRequestMode(endpoint.getRequestMode());
+        ThirdEndpointSecurity.validateResponseMode(endpoint.getResponseMode());
+        ThirdEndpointSecurity.validateMetadataJson(endpoint.getPathSchemaJson(), "Path schema");
+        ThirdEndpointSecurity.validateMetadataJson(endpoint.getQuerySchemaJson(), "Query schema");
+        ThirdEndpointSecurity.validateMetadataJson(endpoint.getHeaderSchemaJson(), "Header schema");
+        ThirdEndpointSecurity.validateMetadataJson(endpoint.getBodySchemaJson(), "Body schema");
+        ThirdEndpointSecurity.validateMetadataJson(endpoint.getResponseSchemaJson(), "Response schema");
+        ThirdEndpointSecurity.validateMetadataJson(endpoint.getOverrideJson(), "Override");
+        ThirdEndpointSecurity.validateMetadataJson(endpoint.getSensitiveFieldsJson(), "Sensitive fields");
+        ThirdEndpointSecurity.parseAllowedNames(endpoint.getPathSchemaJson());
+        ThirdEndpointSecurity.parseAllowedNames(endpoint.getQuerySchemaJson());
+        ThirdEndpointSecurity.parseAllowedNames(endpoint.getHeaderSchemaJson());
+        ThirdEndpointSecurity.parseAllowedNames(endpoint.getBodySchemaJson());
+        ThirdEndpointSecurity.parseSensitiveFields(endpoint.getSensitiveFieldsJson());
+    }
+
     private static <T> T convert(Object body, Class<T> type, Type genericType) {
         if (body == null || (type == Object.class && genericType == Object.class)) return type.cast(body);
         if (genericType == type && type.isInstance(body)) return type.cast(body);
@@ -199,9 +226,15 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         }
     }
 
-    private static String expandPath(String template, Map<String, ?> values) {
+    private static String expandPath(String template, String schema, Map<String, ?> values) {
         String result = ThirdEndpointSecurity.validateRelativePath(template);
+        boolean declared = schema != null && !schema.isBlank();
+        java.util.Set<String> allowed = !declared
+            ? java.util.Set.of() : ThirdEndpointSecurity.parseAllowedNames(schema);
         for (Map.Entry<String, ?> entry : values.entrySet()) {
+            if (declared && !allowed.contains(entry.getKey().toLowerCase())) {
+                throw new IllegalArgumentException("Path parameter is not declared");
+            }
             String token = "{" + entry.getKey() + "}";
             if (!result.contains(token)) throw new IllegalArgumentException("Unknown path parameter");
             result = result.replace(token, UriUtils.encodePathSegment(String.valueOf(entry.getValue()), StandardCharsets.UTF_8));
@@ -216,17 +249,8 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         for (Map.Entry<String, String> entry : input.entrySet()) {
             String name = ThirdEndpointSecurity.validateHeaderName(entry.getKey());
             if (!allowed.contains(name.toLowerCase())) throw new IllegalArgumentException("Header is not declared");
-            if (entry.getValue() == null || entry.getValue().indexOf('\r') >= 0 || entry.getValue().indexOf('\n') >= 0) throw new IllegalArgumentException("Header value is invalid");
-            result.put(name, entry.getValue());
+            result.put(name, ThirdEndpointSecurity.validateConfiguredHeaderValue(entry.getValue()));
         }
-        return result;
-    }
-
-    private static java.util.Set<String> parseNames(String schema) {
-        JsonNode node = JsonUtils.getJsonMapper().readTree(schema);
-        java.util.Set<String> result = new java.util.HashSet<>();
-        if (node != null && node.isArray()) node.forEach(value -> result.add(value.asText().toLowerCase()));
-        else if (node != null && node.isObject() && node.get("allowed") != null && node.get("allowed").isArray()) node.get("allowed").forEach(value -> result.add(value.asText().toLowerCase()));
         return result;
     }
 
@@ -235,7 +259,9 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
         JsonNode node = JsonUtils.getJsonMapper().readTree(json);
         if (node != null && node.isObject()) node.properties().forEach(entry -> {
             String name = ThirdEndpointSecurity.validateConfiguredHeaderName(entry.getKey());
-            if (entry.getValue().isValueNode()) target.putIfAbsent(name, entry.getValue().asText());
+            if (entry.getValue().isValueNode() && !entry.getValue().isNull()) {
+                target.putIfAbsent(name, ThirdEndpointSecurity.validateConfiguredHeaderValue(entry.getValue().asText()));
+            }
         });
     }
 
@@ -254,24 +280,35 @@ public class ThirdGatewayAdapter implements ThirdPartyGateway {
             if (credential.getExpiresAt() != null && credential.getExpiresAt().isBefore(LocalDateTime.now())) {
                 throw new ThirdRejectedException(ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, "Third-party credential expired");
             }
-            JsonNode node = JsonUtils.getJsonMapper().readTree(credentialCrypto.decrypt(credential));
-            if (node != null && node.isObject() && node.get("headers") != null && node.get("headers").isObject()) {
-                node.get("headers").properties().forEach(entry -> {
-                    String name = ThirdEndpointSecurity.validateConfiguredHeaderName(entry.getKey());
-                    if (entry.getValue().isValueNode()) target.put(name, entry.getValue().asText());
-                });
+            try {
+                JsonNode node = JsonUtils.getJsonMapper().readTree(credentialCrypto.decrypt(credential));
+                if (node != null && node.isObject() && node.get("headers") != null && node.get("headers").isObject()) {
+                    node.get("headers").properties().forEach(entry -> {
+                        String name = ThirdEndpointSecurity.validateConfiguredHeaderName(entry.getKey());
+                        if (entry.getValue().isValueNode() && !entry.getValue().isNull()) {
+                            target.put(name, ThirdEndpointSecurity.validateConfiguredHeaderValue(entry.getValue().asText()));
+                        }
+                    });
+                }
+            } catch (ThirdRejectedException e) {
+                throw e;
+            } catch (RuntimeException e) {
+                throw new ThirdRejectedException(ThirdPartyFailureCategory.CONFIG_UNAVAILABLE, "Third-party credential is unavailable");
             }
         });
     }
 
     private static void validateDeclaredValues(String schema, Map<String, ?> values) {
-        if (values.isEmpty() || schema == null || schema.isBlank()) return;
+        if (values.isEmpty()) return;
+        if (schema == null || schema.isBlank()) throw new IllegalArgumentException("Parameters are not declared");
         java.util.Set<String> allowed = ThirdEndpointSecurity.parseAllowedNames(schema);
         if (values.keySet().stream().anyMatch(key -> !allowed.contains(key.toLowerCase()))) throw new IllegalArgumentException("Parameter is not declared");
     }
 
     private static void validateBody(String schema, JsonNode body) {
-        if (body == null || !body.isObject() || schema == null || schema.isBlank()) return;
+        if (body == null) return;
+        if (!body.isObject()) throw new IllegalArgumentException("JSON body must be an object");
+        if (schema == null || schema.isBlank()) throw new IllegalArgumentException("Body fields are not declared");
         java.util.Set<String> allowed = ThirdEndpointSecurity.parseAllowedNames(schema);
         body.propertyNames().forEach(name -> { if (!allowed.contains(name.toLowerCase())) throw new IllegalArgumentException("Body field is not declared"); });
     }

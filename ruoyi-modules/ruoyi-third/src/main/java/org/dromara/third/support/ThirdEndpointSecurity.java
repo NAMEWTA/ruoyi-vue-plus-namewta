@@ -93,6 +93,13 @@ public final class ThirdEndpointSecurity {
         return normalized;
     }
 
+    public static String validateConfiguredHeaderValue(String value) {
+        if (value == null || value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+            throw new ServiceException("Configured header value is invalid");
+        }
+        return value;
+    }
+
     public static void validateMetadataJson(String value, String field) {
         if (value == null || value.isBlank()) return;
         try {
@@ -109,7 +116,13 @@ public final class ThirdEndpointSecurity {
         try {
             JsonNode node = JsonUtils.getJsonMapper().readTree(value);
             if (node == null || !node.isObject()) throw new IllegalArgumentException();
-            node.properties().forEach(entry -> validateConfiguredHeaderName(entry.getKey()));
+            node.properties().forEach(entry -> {
+                validateConfiguredHeaderName(entry.getKey());
+                if (!entry.getValue().isValueNode() || entry.getValue().isNull()) {
+                    throw new ServiceException("Shared header value must be scalar");
+                }
+                validateConfiguredHeaderValue(entry.getValue().asText());
+            });
         } catch (RuntimeException ex) {
             throw new ServiceException("Shared headers must be a safe JSON object");
         }

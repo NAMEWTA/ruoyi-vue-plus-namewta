@@ -35,4 +35,11 @@ class ThirdLogSanitizerAdapterTest {
         assertEquals("***", values.get("token"));
         assertEquals("1", values.get("page"));
     }
+
+    @Test
+    void persistenceValueIsAlwaysValidBoundedJson() {
+        String value = ThirdLogSanitizerAdapter.jsonValue("plain text", Set.of());
+        assertEquals("\"plain text\"", value);
+        assertTrue(value.getBytes(StandardCharsets.UTF_8).length <= 16 * 1024);
+    }
 }

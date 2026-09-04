@@ -63,6 +63,18 @@ public final class ThirdLogSanitizerAdapter {
         return text(input);
     }
 
+    /** Returns a valid, bounded JSON scalar for persistence columns declared as JSON. */
+    public static String jsonValue(Object input, Set<String> additionalBlocked) {
+        String sanitized = value(input, additionalBlocked);
+        if (sanitized == null) return null;
+        String encoded = JsonUtils.toJsonString(sanitized);
+        while (encoded.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES && sanitized.length() > 0) {
+            sanitized = sanitized.substring(0, sanitized.length() - 1);
+            encoded = JsonUtils.toJsonString(sanitized);
+        }
+        return encoded;
+    }
+
     private static void redact(JsonNode node, Set<String> additionalBlocked) {
         if (node == null) return;
         if (node.isObject()) {

@@ -34,4 +34,13 @@ class ThirdEndpointSecurityTest {
         assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateRelativePath("/%2e%2e/secret"));
         assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateRelativePath("/resource#fragment"));
     }
+
+    @Test
+    void validatesTrustedHeaderValuesAndParameterSchema() {
+        assertEquals("Bearer test", ThirdEndpointSecurity.validateConfiguredHeaderValue("Bearer test"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateConfiguredHeaderValue("bad\r\nvalue"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.validateSharedHeadersJson("{\"X-Test\":\"bad\\nvalue\"}"));
+        assertEquals(java.util.Set.of("id"), ThirdEndpointSecurity.parseAllowedNames("{\"allowed\":[\"id\"]}"));
+        assertThrows(RuntimeException.class, () -> ThirdEndpointSecurity.parseAllowedNames("{}"));
+    }
 }

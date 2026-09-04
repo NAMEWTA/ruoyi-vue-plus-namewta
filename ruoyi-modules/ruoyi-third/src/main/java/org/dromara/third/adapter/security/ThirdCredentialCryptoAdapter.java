@@ -41,7 +41,9 @@ public class ThirdCredentialCryptoAdapter implements ThirdCredentialCryptoPort {
 
     public String decrypt(ThirdCredential credential) {
         if (credential == null || credential.getCiphertext() == null || credential.getNonce() == null
-            || credential.getAuthTag() == null) throw new ServiceException("凭据不可用");
+            || credential.getAuthTag() == null || !"v1".equals(credential.getKekVersion())
+            || credential.getNonce().length != NONCE_BYTES || credential.getAuthTag().length != TAG_BYTES
+            || credential.getCiphertext().length == 0) throw new ServiceException("凭据不可用");
         byte[] combined = new byte[credential.getCiphertext().length + credential.getAuthTag().length];
         System.arraycopy(credential.getCiphertext(), 0, combined, 0, credential.getCiphertext().length);
         System.arraycopy(credential.getAuthTag(), 0, combined, credential.getCiphertext().length, credential.getAuthTag().length);

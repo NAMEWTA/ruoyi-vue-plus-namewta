@@ -43,8 +43,8 @@ public class ThirdInvocationRecorderAdapter implements ThirdInvocationRecorderPo
             invocation.setProviderCode(request.providerCode()); invocation.setEndpointCode(request.endpointCode());
             invocation.setAttemptCount(attempts); invocation.setLogicalStatus(response.isSuccess() ? "SUCCESS" : "FAILURE");
             invocation.setFailureCategory(response.category().name()); invocation.setHttpStatus(response.httpStatus());
-            invocation.setDurationMs(durationMs); invocation.setSanitizedRequestJson(ThirdLogSanitizerAdapter.json(request.body(), additionalSensitiveFields));
-            invocation.setSanitizedResponseJson(ThirdLogSanitizerAdapter.value(response.body(), additionalSensitiveFields)); invocation.setCreateTime(LocalDateTime.now());
+            invocation.setDurationMs(durationMs); invocation.setSanitizedRequestJson(ThirdLogSanitizerAdapter.jsonValue(request.body(), additionalSensitiveFields));
+            invocation.setSanitizedResponseJson(ThirdLogSanitizerAdapter.jsonValue(response.body(), additionalSensitiveFields)); invocation.setCreateTime(LocalDateTime.now());
             invocationDao.upsert(invocation);
             ThirdStatistic statistic = statistic(request, response, attempts, request.endpointCode());
             statisticDao.upsert(statistic);
