@@ -227,11 +227,27 @@ class BusinessOssOwnerArchitectureUnitTest {
 
     private List<Path> productionJavaFiles(Path repository) throws Exception {
         try (Stream<Path> files = Files.walk(repository)) {
-            return files.filter(path -> path.toString().endsWith(".java"))
-                .filter(path -> path.toString().contains("/src/main/java/"))
-                .filter(path -> !repository.relativize(path).startsWith("specdev-worktree"))
+            return files.filter(this::isProductionJava)
                 .toList();
         }
+    }
+
+    private boolean isProductionJava(Path path) {
+        if (!path.getFileName().toString().endsWith(".java")) {
+            return false;
+        }
+        if (path.getNameCount() > 0 && java.util.stream.IntStream.range(0, path.getNameCount())
+            .anyMatch(index -> path.getName(index).toString().equals("specdev-worktree"))) {
+            return false;
+        }
+        for (int index = 0; index <= path.getNameCount() - 3; index++) {
+            if (path.getName(index).toString().equals("src")
+                && path.getName(index + 1).toString().equals("main")
+                && path.getName(index + 2).toString().equals("java")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void assertCarrierCoverage(Set<String> discovered, Manifest manifest) {

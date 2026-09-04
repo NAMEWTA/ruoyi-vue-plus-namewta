@@ -105,7 +105,7 @@ class SysConsoleLoggingUnitTest {
         @SuppressWarnings("unchecked")
         RollingFileAppender<ILoggingEvent> fileAppender =
             (RollingFileAppender<ILoggingEvent>) root.getAppender("file_console");
-        assertThat(fileAppender.getFile()).isEqualTo(logDirectory.resolve("sys-console.log").toString());
+        assertThat(Path.of(fileAppender.getFile())).isEqualTo(logDirectory.resolve("sys-console.log"));
         assertThat(fileAppender.isStarted()).isTrue();
         assertThat(fileAppender.getRollingPolicy()).isInstanceOf(TimeBasedRollingPolicy.class);
 

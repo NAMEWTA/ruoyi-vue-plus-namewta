@@ -51,6 +51,5 @@ nbdist/
 
 .flattened-pom.xml
 
-application-local.yml
 application-ga.yml
 specdev-worktree/

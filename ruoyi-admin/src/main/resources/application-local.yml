@@ -1,0 +1,87 @@
+# Generated local-only overrides for NAMEWTA development. Do not commit.
+server:
+  port: 18080
+
+spring:
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    dynamic:
+      primary: master
+      strict: true
+      datasource:
+        master:
+          type: ${spring.datasource.type}
+          driverClassName: com.mysql.cj.jdbc.Driver
+          url: "jdbc:mysql://172.16.105.9:53306/ry-namewta?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true"
+          username: "namewta_app"
+          password: "d0febf7e5dc9519a43ed55001c3e4d7d3764b769"
+      hikari:
+        maxPoolSize: 20
+        minIdle: 10
+        connectionTimeout: 30000
+        validationTimeout: 5000
+        idleTimeout: 600000
+        maxLifetime: 1800000
+        keepaliveTime: 30000
+  data:
+    redis:
+      host: "172.16.105.9"
+      port: 56379
+      database: 0
+      password: "f4f7756c9ee95c2c8f262792bf098303d226533514e3fd0f"
+      timeout: 10s
+      ssl:
+        enabled: false
+
+spring.boot.admin.client:
+  enabled: true
+  url: "http://172.16.105.9:59090/admin"
+  instance:
+    service-base-url: "http://172.16.105.25:18080"
+    service-host-type: IP
+    metadata:
+      username: ${spring.boot.admin.client.username}
+      userpassword: ${spring.boot.admin.client.password}
+  username: "namewta-monitor"
+  password: "d1a6fb7c3c623b8270e356bebb735e8a79680831"
+
+snail-job:
+  enabled: true
+  group: ruoyi_group
+  token: SJ_cKqBTPzCsWA3VyuCfFoccmuIEGXjr5KT
+  server:
+    host: "172.16.105.9"
+    port: 57888
+  namespace: dev
+  port: 28080
+  host:
+
+snail-ai:
+  enabled: true
+  server:
+    host: "172.16.105.9"
+    port: 58888
+  app-id: 1
+  token: SAI_566a6bfbc26e4998b4841cc927d50c5d
+  port: 38080
+  skill-temp-dir: ${java.io.tmpdir}/snail-ai-agent/skills
+  chat.ui.embed:
+    enabled: true
+    show-header: false
+    show-sidebar-user: false
+    show-agent-market: true
+    compact-input: true
+    lock-agent: false
+  open-api:
+    enabled: true
+    web-port: 58900
+    https: false
+    prefix: snail-ai
+    connect-timeout-ms: 5000
+    read-timeout-ms: 60000
+    chat-timeout-ms: 300000
+
+oss:
+  readiness:
+    diagnostic-objects:
+      minio: .well-known/oss-readiness/private-canary.txt
