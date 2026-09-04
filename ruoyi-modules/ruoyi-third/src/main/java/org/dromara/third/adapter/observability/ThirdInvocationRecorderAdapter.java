@@ -67,8 +67,8 @@ public class ThirdInvocationRecorderAdapter implements ThirdInvocationRecorderPo
             log.warn("Third-party invocation recording failed provider={} endpoint={} requestId={}", request.providerCode(), request.endpointCode(), response.requestId());
         }
         try {
-            Map<String, Object> event = new LinkedHashMap<>(); event.put("event", "HTTP_REQUEST"); event.put("requestId", response.requestId());
-            event.put("providerCode", request.providerCode()); event.put("endpointCode", request.endpointCode()); event.put("status", response.category().name()); event.put("durationMs", durationMs);
+            Map<String, Object> event = new LinkedHashMap<>(); event.put("event", "THIRD_HTTP_INVOCATION"); event.put("requestId", response.requestId());
+            event.put("providerCode", request.providerCode()); event.put("endpointCode", request.endpointCode()); event.put("failureCategory", response.category().name()); event.put("durationMs", durationMs);
             event.put("attempts", attempts); event.put("parameters", ThirdLogSanitizerAdapter.values(request.query()));
             event.put("requestHeaders", ThirdLogSanitizerAdapter.headers(request.headers())); event.put("body", ThirdLogSanitizerAdapter.json(request.body(), additionalSensitiveFields));
             event.put("response", ThirdLogSanitizerAdapter.value(response.body(), additionalSensitiveFields)); event.put("completed", true);
@@ -92,7 +92,7 @@ public class ThirdInvocationRecorderAdapter implements ThirdInvocationRecorderPo
             event.put("requestHeaders", ThirdLogSanitizerAdapter.headers(attempt.effectiveHeaders()));
             event.put("parameters", ThirdLogSanitizerAdapter.values(attempt.request().query()));
             event.put("body", ThirdLogSanitizerAdapter.value(attempt.requestBody(), attempt.additionalSensitiveFields()));
-            event.put("status", attempt.category() == null ? null : attempt.category().name());
+            event.put("failureCategory", attempt.category() == null ? null : attempt.category().name());
             event.put("httpStatus", attempt.httpStatus());
             event.put("response", ThirdLogSanitizerAdapter.value(attempt.responseBody(), attempt.additionalSensitiveFields()));
             event.put("durationMs", attempt.durationMs());

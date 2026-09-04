@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("local")
 class ThirdResiliencePolicyAdapterTest {
-    private final ThirdResiliencePolicyAdapter policy = new ThirdResiliencePolicyAdapter();
+    private final ThirdResiliencePolicyAdapter policy = new ThirdResiliencePolicyAdapter(null);
 
     @Test
     void onlyIdempotentEndpointsMayUseBoundedRetries() {

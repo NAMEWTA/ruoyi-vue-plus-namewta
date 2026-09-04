@@ -9,4 +9,6 @@ public interface ThirdEndpointConfigStore {
     ThirdEndpoint findActiveByProviderAndCode(Long providerId, String endpointCode);
 
     List<ThirdEndpoint> findAllByProviderCode(String providerCode);
+
+    List<ThirdEndpoint> findAllWithAdapter();
 }

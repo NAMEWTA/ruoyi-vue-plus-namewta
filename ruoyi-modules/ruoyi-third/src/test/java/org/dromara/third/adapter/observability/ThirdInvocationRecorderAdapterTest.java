@@ -86,6 +86,8 @@ class ThirdInvocationRecorderAdapterTest {
         assertEquals(2, events.size());
         assertEquals("THIRD_HTTP_ATTEMPT_START", events.getFirst().get("event"));
         assertEquals("THIRD_HTTP_ATTEMPT_FINISH", events.getLast().get("event"));
+        assertEquals(ThirdPartyFailureCategory.NONE.name(), events.getLast().get("failureCategory"));
+        assertEquals(200, events.getLast().get("httpStatus"));
         assertEquals("***", ((Map<?, ?>) events.getFirst().get("requestHeaders")).get("Authorization"));
         assertEquals("***", ((Map<?, ?>) events.getFirst().get("requestHeaders")).get("X-QCC-Key"));
         assertFalse(String.valueOf(events.getLast().get("body")).contains("plain-secret"));

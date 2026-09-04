@@ -10,6 +10,7 @@ import org.dromara.third.domain.ThirdProvider;
 import org.dromara.third.domain.bo.ThirdEndpointBo;
 import org.dromara.third.domain.vo.ThirdEndpointVo;
 import org.dromara.third.port.ThirdConfigSnapshotPort;
+import org.dromara.third.spi.ThirdProviderAdapterRegistry;
 import org.dromara.third.support.ThirdEndpointSecurity;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,7 @@ public class ThirdEndpointService {
     private final ThirdEndpointDao endpointDao;
     private final ThirdProviderDao providerDao;
     private final ThirdConfigSnapshotPort configCache;
+    private final ThirdProviderAdapterRegistry adapterRegistry;
 
     public List<ThirdEndpointVo> list(Long providerId, String keyword) {
         return endpointDao.findActive(providerId, keyword).stream().map(ThirdEndpointService::toVo).toList();
@@ -75,6 +77,7 @@ public class ThirdEndpointService {
         entity.setSensitiveFieldsJson(bo.getSensitiveFieldsJson());
         entity.setAdapterCode(bo.getAdapterCode() == null || bo.getAdapterCode().isBlank()
             ? null : ThirdEndpointSecurity.validateIdentifier(bo.getAdapterCode(), "Adapter code"));
+        adapterRegistry.find(entity.getProviderCode(), entity.getEndpointCode(), entity.getAdapterCode());
         int changed = bo.getEndpointId() == null ? endpointDao.insert(entity) : endpointDao.update(entity);
         if (changed != 1) throw new ServiceException("Endpoint save failed");
         configCache.evict(entity.getProviderCode(), entity.getEndpointCode());

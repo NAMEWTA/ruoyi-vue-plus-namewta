@@ -30,6 +30,14 @@ public class ThirdEndpointDao implements ThirdEndpointConfigStore {
             .eq(ThirdEndpoint::getProviderCode, providerCode));
     }
 
+    @Override
+    public List<ThirdEndpoint> findAllWithAdapter() {
+        return endpointMapper.selectList(new LambdaQueryWrapper<ThirdEndpoint>()
+            .eq(ThirdEndpoint::getDelFlag, "0")
+            .isNotNull(ThirdEndpoint::getAdapterCode)
+            .ne(ThirdEndpoint::getAdapterCode, ""));
+    }
+
     public ThirdEndpoint findActiveById(Long endpointId) {
         return endpointMapper.selectOne(new LambdaQueryWrapper<ThirdEndpoint>()
             .eq(ThirdEndpoint::getEndpointId, endpointId).eq(ThirdEndpoint::getDelFlag, "0"));

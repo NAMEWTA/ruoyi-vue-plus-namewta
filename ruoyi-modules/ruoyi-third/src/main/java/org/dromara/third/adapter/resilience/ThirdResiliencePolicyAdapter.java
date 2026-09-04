@@ -1,6 +1,5 @@
 package org.dromara.third.adapter.resilience;
 
-import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.third.api.ThirdPartyFailureCategory;
 import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.domain.ThirdProvider;
@@ -8,21 +7,30 @@ import org.dromara.third.port.ThirdResiliencePort;
 import org.dromara.third.support.ThirdLimitLease;
 import org.dromara.third.support.ThirdRejectedException;
 import org.redisson.api.RSemaphore;
+import org.redisson.api.RRateLimiter;
 import org.redisson.api.RateType;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
 @Component
 public class ThirdResiliencePolicyAdapter implements ThirdResiliencePort {
+    private final RedissonClient redissonClient;
+
+    public ThirdResiliencePolicyAdapter(RedissonClient redissonClient) {
+        this.redissonClient = redissonClient;
+    }
+
     public ThirdLimitLease acquire(ThirdProvider provider, ThirdEndpoint endpoint) {
         List<RSemaphore> acquired = new ArrayList<>();
         try {
-            if (positive(provider.getRateLimit()) && RedisUtils.rateLimiter("third:rate:provider:" + provider.getProviderCode(), RateType.OVERALL, provider.getRateLimit(), 1) < 0) {
+            if (positive(provider.getRateLimit()) && rateLimited("third:rate:provider:" + provider.getProviderCode(), provider.getRateLimit())) {
                 throw new ThirdRejectedException(ThirdPartyFailureCategory.RATE_LIMITED, "Provider rate limit exceeded");
             }
-            if (positive(endpoint.getRateLimit()) && RedisUtils.rateLimiter("third:rate:endpoint:" + provider.getProviderCode() + ":" + endpoint.getEndpointCode(), RateType.OVERALL, endpoint.getRateLimit(), 1) < 0) {
+            if (positive(endpoint.getRateLimit()) && rateLimited("third:rate:endpoint:" + provider.getProviderCode() + ":" + endpoint.getEndpointCode(), endpoint.getRateLimit())) {
                 throw new ThirdRejectedException(ThirdPartyFailureCategory.RATE_LIMITED, "Endpoint rate limit exceeded");
             }
             acquireSemaphore(acquired, "third:concurrency:provider:" + provider.getProviderCode(), provider.getConcurrencyLimit());
@@ -43,10 +51,16 @@ public class ThirdResiliencePolicyAdapter implements ThirdResiliencePort {
 
     private void acquireSemaphore(List<RSemaphore> acquired, String key, Integer limit) {
         if (!positive(limit)) return;
-        RSemaphore semaphore = RedisUtils.getClient().getSemaphore(key);
+        RSemaphore semaphore = redissonClient.getSemaphore(key);
         semaphore.trySetPermits(limit);
         if (!semaphore.tryAcquire()) throw new ThirdRejectedException(ThirdPartyFailureCategory.REJECTED, "Concurrency limit exceeded");
         acquired.add(semaphore);
+    }
+
+    private boolean rateLimited(String key, int rate) {
+        RRateLimiter rateLimiter = redissonClient.getRateLimiter(key);
+        rateLimiter.trySetRate(RateType.OVERALL, rate, Duration.ofSeconds(1), Duration.ZERO);
+        return !rateLimiter.tryAcquire();
     }
 
     private void release(RSemaphore semaphore) {

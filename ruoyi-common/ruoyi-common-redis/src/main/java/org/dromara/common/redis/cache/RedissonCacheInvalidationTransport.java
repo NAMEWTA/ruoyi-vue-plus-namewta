@@ -22,15 +22,24 @@ public class RedissonCacheInvalidationTransport implements CacheInvalidationTran
 
     private final RedissonClient redissonClient;
     private final JsonMapper jsonMapper;
+    private final String channel;
+    private final String acknowledgementPrefix;
 
     public RedissonCacheInvalidationTransport(RedissonClient redissonClient, JsonMapper jsonMapper) {
+        this(redissonClient, jsonMapper, CHANNEL, ACKNOWLEDGEMENT_PREFIX);
+    }
+
+    RedissonCacheInvalidationTransport(RedissonClient redissonClient, JsonMapper jsonMapper,
+                                       String channel, String acknowledgementPrefix) {
         this.redissonClient = redissonClient;
         this.jsonMapper = jsonMapper;
+        this.channel = channel;
+        this.acknowledgementPrefix = acknowledgementPrefix;
     }
 
     @Override
     public Subscription subscribe(Consumer<CacheInvalidationMessage> listener) {
-        RTopic topic = redissonClient.getTopic(CHANNEL);
+        RTopic topic = redissonClient.getTopic(channel);
         int listenerId = topic.addListener(String.class, (channel, payload) ->
             listener.accept(jsonMapper.readValue(payload, CacheInvalidationMessage.class)));
         return () -> topic.removeListener(listenerId);
@@ -38,7 +47,7 @@ public class RedissonCacheInvalidationTransport implements CacheInvalidationTran
 
     @Override
     public long publish(CacheInvalidationMessage message) {
-        return redissonClient.getTopic(CHANNEL).publish(jsonMapper.writeValueAsString(message));
+        return redissonClient.getTopic(channel).publish(jsonMapper.writeValueAsString(message));
     }
 
     @Override
@@ -65,6 +74,6 @@ public class RedissonCacheInvalidationTransport implements CacheInvalidationTran
     }
 
     private RSetCache<String> acknowledgements(String requestId) {
-        return redissonClient.getSetCache(ACKNOWLEDGEMENT_PREFIX + requestId);
+        return redissonClient.getSetCache(acknowledgementPrefix + requestId);
     }
 }
