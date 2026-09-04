@@ -98,6 +98,12 @@
             <artifactId>ruoyi-system</artifactId>
         </dependency>
 
+        <!-- unified third-party HTTP gateway -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-third</artifactId>
+        </dependency>
+
         <!-- Spring Boot Admin 客户端 -->
         <dependency>
             <groupId>de.codecentric</groupId>

@@ -22,6 +22,7 @@
         <module>ruoyi-workflow</module>
         <module>ruoyi-ai</module>
         <module>ruoyi-profile</module>
+        <module>ruoyi-third</module>
     </modules>
 
 </project>

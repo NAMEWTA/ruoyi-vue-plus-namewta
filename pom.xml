@@ -460,6 +460,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- 统一第三方 HTTP 供应商模块 -->
+            <dependency>
+                <groupId>org.dromara</groupId>
+                <artifactId>ruoyi-third</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
             <!--  api模块  -->
             <dependency>
                 <groupId>org.dromara</groupId>
