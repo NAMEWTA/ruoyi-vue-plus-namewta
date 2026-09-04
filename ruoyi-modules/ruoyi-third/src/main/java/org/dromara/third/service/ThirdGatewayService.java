@@ -28,6 +28,7 @@ import org.springframework.web.util.UriUtils;
 import tools.jackson.databind.JsonNode;
 
 import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Type;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -57,10 +58,16 @@ public class ThirdGatewayService implements ThirdPartyGateway {
     @Override
     @SuppressWarnings("unchecked")
     public <T> ThirdPartyResponse<T> execute(ThirdPartyRequest request, ParameterizedTypeReference<T> responseType) {
-        return (ThirdPartyResponse<T>) executeInternal(request, Object.class);
+        if (responseType == null) throw new IllegalArgumentException("Response type is required");
+        return (ThirdPartyResponse<T>) (ThirdPartyResponse<?>) executeInternal(request, Object.class, responseType.getType());
     }
 
     private <T> ThirdPartyResponse<T> executeInternal(ThirdPartyRequest request, Class<T> responseType) {
+        return executeInternal(request, responseType, responseType);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> ThirdPartyResponse<T> executeInternal(ThirdPartyRequest request, Class<T> responseType, Type genericType) {
         String requestId = UUID.randomUUID().toString();
         long startedAt = System.nanoTime();
         ThirdConfigSnapshot snapshot;
@@ -124,7 +131,7 @@ public class ThirdGatewayService implements ThirdPartyGateway {
                 }
             }
             ThirdPartyResponse<T> result = new ThirdPartyResponse<>(requestId, request.providerCode(), request.endpointCode(), response.getStatusCode().value(),
-                ThirdPartyFailureCategory.NONE, null, convert(body, responseType));
+                ThirdPartyFailureCategory.NONE, null, convert(body, responseType, genericType));
             invocationRecorder.record(request, result, (System.nanoTime() - startedAt) / 1_000_000, attemptsUsed);
             return result;
         } catch (RestClientResponseException e) {
@@ -149,10 +156,11 @@ public class ThirdGatewayService implements ThirdPartyGateway {
         return body.length == 0 ? null : JsonUtils.getJsonMapper().readTree(body);
     }
 
-    private static <T> T convert(Object body, Class<T> type) {
-        if (body == null || type == Object.class) return type.cast(body);
-        if (type.isInstance(body)) return type.cast(body);
-        return JsonUtils.getJsonMapper().convertValue(body, type);
+    private static <T> T convert(Object body, Class<T> type, Type genericType) {
+        if (body == null || (type == Object.class && genericType == Object.class)) return type.cast(body);
+        if (genericType == type && type.isInstance(body)) return type.cast(body);
+        if (genericType == Object.class) return type.cast(body);
+        return (T) JsonUtils.getJsonMapper().convertValue(body, JsonUtils.getJsonMapper().constructType(genericType));
     }
 
     private static String expandPath(String template, Map<String, ?> values) {
