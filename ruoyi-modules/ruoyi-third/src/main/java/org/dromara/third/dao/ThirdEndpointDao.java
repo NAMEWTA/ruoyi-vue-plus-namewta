@@ -4,13 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.mapper.ThirdEndpointMapper;
+import org.dromara.third.port.ThirdEndpointConfigStore;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
-public class ThirdEndpointDao {
+public class ThirdEndpointDao implements ThirdEndpointConfigStore {
     private final ThirdEndpointMapper endpointMapper;
 
     public List<ThirdEndpoint> findActive(Long providerId, String keyword) {

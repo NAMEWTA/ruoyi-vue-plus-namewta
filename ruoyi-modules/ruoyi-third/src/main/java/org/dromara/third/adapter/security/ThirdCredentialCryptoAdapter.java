@@ -1,9 +1,10 @@
-package org.dromara.third.service;
+package org.dromara.third.adapter.security;
 
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.third.config.ThirdCryptoProperties;
 import org.dromara.third.domain.ThirdCredential;
+import org.dromara.third.port.ThirdCredentialCryptoPort;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
@@ -16,7 +17,7 @@ import java.util.Base64;
 
 @Component
 @RequiredArgsConstructor
-public class ThirdCredentialCrypto {
+public class ThirdCredentialCryptoAdapter implements ThirdCredentialCryptoPort {
     private static final int NONCE_BYTES = 12;
     private static final int TAG_BITS = 128;
     private static final int TAG_BYTES = TAG_BITS / 8;
@@ -79,6 +80,4 @@ public class ThirdCredentialCrypto {
         return (scopeType + ":" + credentialType).getBytes(StandardCharsets.UTF_8);
     }
 
-    public record EncryptedSecret(byte[] ciphertext, byte[] nonce, byte[] authTag) {
-    }
 }

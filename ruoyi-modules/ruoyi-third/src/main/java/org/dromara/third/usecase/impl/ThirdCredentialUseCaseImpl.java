@@ -1,6 +1,7 @@
 package org.dromara.third.usecase.impl;
 
 import lombok.RequiredArgsConstructor;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import org.dromara.third.domain.bo.ThirdCredentialBo;
 import org.dromara.third.domain.vo.ThirdCredentialVo;
 import org.dromara.third.service.ThirdCredentialService;
@@ -15,6 +16,6 @@ public class ThirdCredentialUseCaseImpl implements ThirdCredentialUseCase {
     private final ThirdCredentialService service;
 
     public List<ThirdCredentialVo> list(String providerCode, String endpointCode) { return service.list(providerCode, endpointCode); }
-    public void save(ThirdCredentialBo bo) { service.save(bo); }
-    public void remove(Long credentialId) { service.remove(credentialId); }
+    @DSTransactional public void save(ThirdCredentialBo bo) { service.save(bo); }
+    @DSTransactional public void remove(Long credentialId) { service.remove(credentialId); }
 }

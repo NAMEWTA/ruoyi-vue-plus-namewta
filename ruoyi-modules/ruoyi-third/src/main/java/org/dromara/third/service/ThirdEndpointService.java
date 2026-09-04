@@ -1,6 +1,5 @@
 package org.dromara.third.service;
 
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.mybatis.utils.IdGeneratorUtil;
@@ -10,17 +9,18 @@ import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.domain.ThirdProvider;
 import org.dromara.third.domain.bo.ThirdEndpointBo;
 import org.dromara.third.domain.vo.ThirdEndpointVo;
-import org.dromara.third.usecase.ThirdEndpointUseCase;
+import org.dromara.third.port.ThirdConfigSnapshotPort;
+import org.dromara.third.support.ThirdEndpointSecurity;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class ThirdEndpointService implements ThirdEndpointUseCase {
+public class ThirdEndpointService {
     private final ThirdEndpointDao endpointDao;
     private final ThirdProviderDao providerDao;
-    private final ThirdConfigCache configCache;
+    private final ThirdConfigSnapshotPort configCache;
 
     public List<ThirdEndpointVo> list(Long providerId, String keyword) {
         return endpointDao.findActive(providerId, keyword).stream().map(ThirdEndpointService::toVo).toList();
@@ -28,7 +28,6 @@ public class ThirdEndpointService implements ThirdEndpointUseCase {
 
     public ThirdEndpointVo get(Long endpointId) { return toVo(required(endpointId)); }
 
-    @DSTransactional
     public void save(ThirdEndpointBo bo) {
         ThirdProvider provider = providerDao.findActiveById(bo.getProviderId());
         if (provider == null) throw new ServiceException("Provider not found");
@@ -63,7 +62,6 @@ public class ThirdEndpointService implements ThirdEndpointUseCase {
         configCache.evict(entity.getProviderCode(), entity.getEndpointCode());
     }
 
-    @DSTransactional
     public void changeStatus(Long endpointId, String status) {
         ThirdEndpoint entity = required(endpointId);
         entity.setStatus("1".equals(status) ? "1" : "0");
@@ -71,7 +69,6 @@ public class ThirdEndpointService implements ThirdEndpointUseCase {
         configCache.evict(entity.getProviderCode(), entity.getEndpointCode());
     }
 
-    @DSTransactional
     public void remove(Long endpointId) {
         ThirdEndpoint entity = required(endpointId);
         if (!"1".equals(entity.getStatus())) throw new ServiceException("Disable endpoint before deleting");

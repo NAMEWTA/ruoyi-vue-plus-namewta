@@ -1,7 +1,7 @@
 package org.dromara.third.spi;
 
 import org.dromara.third.api.ThirdPartyRequest;
-import org.dromara.third.service.ThirdConfigSnapshot;
+import org.dromara.third.port.ThirdConfigSnapshot;
 
 import java.util.Map;
 

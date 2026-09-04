@@ -1,6 +1,5 @@
 package org.dromara.third.service;
 
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.mybatis.utils.IdGeneratorUtil;
@@ -8,7 +7,7 @@ import org.dromara.third.dao.ThirdProviderDao;
 import org.dromara.third.domain.ThirdProvider;
 import org.dromara.third.domain.bo.ThirdProviderBo;
 import org.dromara.third.domain.vo.ThirdProviderVo;
-import org.dromara.third.usecase.ThirdProviderUseCase;
+import org.dromara.third.port.ThirdConfigSnapshotPort;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -17,10 +16,10 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-public class ThirdProviderService implements ThirdProviderUseCase {
+public class ThirdProviderService {
     private static final String ENABLED = "0";
     private final ThirdProviderDao providerDao;
-    private final ThirdConfigCache configCache;
+    private final ThirdConfigSnapshotPort configCache;
 
     public List<ThirdProviderVo> list(String keyword) {
         return providerDao.findActive(keyword).stream().map(ThirdProviderService::toVo).toList();
@@ -28,7 +27,6 @@ public class ThirdProviderService implements ThirdProviderUseCase {
 
     public ThirdProviderVo get(Long providerId) { return toVo(required(providerId)); }
 
-    @DSTransactional
     public void save(ThirdProviderBo bo) {
         ThirdProvider current = bo.getProviderId() == null ? null : required(bo.getProviderId());
         if (providerDao.existsCode(bo.getProviderCode(), bo.getProviderId())) throw new ServiceException("Provider code already exists");
@@ -49,7 +47,6 @@ public class ThirdProviderService implements ThirdProviderUseCase {
         configCache.evict(entity.getProviderCode(), null);
     }
 
-    @DSTransactional
     public void changeStatus(Long providerId, String status) {
         ThirdProvider entity = required(providerId);
         entity.setStatus("1".equals(status) ? "1" : ENABLED);
@@ -57,7 +54,6 @@ public class ThirdProviderService implements ThirdProviderUseCase {
         configCache.evict(entity.getProviderCode(), null);
     }
 
-    @DSTransactional
     public void remove(Long providerId) {
         ThirdProvider entity = required(providerId);
         if (!"1".equals(entity.getStatus())) throw new ServiceException("Disable provider before deleting");

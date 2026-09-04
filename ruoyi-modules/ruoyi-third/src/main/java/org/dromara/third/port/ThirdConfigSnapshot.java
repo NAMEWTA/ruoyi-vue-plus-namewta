@@ -1,4 +1,4 @@
-package org.dromara.third.service;
+package org.dromara.third.port;
 
 import lombok.Data;
 import org.dromara.third.domain.ThirdEndpoint;

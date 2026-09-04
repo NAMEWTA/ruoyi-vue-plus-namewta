@@ -1,4 +1,4 @@
-package org.dromara.third.service;
+package org.dromara.third.adapter.gateway;
 
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.json.utils.JsonUtils;
@@ -7,8 +7,16 @@ import org.dromara.third.api.ThirdPartyGateway;
 import org.dromara.third.api.ThirdPartyRequest;
 import org.dromara.third.api.ThirdPartyResponse;
 import org.dromara.third.domain.ThirdCredential;
-import org.dromara.third.dao.ThirdCredentialDao;
 import org.dromara.third.http.ThirdHttpClientFactory;
+import org.dromara.third.port.ThirdConfigSnapshot;
+import org.dromara.third.port.ThirdConfigSnapshotPort;
+import org.dromara.third.port.ThirdCredentialStore;
+import org.dromara.third.port.ThirdCredentialCryptoPort;
+import org.dromara.third.port.ThirdInvocationRecorderPort;
+import org.dromara.third.port.ThirdResiliencePort;
+import org.dromara.third.support.ThirdEndpointSecurity;
+import org.dromara.third.support.ThirdLimitLease;
+import org.dromara.third.support.ThirdRejectedException;
 import org.dromara.third.spi.ThirdAdapterRequest;
 import org.dromara.third.spi.ThirdAdapterResponse;
 import org.dromara.third.spi.ThirdProviderAdapter;
@@ -17,7 +25,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
@@ -34,15 +42,15 @@ import java.util.Map;
 import java.util.UUID;
 import java.time.LocalDateTime;
 
-@Service
+@Component
 @RequiredArgsConstructor
-public class ThirdGatewayService implements ThirdPartyGateway {
-    private final ThirdConfigCache configCache;
+public class ThirdGatewayAdapter implements ThirdPartyGateway {
+    private final ThirdConfigSnapshotPort configCache;
     private final ThirdProviderAdapterRegistry adapterRegistry;
-    private final ThirdResiliencePolicy resiliencePolicy;
-    private final ThirdInvocationRecorder invocationRecorder;
-    private final ThirdCredentialDao credentialDao;
-    private final ThirdCredentialCrypto credentialCrypto;
+    private final ThirdResiliencePort resiliencePolicy;
+    private final ThirdInvocationRecorderPort invocationRecorder;
+    private final ThirdCredentialStore credentialStore;
+    private final ThirdCredentialCryptoPort credentialCrypto;
     private final ThirdHttpClientFactory clientFactory = new ThirdHttpClientFactory();
 
     @Override
@@ -205,7 +213,7 @@ public class ThirdGatewayService implements ThirdPartyGateway {
     }
 
     private void mergeCredentialHeaders(Map<String, String> target, ThirdConfigSnapshot snapshot) {
-        java.util.List<ThirdCredential> credentials = credentialDao.findByScopes(snapshot.getProvider().getProviderId(), snapshot.getEndpoint().getEndpointId());
+        java.util.List<ThirdCredential> credentials = credentialStore.findByScopes(snapshot.getProvider().getProviderId(), snapshot.getEndpoint().getEndpointId());
         java.util.Map<String, ThirdCredential> byType = new java.util.LinkedHashMap<>();
         credentials.forEach(credential -> byType.putIfAbsent(credential.getCredentialType(), credential));
         credentials.forEach(credential -> { if (credential.getEndpointId() != null) byType.put(credential.getCredentialType(), credential); });

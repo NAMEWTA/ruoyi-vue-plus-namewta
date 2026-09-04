@@ -2,6 +2,7 @@ package org.dromara.third.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.dromara.third.support.ThirdEndpointSecurity;
 
 import static org.junit.jupiter.api.Assertions.*;
 

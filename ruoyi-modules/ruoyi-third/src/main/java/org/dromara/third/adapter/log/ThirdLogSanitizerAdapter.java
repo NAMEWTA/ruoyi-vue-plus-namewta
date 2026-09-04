@@ -1,4 +1,4 @@
-package org.dromara.third.service;
+package org.dromara.third.adapter.log;
 
 import org.dromara.common.json.utils.JsonUtils;
 import tools.jackson.databind.JsonNode;
@@ -10,11 +10,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-public final class ThirdLogSanitizer {
+public final class ThirdLogSanitizerAdapter {
     private static final int MAX_BYTES = 16 * 1024;
     private static final Set<String> BLOCKED = Set.of("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key", "secret", "private-key", "signature", "token", "password");
 
-    private ThirdLogSanitizer() {
+    private ThirdLogSanitizerAdapter() {
     }
 
     public static Map<String, String> headers(Map<String, String> input) {
@@ -41,7 +41,7 @@ public final class ThirdLogSanitizer {
             for (String name : new HashSet<>(object.propertyNames())) {
                 if (blocked(name)) object.put(name, "***"); else redact(object.get(name));
             }
-        } else if (node.isArray()) node.forEach(ThirdLogSanitizer::redact);
+    } else if (node.isArray()) node.forEach(ThirdLogSanitizerAdapter::redact);
     }
 
     private static boolean blocked(String key) {

@@ -1,4 +1,4 @@
-package org.dromara.third.service;
+package org.dromara.third.support;
 
 public interface ThirdLimitLease extends AutoCloseable {
     @Override

@@ -1,6 +1,7 @@
 package org.dromara.third.usecase.impl;
 
 import lombok.RequiredArgsConstructor;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import org.dromara.third.domain.bo.ThirdProviderBo;
 import org.dromara.third.domain.vo.ThirdProviderVo;
 import org.dromara.third.service.ThirdProviderService;
@@ -16,7 +17,7 @@ public class ThirdProviderUseCaseImpl implements ThirdProviderUseCase {
 
     public List<ThirdProviderVo> list(String keyword) { return service.list(keyword); }
     public ThirdProviderVo get(Long providerId) { return service.get(providerId); }
-    public void save(ThirdProviderBo bo) { service.save(bo); }
-    public void changeStatus(Long providerId, String status) { service.changeStatus(providerId, status); }
-    public void remove(Long providerId) { service.remove(providerId); }
+    @DSTransactional public void save(ThirdProviderBo bo) { service.save(bo); }
+    @DSTransactional public void changeStatus(Long providerId, String status) { service.changeStatus(providerId, status); }
+    @DSTransactional public void remove(Long providerId) { service.remove(providerId); }
 }

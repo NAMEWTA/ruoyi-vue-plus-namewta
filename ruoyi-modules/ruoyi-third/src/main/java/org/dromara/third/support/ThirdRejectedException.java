@@ -1,4 +1,4 @@
-package org.dromara.third.service;
+package org.dromara.third.support;
 
 import org.dromara.third.api.ThirdPartyFailureCategory;
 

@@ -4,13 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.dromara.third.domain.ThirdCredential;
 import org.dromara.third.mapper.ThirdCredentialMapper;
+import org.dromara.third.port.ThirdCredentialStore;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
-public class ThirdCredentialDao {
+public class ThirdCredentialDao implements ThirdCredentialStore {
     private final ThirdCredentialMapper credentialMapper;
 
     public List<ThirdCredential> findByScope(Long providerId, Long endpointId) {
@@ -21,6 +22,7 @@ public class ThirdCredentialDao {
         return credentialMapper.selectList(query);
     }
 
+    @Override
     public List<ThirdCredential> findByScopes(Long providerId, Long endpointId) {
         return credentialMapper.selectList(new LambdaQueryWrapper<ThirdCredential>()
             .eq(ThirdCredential::getProviderId, providerId).eq(ThirdCredential::getDelFlag, "0")

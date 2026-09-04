@@ -1,9 +1,12 @@
-package org.dromara.third.service;
+package org.dromara.third.adapter.resilience;
 
 import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.third.api.ThirdPartyFailureCategory;
 import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.domain.ThirdProvider;
+import org.dromara.third.port.ThirdResiliencePort;
+import org.dromara.third.support.ThirdLimitLease;
+import org.dromara.third.support.ThirdRejectedException;
 import org.redisson.api.RSemaphore;
 import org.redisson.api.RateType;
 import org.springframework.stereotype.Component;
@@ -12,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-public class ThirdResiliencePolicy {
+public class ThirdResiliencePolicyAdapter implements ThirdResiliencePort {
     public ThirdLimitLease acquire(ThirdProvider provider, ThirdEndpoint endpoint) {
         List<RSemaphore> acquired = new ArrayList<>();
         try {

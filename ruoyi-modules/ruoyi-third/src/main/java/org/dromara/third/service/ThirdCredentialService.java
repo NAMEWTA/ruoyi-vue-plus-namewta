@@ -1,6 +1,5 @@
 package org.dromara.third.service;
 
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.mybatis.utils.IdGeneratorUtil;
@@ -12,19 +11,20 @@ import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.domain.ThirdProvider;
 import org.dromara.third.domain.bo.ThirdCredentialBo;
 import org.dromara.third.domain.vo.ThirdCredentialVo;
-import org.dromara.third.usecase.ThirdCredentialUseCase;
+import org.dromara.third.port.ThirdConfigSnapshotPort;
+import org.dromara.third.port.ThirdCredentialCryptoPort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class ThirdCredentialService implements ThirdCredentialUseCase {
+public class ThirdCredentialService {
     private final ThirdCredentialDao credentialDao;
     private final ThirdProviderDao providerDao;
     private final ThirdEndpointDao endpointDao;
-    private final ThirdCredentialCrypto crypto;
-    private final ThirdConfigCache configCache;
+    private final ThirdCredentialCryptoPort crypto;
+    private final ThirdConfigSnapshotPort configCache;
 
     public List<ThirdCredentialVo> list(String providerCode, String endpointCode) {
         ThirdProvider provider = provider(providerCode);
@@ -34,7 +34,6 @@ public class ThirdCredentialService implements ThirdCredentialUseCase {
                 c.getKekVersion(), c.getExpiresAt(), c.getVersion(), c.getDelFlag())).toList();
     }
 
-    @DSTransactional
     public void save(ThirdCredentialBo bo) {
         ThirdProvider provider = provider(bo.getProviderCode());
         ThirdEndpoint endpoint = bo.getEndpointCode() == null || bo.getEndpointCode().isBlank() ? null : endpoint(provider.getProviderId(), bo.getEndpointCode());
@@ -46,7 +45,7 @@ public class ThirdCredentialService implements ThirdCredentialUseCase {
         credential.setEndpointId(endpoint == null ? null : endpoint.getEndpointId());
         credential.setScopeType(scope);
         credential.setCredentialType(bo.getCredentialType().trim());
-        ThirdCredentialCrypto.EncryptedSecret encrypted = crypto.encrypt(scope, bo.getCredentialType().trim(), bo.getSecretJson());
+        ThirdCredentialCryptoPort.EncryptedSecret encrypted = crypto.encrypt(scope, bo.getCredentialType().trim(), bo.getSecretJson());
         credential.setCiphertext(encrypted.ciphertext());
         credential.setNonce(encrypted.nonce());
         credential.setAuthTag(encrypted.authTag());
@@ -59,7 +58,6 @@ public class ThirdCredentialService implements ThirdCredentialUseCase {
         configCache.evict(provider.getProviderCode(), endpoint == null ? null : endpoint.getEndpointCode());
     }
 
-    @DSTransactional
     public void remove(Long credentialId) {
         ThirdCredential credential = credentialDao.findById(credentialId);
         if (credential == null) throw new ServiceException("Credential not found");

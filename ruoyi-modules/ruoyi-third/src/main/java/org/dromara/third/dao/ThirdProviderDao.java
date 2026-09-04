@@ -6,13 +6,14 @@ import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.domain.ThirdProvider;
 import org.dromara.third.mapper.ThirdEndpointMapper;
 import org.dromara.third.mapper.ThirdProviderMapper;
+import org.dromara.third.port.ThirdProviderConfigStore;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
-public class ThirdProviderDao {
+public class ThirdProviderDao implements ThirdProviderConfigStore {
     private final ThirdProviderMapper providerMapper;
     private final ThirdEndpointMapper endpointMapper;
 

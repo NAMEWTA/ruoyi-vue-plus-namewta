@@ -1,24 +1,26 @@
-package org.dromara.third.service;
+package org.dromara.third.adapter.store;
 
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.redis.utils.RedisUtils;
-import org.dromara.third.dao.ThirdEndpointDao;
-import org.dromara.third.dao.ThirdProviderDao;
 import org.dromara.third.domain.ThirdEndpoint;
 import org.dromara.third.domain.ThirdProvider;
+import org.dromara.third.port.ThirdConfigSnapshot;
+import org.dromara.third.port.ThirdConfigSnapshotPort;
+import org.dromara.third.port.ThirdEndpointConfigStore;
+import org.dromara.third.port.ThirdProviderConfigStore;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
 @Component
 @RequiredArgsConstructor
-public class ThirdConfigCache {
+public class ThirdConfigCacheAdapter implements ThirdConfigSnapshotPort {
     private static final String PREFIX = "third:config:";
     private static final String CHANNEL = "third:config:invalidation";
-    private final ThirdProviderDao providerDao;
-    private final ThirdEndpointDao endpointDao;
+    private final ThirdProviderConfigStore providerStore;
+    private final ThirdEndpointConfigStore endpointStore;
 
     public ThirdConfigSnapshot get(String providerCode, String endpointCode) {
         String key = key(providerCode, endpointCode);
@@ -31,8 +33,8 @@ public class ThirdConfigCache {
         } catch (Throwable e) {
             throw unavailable(e);
         }
-        ThirdProvider provider = providerDao.findActiveByCode(providerCode);
-        ThirdEndpoint endpoint = provider == null ? null : endpointDao.findActiveByProviderAndCode(provider.getProviderId(), endpointCode);
+        ThirdProvider provider = providerStore.findActiveByCode(providerCode);
+        ThirdEndpoint endpoint = provider == null ? null : endpointStore.findActiveByProviderAndCode(provider.getProviderId(), endpointCode);
         if (provider == null || endpoint == null || !provider.getProviderId().equals(endpoint.getProviderId())) {
             throw new ServiceException("第三方接口配置不存在");
         }
@@ -50,7 +52,7 @@ public class ThirdConfigCache {
             if (providerCode != null && endpointCode != null) {
                 RedisUtils.deleteObject(key(providerCode, endpointCode));
             } else if (providerCode != null) {
-                endpointDao.findAllByProviderCode(providerCode).forEach(endpoint ->
+                endpointStore.findAllByProviderCode(providerCode).forEach(endpoint ->
                     RedisUtils.deleteObject(key(providerCode, endpoint.getEndpointCode())));
             }
             RedisUtils.publish(CHANNEL, providerCode + ":" + (endpointCode == null ? "*" : endpointCode));
