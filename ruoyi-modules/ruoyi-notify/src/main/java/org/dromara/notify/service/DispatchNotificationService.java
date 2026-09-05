@@ -9,6 +9,7 @@ import org.dromara.common.notify.model.NotifyTarget;
 import org.dromara.common.notify.model.NotifyTextContent;
 import org.dromara.notify.api.NotificationChannel;
 import org.dromara.notify.api.NotificationStatus;
+import org.dromara.notify.api.InAppNotificationPort;
 import org.dromara.notify.domain.entity.NotifyAttempt;
 import org.dromara.notify.domain.entity.NotifyDelivery;
 import org.dromara.notify.domain.entity.NotifyIntent;
@@ -18,6 +19,7 @@ import org.dromara.notify.mapper.NotifyDeliveryMapper;
 import org.dromara.notify.mapper.NotifyIntentMapper;
 import org.dromara.notify.mapper.NotifyOutboxMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.Instant;
 import java.util.List;
@@ -35,6 +37,7 @@ public class DispatchNotificationService {
     private final NotifyAttemptMapper attemptMapper;
     private final NotifyOutboxMapper outboxMapper;
     private final NotifyClient notifyClient;
+    private final ObjectProvider<InAppNotificationPort> inAppPort;
 
     /** 执行一个 Outbox 任务。 */
     public void dispatch(NotifyOutbox outbox) {
@@ -51,6 +54,14 @@ public class DispatchNotificationService {
         String errorMessage = null;
         try {
             if (NotificationChannel.IN_APP.name().equals(delivery.getChannel())) {
+                InAppNotificationPort port = inAppPort.getIfAvailable();
+                if (port == null) {
+                    throw new IllegalStateException("站内通知端口未装配");
+                }
+                port.persist(String.valueOf(intent.getIntentId()),
+                    new InAppNotificationPort.InAppSnapshot(intent.getTitleSnapshot(),
+                        intent.getContentSnapshot(), intent.getPathSnapshot()), List.of(delivery.getUserId()));
+                port.pushRealtime(String.valueOf(intent.getIntentId()), List.of(delivery.getUserId()));
                 delivery.setStatus("ACCEPTED");
             } else {
                 NotifyRequest request = NotifyRequest.builder()
