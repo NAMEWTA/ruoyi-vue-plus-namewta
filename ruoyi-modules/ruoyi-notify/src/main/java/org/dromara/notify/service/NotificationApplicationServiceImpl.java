@@ -41,6 +41,7 @@ public class NotificationApplicationServiceImpl implements NotificationApplicati
     private final NotifyDeliveryMapper deliveryMapper;
     private final NotifyOutboxMapper outboxMapper;
     private final UserService userService;
+    private final DispatchNotificationService dispatchService;
 
     @Override
     @DSTransactional
@@ -75,18 +76,19 @@ public class NotificationApplicationServiceImpl implements NotificationApplicati
         intent.setVersion(0);
         intentMapper.insert(intent);
 
-        List<UserDTO> users = resolveUsers(command);
+        List<ResolvedRecipient> users = resolveUsers(command);
         List<NotifyDelivery> deliveries = new ArrayList<>();
-        for (UserDTO user : users) {
+        List<NotifyOutbox> outboxes = new ArrayList<>();
+        for (ResolvedRecipient user : users) {
             NotifyRecipient recipient = new NotifyRecipient();
             recipient.setRecipientId(IdGeneratorUtil.nextLongId());
             recipient.setIntentId(intentId);
             recipient.setRecipientType(command.recipientType());
-            recipient.setRecipientKey(String.valueOf(user.getUserId()));
-            recipient.setUserId(user.getUserId());
+            recipient.setRecipientKey(user.key());
+            recipient.setUserId(user.userId());
             recipient.setTargetSnapshotJson(JsonUtils.toJsonString(Map.of(
-                "phone", Objects.toString(user.getPhoneNumber(), ""),
-                "email", Objects.toString(user.getEmail(), ""))));
+                "phone", Objects.toString(user.phone(), ""),
+                "email", Objects.toString(user.email(), ""))));
             recipient.setStatus("ACTIVE");
             recipientMapper.insert(recipient);
             for (NotificationChannel channel : command.channels()) {
@@ -94,7 +96,7 @@ public class NotificationApplicationServiceImpl implements NotificationApplicati
                 delivery.setDeliveryId(IdGeneratorUtil.nextLongId());
                 delivery.setIntentId(intentId);
                 delivery.setRecipientId(recipient.getRecipientId());
-                delivery.setUserId(user.getUserId());
+                delivery.setUserId(user.userId());
                 delivery.setChannel(channel.name());
                 delivery.setTargetValue(targetValue(channel, user));
                 delivery.setStatus("PENDING");
@@ -113,11 +115,17 @@ public class NotificationApplicationServiceImpl implements NotificationApplicati
                 outbox.setNextAttemptAt(outbox.getAvailableAt());
                 outbox.setMaxAttempts(5);
                 outboxMapper.insert(outbox);
+                outboxes.add(outbox);
             }
         }
-        return new NotificationReceipt(String.valueOf(intentId), NotificationStatus.QUEUED, true, true,
+        if (command.mode() == NotificationMode.SYNC) {
+            outboxes.forEach(dispatchService::dispatch);
+        }
+        NotificationStatus aggregate = command.mode() == NotificationMode.SYNC
+            ? status(intentMapper.selectById(intentId).getStatus()) : NotificationStatus.QUEUED;
+        return new NotificationReceipt(String.valueOf(intentId), aggregate, command.mode() == NotificationMode.ASYNC, true,
             deliveries.stream().map(item -> new NotificationReceipt.DeliveryReceipt(
-                String.valueOf(item.getUserId()), NotificationChannel.valueOf(item.getChannel()),
+                    String.valueOf(item.getUserId()), NotificationChannel.valueOf(item.getChannel()),
                 NotificationStatus.QUEUED, null)).toList());
     }
 
@@ -211,23 +219,38 @@ public class NotificationApplicationServiceImpl implements NotificationApplicati
             .last("limit 1"));
     }
 
-    private List<UserDTO> resolveUsers(NotificationCommand command) {
+    private List<ResolvedRecipient> resolveUsers(NotificationCommand command) {
         if ("USER".equalsIgnoreCase(command.recipientType())) {
             List<Long> ids = command.recipientIds().stream().map(Long::valueOf).toList();
-            return userService.selectListByIds(ids).stream().filter(Objects::nonNull).toList();
+            return userService.selectListByIds(ids).stream().filter(Objects::nonNull)
+                .map(user -> new ResolvedRecipient(user.getUserId(), String.valueOf(user.getUserId()), user.getPhoneNumber(), user.getEmail()))
+                .toList();
         }
         if ("ALL".equalsIgnoreCase(command.recipientType())) {
+            if (command.recipientIds().isEmpty()) {
+                return userService.selectAllActiveUsers(100_000).stream()
+                    .map(user -> new ResolvedRecipient(user.getUserId(), String.valueOf(user.getUserId()), user.getPhoneNumber(), user.getEmail()))
+                    .toList();
+            }
             return command.recipientIds().stream().map(Long::valueOf)
-                .map(userService::selectById).filter(Objects::nonNull).toList();
+                .map(userService::selectById).filter(Objects::nonNull)
+                .map(user -> new ResolvedRecipient(user.getUserId(), String.valueOf(user.getUserId()), user.getPhoneNumber(), user.getEmail()))
+                .toList();
         }
-        throw new ServiceException("一期仅支持 USER 和固定用户快照的 ALL 接收者");
+        if ("PHONE".equalsIgnoreCase(command.recipientType()) || "SMS".equalsIgnoreCase(command.recipientType())) {
+            return command.recipientIds().stream().map(value -> new ResolvedRecipient(null, value, value, null)).toList();
+        }
+        if ("EMAIL".equalsIgnoreCase(command.recipientType()) || "MAIL".equalsIgnoreCase(command.recipientType())) {
+            return command.recipientIds().stream().map(value -> new ResolvedRecipient(null, value, null, value)).toList();
+        }
+        throw new ServiceException("接收者类型仅支持 USER、ALL、PHONE 和 EMAIL");
     }
 
-    private String targetValue(NotificationChannel channel, UserDTO user) {
+    private String targetValue(NotificationChannel channel, ResolvedRecipient user) {
         return switch (channel) {
-            case IN_APP -> String.valueOf(user.getUserId());
-            case SMS -> user.getPhoneNumber();
-            case MAIL -> user.getEmail();
+            case IN_APP -> String.valueOf(user.userId());
+            case SMS -> user.phone();
+            case MAIL -> user.email();
         };
     }
 
@@ -248,4 +271,7 @@ public class NotificationApplicationServiceImpl implements NotificationApplicati
         return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
     private boolean blank(String value) { return value == null || value.isBlank(); }
+
+    private record ResolvedRecipient(Long userId, String key, String phone, String email) {
+    }
 }

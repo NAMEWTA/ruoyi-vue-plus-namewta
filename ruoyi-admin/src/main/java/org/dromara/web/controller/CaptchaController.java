@@ -17,16 +17,11 @@ import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.core.utils.regex.RegexValidator;
 import org.dromara.common.mail.config.properties.MailProperties;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.exception.NotifyDeliveryException;
-import org.dromara.common.notify.model.NotifyAuditPolicy;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyDeliveryStatus;
-import org.dromara.common.notify.model.NotifyRequest;
-import org.dromara.common.notify.model.NotifyTarget;
-import org.dromara.common.notify.model.NotifyTargetResult;
-import org.dromara.common.notify.model.NotifyTemplateContent;
-import org.dromara.common.notify.model.NotifyTextContent;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationChannel;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationMode;
+import org.dromara.notify.api.NotificationStrategy;
 import org.dromara.common.redis.annotation.RateLimiter;
 import org.dromara.common.redis.enums.LimitType;
 import org.dromara.common.redis.utils.RedisUtils;
@@ -41,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.awt.*;
 import java.time.Duration;
-import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 
 /**
@@ -58,7 +53,7 @@ public class CaptchaController {
 
     private final CaptchaProperties captchaProperties;
     private final MailProperties mailProperties;
-    private final NotifyClient notifyClient;
+    private final NotificationApplicationService notificationService;
 
     /**
      * 发送短信验证码。
@@ -76,30 +71,15 @@ public class CaptchaController {
         String code = RandomUtil.randomNumbers(4);
         // 验证码模板id 自行处理 (查数据库或写死均可)
         String templateId = "";
-        LinkedHashMap<String, String> map = new LinkedHashMap<>(1);
-        map.put("code", code);
         String content = "您本次验证码为：" + code + "，有效性为" + Constants.CAPTCHA_EXPIRATION + "分钟，请尽快填写。";
         try {
-            notifyClient.send(NotifyRequest.builder()
-                .bizType("auth_captcha")
-                .bizId(phoneNumber)
-                .channel(NotifyChannel.SMS)
-                .providerKey("config1")
-                .targets(List.of(NotifyTarget.phone(phoneNumber)))
-                .content(new NotifyTemplateContent(null, templateId, map, content))
-                .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
-                .idempotencyKey(captchaIdempotencyKey(NotifyChannel.SMS, phoneNumber))
-                .build());
-        } catch (NotifyDeliveryException ex) {
-            NotifyTargetResult failed = ex.result().deliveries().stream()
-                .filter(delivery -> delivery.status() == NotifyDeliveryStatus.FAILED)
-                .findFirst()
-                .orElse(null);
-            String errorMessage = failed == null || StringUtils.isBlank(failed.errorMessage())
-                ? "验证码短信发送失败" : failed.errorMessage();
-            log.error("验证码短信发送失败，status={}，errorCode={}", ex.result().status(),
-                failed == null ? null : failed.errorCode());
-            return R.fail(errorMessage);
+            notificationService.submit(new NotificationCommand("admin-web", "auth-captcha", "auth_captcha", phoneNumber,
+                "PHONE", List.of(phoneNumber), templateId, Map.of("code", code, "title", "登录验证码", "content", content),
+                List.of(NotificationChannel.SMS), NotificationStrategy.ALL, NotificationMode.SYNC, 80, null, null,
+                captchaIdempotencyKey(NotificationChannel.SMS, phoneNumber), Map.of("audit", "REDACT_SENSITIVE")));
+        } catch (Exception ex) {
+            log.error("验证码短信发送失败，异常类型={}", ex.getClass().getSimpleName());
+            return R.fail("验证码短信发送失败");
         }
         cacheCaptchaCode(key, code);
         return R.ok();
@@ -134,15 +114,10 @@ public class CaptchaController {
         String code = RandomUtil.randomNumbers(4);
         String content = "您本次验证码为：" + code + "，有效性为" + Constants.CAPTCHA_EXPIRATION + "分钟，请尽快填写。";
         try {
-            notifyClient.send(NotifyRequest.builder()
-                .bizType("auth_captcha")
-                .bizId(email)
-                .channel(NotifyChannel.MAIL)
-                .targets(List.of(NotifyTarget.email(email)))
-                .content(new NotifyTextContent("登录验证码", content))
-                .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
-                .idempotencyKey(captchaIdempotencyKey(NotifyChannel.MAIL, email))
-                .build());
+            notificationService.submit(new NotificationCommand("admin-web", "auth-captcha", "auth_captcha", email,
+                "EMAIL", List.of(email), "", Map.of("title", "登录验证码", "content", content),
+                List.of(NotificationChannel.MAIL), NotificationStrategy.ALL, NotificationMode.SYNC, 80, null, null,
+                captchaIdempotencyKey(NotificationChannel.MAIL, email), Map.of("audit", "REDACT_SENSITIVE")));
             cacheCaptchaCode(key, code);
         } catch (Exception e) {
             log.error("验证码邮件发送失败，异常类型={}", e.getClass().getSimpleName());
@@ -150,9 +125,9 @@ public class CaptchaController {
         }
     }
 
-    private String captchaIdempotencyKey(NotifyChannel channel, String target) {
+    private String captchaIdempotencyKey(NotificationChannel channel, String target) {
         long minute = System.currentTimeMillis() / Duration.ofMinutes(1).toMillis();
-        return "captcha:" + channel.value() + ":" + target + ":" + minute;
+        return "captcha:" + channel.name().toLowerCase() + ":" + target + ":" + minute;
     }
 
     protected void cacheCaptchaCode(String key, String code) {

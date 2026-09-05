@@ -95,6 +95,16 @@ public interface UserService {
     List<UserDTO> selectListByIds(Collection<Long> userIds);
 
     /**
+     * 查询可接收通知的全部正常用户。
+     *
+     * @param limit 最大返回数量
+     * @return 正常用户列表
+     */
+    default List<UserDTO> selectAllActiveUsers(int limit) {
+        return List.of();
+    }
+
+    /**
      * 通过角色ID查询用户ID
      *
      * @param roleIds 角色ids

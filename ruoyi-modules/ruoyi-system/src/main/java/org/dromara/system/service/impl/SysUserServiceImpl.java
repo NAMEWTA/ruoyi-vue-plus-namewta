@@ -908,6 +908,27 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     }
 
     /**
+     * 查询正常用户，用于公告等全量通知的接收人快照。
+     *
+     * @param limit 最大返回数量
+     * @return 正常用户列表
+     */
+    @Override
+    public List<UserDTO> selectAllActiveUsers(int limit) {
+        int boundedLimit = Math.clamp(limit, 1, 100_000);
+        List<SysUserVo> list = userMapper.lambda()
+            .select(SysUser::getUserId, SysUser::getDeptId, SysUser::getUserName,
+                SysUser::getNickName, SysUser::getEmail, SysUser::getPhoneNumber,
+                SysUser::getGender, SysUser::getStatus, SysUser::getCreateTime)
+            .eq(SysUser::getStatus, SystemConstants.NORMAL)
+            .eq(SysUser::getDelFlag, SystemConstants.NORMAL)
+            .orderByAsc(SysUser::getUserId)
+            .last("limit " + boundedLimit)
+            .voList();
+        return BeanUtil.copyToList(list, UserDTO.class);
+    }
+
+    /**
      * 通过角色ID查询用户ID
      *
      * @param roleIds 角色ids

@@ -4,7 +4,6 @@ import org.dromara.common.mail.config.properties.MailProperties;
 import org.dromara.common.nacos.NacosConfigAccessor;
 import org.dromara.common.nacos.NacosConfigManager;
 import org.dromara.common.nacos.NacosConfigParticipant;
-import org.dromara.common.notify.core.NotifyClient;
 import org.dromara.common.notify.config.NotifyAutoConfiguration;
 import org.dromara.common.notify.idempotency.NotifyIdempotencyCoordinator;
 import org.dromara.common.notify.idempotency.NotifyIdempotencyProperties;
@@ -12,6 +11,7 @@ import org.dromara.common.web.config.properties.CaptchaProperties;
 import org.dromara.common.web.config.CaptchaConfig;
 import org.dromara.system.oss.config.OssLifecycleProperties;
 import org.dromara.web.controller.CaptchaController;
+import org.dromara.notify.api.NotificationApplicationService;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -59,7 +59,8 @@ class NacosLiveRefreshContractUnitTest {
         MutableAccessor accessor = new MutableAccessor();
         CaptchaProperties properties = captchaProperties();
         properties.setNacosConfigAccessor(accessor);
-        CaptchaController controller = new CaptchaController(properties, new MailProperties(), mock(NotifyClient.class));
+        CaptchaController controller = new CaptchaController(properties, new MailProperties(),
+            mock(NotificationApplicationService.class));
 
         accessor.replace(Map.of("captcha", new CaptchaProperties.Snapshot(false, "char", 2, 6)));
         assertThat(controller.getCode().getData().captchaEnabled()).isFalse();

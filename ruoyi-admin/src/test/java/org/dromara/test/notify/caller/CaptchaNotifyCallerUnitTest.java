@@ -3,10 +3,11 @@ package org.dromara.test.notify.caller;
 import org.dromara.common.core.constant.GlobalConstants;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.mail.config.properties.MailProperties;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.exception.NotifyDeliveryException;
-import org.dromara.common.notify.model.*;
 import org.dromara.common.web.config.properties.CaptchaProperties;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationReceipt;
+import org.dromara.notify.api.NotificationStatus;
 import org.dromara.web.controller.CaptchaController;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,25 +26,23 @@ class CaptchaNotifyCallerUnitTest {
 
     @Test
     void smsCaptchaUsesTemplateSnapshotAndCachesOnlyAfterAccepted() {
-        NotifyClient notifyClient = mock(NotifyClient.class);
-        when(notifyClient.send(any())).thenAnswer(invocation -> accepted(invocation.getArgument(0)));
+        NotificationApplicationService notificationService = mock(NotificationApplicationService.class);
+        when(notificationService.submit(any())).thenReturn(accepted());
         RecordingCaptchaController controller = new RecordingCaptchaController(
-            new CaptchaProperties(), mailProperties(), notifyClient);
+            new CaptchaProperties(), mailProperties(), notificationService);
 
         var response = controller.smsCode("13812345678");
 
         assertEquals(SUCCESS, response.getCode());
-        ArgumentCaptor<NotifyRequest> request = ArgumentCaptor.forClass(NotifyRequest.class);
-        verify(notifyClient).send(request.capture());
-        NotifyTemplateContent content = assertInstanceOf(NotifyTemplateContent.class,
-            request.getValue().content());
-        String code = content.params().get("code");
+        ArgumentCaptor<NotificationCommand> request = ArgumentCaptor.forClass(NotificationCommand.class);
+        verify(notificationService).submit(request.capture());
+        String code = String.valueOf(request.getValue().templateParams().get("code"));
         assertAll(
-            () -> assertEquals(NotifyChannel.SMS, request.getValue().channel()),
-            () -> assertEquals("config1", request.getValue().providerKey()),
-            () -> assertEquals("13812345678", request.getValue().targets().getFirst().value()),
+            () -> assertEquals("PHONE", request.getValue().recipientType()),
+            () -> assertEquals("13812345678", request.getValue().recipientIds().getFirst()),
+            () -> assertEquals("13812345678", request.getValue().bizId()),
             () -> assertTrue(request.getValue().idempotencyKey().startsWith("captcha:sms:13812345678:")),
-            () -> assertTrue(content.contentSnapshot().contains(code)),
+            () -> assertTrue(String.valueOf(request.getValue().templateParams().get("content")).contains(code)),
             () -> assertEquals(GlobalConstants.CAPTCHA_CODE_KEY + "13812345678", controller.cachedKey),
             () -> assertEquals(code, controller.cachedCode)
         );
@@ -51,50 +50,45 @@ class CaptchaNotifyCallerUnitTest {
 
     @Test
     void smsCaptchaReturnsFailureAndDoesNotCacheWhenProviderRejects() {
-        NotifyClient notifyClient = mock(NotifyClient.class);
-        NotifyTarget target = NotifyTarget.phone("13812345678");
-        NotifyResult failed = new NotifyResult("request-failed", NotifyChannel.SMS, "config1", NotifyStatus.FAILED,
-            List.of(NotifyTargetResult.failed(target, "REJECTED", "provider rejected", 1L)));
-        when(notifyClient.send(any())).thenThrow(new NotifyDeliveryException(failed));
+        NotificationApplicationService notificationService = mock(NotificationApplicationService.class);
+        when(notificationService.submit(any())).thenThrow(new IllegalStateException("provider rejected"));
         RecordingCaptchaController controller = new RecordingCaptchaController(
-            new CaptchaProperties(), mailProperties(), notifyClient);
+            new CaptchaProperties(), mailProperties(), notificationService);
 
         var response = controller.smsCode("13812345678");
 
         assertEquals(ERROR, response.getCode());
-        assertEquals("provider rejected", response.getMsg());
+        assertEquals("验证码短信发送失败", response.getMsg());
         assertNull(controller.cachedKey);
         assertNull(controller.cachedCode);
     }
 
     @Test
     void emailCaptchaUsesNotifyClientAndCachesOnlyAfterAccepted() {
-        NotifyClient notifyClient = mock(NotifyClient.class);
-        when(notifyClient.send(any())).thenAnswer(invocation -> accepted(invocation.getArgument(0)));
+        NotificationApplicationService notificationService = mock(NotificationApplicationService.class);
+        when(notificationService.submit(any())).thenReturn(accepted());
         RecordingCaptchaController controller = new RecordingCaptchaController(
-            new CaptchaProperties(), mailProperties(), notifyClient);
+            new CaptchaProperties(), mailProperties(), notificationService);
 
         controller.emailCodeImpl("user@example.com");
 
-        ArgumentCaptor<NotifyRequest> request = ArgumentCaptor.forClass(NotifyRequest.class);
-        verify(notifyClient).send(request.capture());
-        NotifyTextContent content = assertInstanceOf(NotifyTextContent.class, request.getValue().content());
+        ArgumentCaptor<NotificationCommand> request = ArgumentCaptor.forClass(NotificationCommand.class);
+        verify(notificationService).submit(request.capture());
         assertAll(
-            () -> assertEquals(NotifyChannel.MAIL, request.getValue().channel()),
-            () -> assertEquals(NotifyAuditPolicy.REDACT_SENSITIVE, request.getValue().auditPolicy()),
-            () -> assertEquals(NotifyTarget.email("user@example.com"), request.getValue().targets().getFirst()),
+            () -> assertEquals("EMAIL", request.getValue().recipientType()),
+            () -> assertEquals("user@example.com", request.getValue().recipientIds().getFirst()),
             () -> assertTrue(request.getValue().idempotencyKey().startsWith("captcha:mail:user@example.com:")),
-            () -> assertTrue(content.text().contains(controller.cachedCode)),
+            () -> assertTrue(String.valueOf(request.getValue().templateParams().get("content")).contains(controller.cachedCode)),
             () -> assertEquals(GlobalConstants.CAPTCHA_CODE_KEY + "user@example.com", controller.cachedKey)
         );
     }
 
     @Test
     void emailCaptchaDoesNotCacheWhenNotificationFails() {
-        NotifyClient notifyClient = mock(NotifyClient.class);
-        when(notifyClient.send(any())).thenThrow(new IllegalStateException("provider secret"));
+        NotificationApplicationService notificationService = mock(NotificationApplicationService.class);
+        when(notificationService.submit(any())).thenThrow(new IllegalStateException("provider secret"));
         RecordingCaptchaController controller = new RecordingCaptchaController(
-            new CaptchaProperties(), mailProperties(), notifyClient);
+            new CaptchaProperties(), mailProperties(), notificationService);
 
         ServiceException exception = assertThrows(ServiceException.class,
             () -> controller.emailCodeImpl("user@example.com"));
@@ -110,9 +104,8 @@ class CaptchaNotifyCallerUnitTest {
         return properties;
     }
 
-    private NotifyResult accepted(NotifyRequest request) {
-        return new NotifyResult(request.requestId(), request.channel(), request.providerKey(), NotifyStatus.ACCEPTED,
-            request.targets().stream().map(target -> NotifyTargetResult.accepted(target, "message-1", 1L)).toList());
+    private NotificationReceipt accepted() {
+        return new NotificationReceipt("notification-1", NotificationStatus.ACCEPTED, false, false, List.of());
     }
 
     private static final class RecordingCaptchaController extends CaptchaController {
@@ -121,8 +114,8 @@ class CaptchaNotifyCallerUnitTest {
         private String cachedCode;
 
         private RecordingCaptchaController(CaptchaProperties captchaProperties, MailProperties mailProperties,
-                                           NotifyClient notifyClient) {
-            super(captchaProperties, mailProperties, notifyClient);
+                                           NotificationApplicationService notificationService) {
+            super(captchaProperties, mailProperties, notificationService);
         }
 
         @Override
