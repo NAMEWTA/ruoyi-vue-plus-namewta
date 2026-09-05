@@ -6,6 +6,7 @@ import org.dromara.common.notify.model.*;
 import org.dromara.system.api.MessageService;
 import org.dromara.system.api.domain.UserDTO;
 import org.dromara.workflow.service.impl.FlwCommonServiceImpl;
+import org.dromara.workflow.service.impl.WorkflowTaskRecipientResolver;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,7 +25,8 @@ class WorkflowNotifyCallerUnitTest {
         MessageService messageService = mock(MessageService.class);
         NotifyClient notifyClient = mock(NotifyClient.class);
         when(notifyClient.send(any())).thenAnswer(invocation -> accepted(invocation.getArgument(0)));
-        FlwCommonServiceImpl service = new FlwCommonServiceImpl(messageService, notifyClient);
+        FlwCommonServiceImpl service = new FlwCommonServiceImpl(messageService, notifyClient,
+            mock(WorkflowTaskRecipientResolver.class));
         UserDTO user = user(7L, "user@example.com", "13812345678");
 
         service.sendMessage(List.of("1", "2", "3"), "流程内容", "流程主题", List.of(user));
@@ -53,7 +55,8 @@ class WorkflowNotifyCallerUnitTest {
         NotifyResult failed = new NotifyResult("request-failed", NotifyChannel.MAIL, "smtp", NotifyStatus.FAILED,
             List.of(NotifyTargetResult.failed(target, "FAILED", "rejected", 1L)));
         when(notifyClient.send(any())).thenThrow(new NotifyDeliveryException(failed));
-        FlwCommonServiceImpl service = new FlwCommonServiceImpl(messageService, notifyClient);
+        FlwCommonServiceImpl service = new FlwCommonServiceImpl(messageService, notifyClient,
+            mock(WorkflowTaskRecipientResolver.class));
 
         assertDoesNotThrow(() -> service.sendMessage(List.of("2"), "内容", "主题",
             List.of(user(7L, "user@example.com", null))));
