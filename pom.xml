@@ -467,6 +467,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- 统一通知控制面 -->
+            <dependency>
+                <groupId>org.dromara</groupId>
+                <artifactId>ruoyi-notify</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
             <!--  api模块  -->
             <dependency>
                 <groupId>org.dromara</groupId>

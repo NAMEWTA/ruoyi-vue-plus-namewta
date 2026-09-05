@@ -23,6 +23,7 @@
         <module>ruoyi-ai</module>
         <module>ruoyi-profile</module>
         <module>ruoyi-third</module>
+        <module>ruoyi-notify</module>
     </modules>
 
 </project>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.notify.mapper.NotifyOutboxMapper">
+    <select id="selectClaimable" resultType="org.dromara.notify.domain.entity.NotifyOutbox">
+        select * from notify_outbox
+        where status = 'READY' and available_at &lt;= #{now}
+          and (next_attempt_at is null or next_attempt_at &lt;= #{now})
+          and (lease_until is null or lease_until &lt;= #{now})
+        order by outbox_id
+        limit #{limit}
+    </select>
+</mapper>

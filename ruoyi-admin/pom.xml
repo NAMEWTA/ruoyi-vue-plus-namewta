@@ -104,6 +104,12 @@
             <artifactId>ruoyi-third</artifactId>
         </dependency>
 
+        <!-- 统一通知控制面 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-notify</artifactId>
+        </dependency>
+
         <!-- Spring Boot Admin 客户端 -->
         <dependency>
             <groupId>de.codecentric</groupId>
