@@ -50,6 +50,7 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
     private static final String DEFAULT_SUBJECT = "单据审批提醒";
     private final MessageService messageService;
     private final NotifyClient notifyClient;
+    private final WorkflowTaskRecipientResolver taskRecipientResolver;
 
     /**
      * 根据流程实例发送消息给当前处理人
@@ -72,7 +73,7 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
         if (StringUtils.isBlank(message)) {
             message = "有新的【" + flowName + "】单据已经提交至您，请您及时处理。";
         }
-        List<UserDTO> userList = flwTaskService.currentTaskAllUser(StreamUtils.toList(list, FlowTask::getId));
+        List<UserDTO> userList = taskRecipientResolver.resolve(StreamUtils.toList(list, FlowTask::getId));
         if (CollUtil.isEmpty(userList)) {
             return;
         }
