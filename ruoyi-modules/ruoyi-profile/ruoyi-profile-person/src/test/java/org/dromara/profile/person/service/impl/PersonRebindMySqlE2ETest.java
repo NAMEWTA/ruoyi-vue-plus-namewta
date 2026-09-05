@@ -20,7 +20,7 @@ import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
-import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.notify.api.NotificationApplicationService;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.api.material.ProfileMaterialPort;
 import org.dromara.profile.person.port.gateway.PersonWorkflowGateway;
@@ -28,7 +28,6 @@ import org.dromara.profile.person.mapper.PersonNotificationAuditMapper;
 import org.dromara.profile.person.dao.PersonNotificationAuditDao;
 import org.dromara.profile.person.mapper.PersonApplicationMapper;
 import org.dromara.system.api.ConfigService;
-import org.dromara.system.api.MessageService;
 import org.dromara.system.api.UserService;
 import org.dromara.workflow.api.event.ProcessEvent;
 import org.junit.jupiter.api.Tag;
@@ -198,13 +197,11 @@ class PersonRebindMySqlE2ETest {
         ConfigService config = mock(ConfigService.class);
         when(config.getConfigValue("profile.person.flowCode")).thenReturn("profile_person_verification");
         ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-        MessageService messages = mock(MessageService.class);
-        doThrow(new IllegalStateException("offline")).when(messages).sendMessage(anyLong(), anyString());
-        NotifyClient notifyClient = mock(NotifyClient.class);
-        when(notifyClient.send(any())).thenThrow(new IllegalStateException("offline"));
+        NotificationApplicationService notificationService = mock(NotificationApplicationService.class);
+        doThrow(new IllegalStateException("offline")).when(notificationService).submit(any());
         PersonRebindNotificationService notifications = new PersonRebindNotificationService(
             new PersonNotificationAuditDao(session.getMapper(PersonNotificationAuditMapper.class)),
-            messages, users, notifyClient);
+            notificationService, users);
         PersonRebindServiceImpl service = new PersonRebindServiceImpl(rebinds, applications,
             JsonMapper.builder().build(), materials, providers, attempts, workflow, users,
             Clock.fixed(NOW, ZoneOffset.UTC), config, notifications, events);

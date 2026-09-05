@@ -11,12 +11,10 @@ import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.model.NotifyAuditPolicy;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyRequest;
-import org.dromara.common.notify.model.NotifyResult;
-import org.dromara.common.notify.model.NotifyStatus;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationReceipt;
+import org.dromara.notify.api.NotificationStatus;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.profile.api.person.PersonIdentityLookupService;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityMatch;
@@ -89,7 +87,7 @@ class EnterpriseTransferMySqlRedisE2ETest {
             seed(session);
             session.commit();
             redis = redisClient();
-            AtomicReference<NotifyRequest> delivery = new AtomicReference<>();
+            AtomicReference<NotificationCommand> delivery = new AtomicReference<>();
             AtomicLong currentUser = new AtomicLong(SOURCE_USER);
             MockMvc mvc = fixture(session, delivery);
 
@@ -107,10 +105,10 @@ class EnterpriseTransferMySqlRedisE2ETest {
                 challengeId = JsonMapper.builder().build().readTree(sent.getResponse().getContentAsString())
                     .path("data").path("challengeId").asText();
                 assertThat(challengeId).isNotBlank();
-                assertThat(delivery.get().auditPolicy()).isEqualTo(NotifyAuditPolicy.REDACT_SENSITIVE);
-                assertThat(delivery.get().targets()).singleElement()
-                    .extracting(target -> target.value()).isEqualTo("13800138000");
-                String code = delivery.get().content().contentSnapshot().replaceAll(".*?(\\d{6}).*", "$1");
+                assertThat(delivery.get().metadata().get("audit")).isEqualTo("REDACT_SENSITIVE");
+                assertThat(delivery.get().recipientIds()).containsExactly("13800138000");
+                String code = String.valueOf(delivery.get().templateParams().get("content"))
+                    .replaceAll(".*?(\\d{6}).*", "$1");
 
                 mvc.perform(post("/profile/enterprise/transfer/confirm")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -157,7 +155,7 @@ class EnterpriseTransferMySqlRedisE2ETest {
         }
     }
 
-    private MockMvc fixture(SqlSession session, AtomicReference<NotifyRequest> delivery) {
+    private MockMvc fixture(SqlSession session, AtomicReference<NotificationCommand> delivery) {
         EnterpriseTransferMapper mapper = session.getMapper(EnterpriseTransferMapper.class);
         RedisEnterpriseTransferChallengeStore challenges = new RedisEnterpriseTransferChallengeStore(redis);
         EnterpriseTransferCodeGenerator codes = mock(EnterpriseTransferCodeGenerator.class);
@@ -169,11 +167,13 @@ class EnterpriseTransferMySqlRedisE2ETest {
         ActiveIdentityMatch identity = new ActiveIdentityMatch(TARGET_USER, PERSON_PROFILE);
         when(personIdentities.findActiveExactMatches(any())).thenReturn(List.of(identity));
         when(personIdentities.lockActiveExactMatch(any())).thenReturn(java.util.Optional.of(identity));
-        NotifyClient notify = request -> {
+        NotificationApplicationService notify = mock(NotificationApplicationService.class);
+        when(notify.submit(any())).thenAnswer(invocation -> {
+            NotificationCommand request = invocation.getArgument(0);
             delivery.set(request);
-            return new NotifyResult(request.requestId(), NotifyChannel.SMS, "isolated-sms",
-                NotifyStatus.ACCEPTED, List.of());
-        };
+            return new NotificationReceipt("enterprise-transfer-challenge-1", NotificationStatus.ACCEPTED,
+                false, false, List.of());
+        });
         EnterpriseTransferServiceImpl service = new EnterpriseTransferServiceImpl(mapper, challenges, codes,
             personIdentities, users, notify, Clock.fixed(NOW, ZoneOffset.UTC));
         return MockMvcBuilders.standaloneSetup(new EnterpriseTransferController(service))

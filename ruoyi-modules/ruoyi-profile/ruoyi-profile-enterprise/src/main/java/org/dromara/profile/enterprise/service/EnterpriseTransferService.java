@@ -7,14 +7,13 @@ import org.dromara.profile.enterprise.domain.exception.EnterpriseTransferExcepti
 import org.dromara.profile.enterprise.domain.transfer.EnterpriseTransferChallenge;
 import org.dromara.common.mybatis.utils.IdGeneratorUtil;
 import cn.hutool.crypto.digest.BCrypt;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.model.NotifyAuditPolicy;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyRequest;
-import org.dromara.common.notify.model.NotifyResult;
-import org.dromara.common.notify.model.NotifyStatus;
-import org.dromara.common.notify.model.NotifyTarget;
-import org.dromara.common.notify.model.NotifyTextContent;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationChannel;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationMode;
+import org.dromara.notify.api.NotificationReceipt;
+import org.dromara.notify.api.NotificationStatus;
+import org.dromara.notify.api.NotificationStrategy;
 import org.dromara.profile.api.person.PersonIdentityLookupService;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityLock;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityMatch;
@@ -54,7 +53,7 @@ public class EnterpriseTransferService {
     private final EnterpriseTransferCodePort codes;
     private final PersonIdentityLookupService personIdentities;
     private final UserService users;
-    private final NotifyClient notify;
+    private final NotificationApplicationService notify;
     private final Clock clock;
     /** 创建企业转移业务服务。 */
     @Autowired
@@ -63,7 +62,7 @@ public class EnterpriseTransferService {
                                      EnterpriseTransferCodePort codes,
                                      PersonIdentityLookupService personIdentities,
                                      UserService users,
-                                     NotifyClient notify) {
+                                     NotificationApplicationService notify) {
         this(dao, challenges, codes, personIdentities, users, notify, Clock.systemUTC());
     }
     /** 创建可注入时钟的企业转移业务服务，测试场景据此固定过期时间。 */
@@ -72,7 +71,7 @@ public class EnterpriseTransferService {
                               EnterpriseTransferCodePort codes,
                               PersonIdentityLookupService personIdentities,
                               UserService users,
-                              NotifyClient notify,
+                              NotificationApplicationService notify,
                               Clock clock) {
         this.dao = dao;
         this.challenges = challenges;
@@ -88,7 +87,7 @@ public class EnterpriseTransferService {
                               EnterpriseTransferChallengeStore challenges,
                               org.dromara.profile.enterprise.adapter.security.EnterpriseTransferCodeGenerator codes,
                               PersonIdentityLookupService personIdentities, UserService users,
-                              NotifyClient notify, Clock clock) {
+                              NotificationApplicationService notify, Clock clock) {
         this(dao, challenges, (EnterpriseTransferCodePort) codes, personIdentities, users, notify, clock);
     }
     /**
@@ -118,20 +117,13 @@ public class EnterpriseTransferService {
         if (challenges.stage(challenge) != StageResult.STAGED) {
             throw failure("ENTERPRISE_TRANSFER_RATE_LIMITED");
         }
-        NotifyResult result;
+        NotificationReceipt result;
         try {
-            result = notify.send(NotifyRequest.builder()
-                .requestId("enterprise-transfer-" + challengeId)
-                .bizType("profile_enterprise_transfer")
-                .bizId(challengeId)
-                .channel(NotifyChannel.SMS)
-                .targets(List.of(NotifyTarget.phone(target.phone())))
-                .content(new NotifyTextContent("企业负责人转移验证码",
-                    "您的企业负责人转移验证码为：" + code + "，5分钟内有效。"))
-                .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
-                .idempotencyKey("profile:enterprise:transfer:" + challengeId)
-                .idempotencyWindow(CHALLENGE_TTL)
-                .build());
+            result = notify.submit(new NotificationCommand("profile", "enterprise-transfer", "ENTERPRISE_TRANSFER",
+                challengeId, "PHONE", List.of(target.phone()), "enterprise-transfer",
+                Map.of("title", "企业负责人转移验证码", "content", "您的企业负责人转移验证码为：" + code + "，5分钟内有效。"),
+                List.of(NotificationChannel.SMS), NotificationStrategy.ALL, NotificationMode.SYNC, 80, null, expiresAt,
+                "profile:enterprise:transfer:" + challengeId, Map.of("audit", "REDACT_SENSITIVE")));
         } catch (RuntimeException exception) {
             challenges.revoke(challengeId);
             throw new EnterpriseTransferException("ENTERPRISE_TRANSFER_DELIVERY_FAILED", exception);
@@ -298,9 +290,9 @@ public class EnterpriseTransferService {
     /**
      * 判断通知是否已送达
      */
-    private boolean delivered(NotifyResult result) {
-        return result != null && (result.status() == NotifyStatus.ACCEPTED
-            || result.status() == NotifyStatus.SKIPPED_DUPLICATE);
+    private boolean delivered(NotificationReceipt result) {
+        return result != null && (result.status() == NotificationStatus.ACCEPTED
+            || result.status() == NotificationStatus.DELIVERED);
     }
     /**
      * 构造流程事件数据

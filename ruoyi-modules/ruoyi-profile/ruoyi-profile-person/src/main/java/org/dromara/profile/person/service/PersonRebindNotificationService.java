@@ -3,20 +3,17 @@ import org.dromara.profile.person.dao.PersonNotificationAuditDao;
 import org.dromara.profile.person.port.notification.PersonRebindNotificationPort;
 import org.dromara.common.mybatis.utils.IdGeneratorUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.model.NotifyAuditPolicy;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyRequest;
-import org.dromara.common.notify.model.NotifyResult;
-import org.dromara.common.notify.model.NotifyStatus;
-import org.dromara.common.notify.model.NotifyTarget;
-import org.dromara.common.notify.model.NotifyTextContent;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationChannel;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationMode;
+import org.dromara.notify.api.NotificationReceipt;
+import org.dromara.notify.api.NotificationStatus;
+import org.dromara.notify.api.NotificationStrategy;
 import org.dromara.profile.person.domain.model.read.PersonNotificationAuditRow;
 import org.dromara.profile.person.event.PersonReboundEvent;
-import org.dromara.system.api.MessageService;
 import org.dromara.system.api.UserService;
 import org.springframework.stereotype.Service;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 /**
@@ -29,18 +26,16 @@ public class PersonRebindNotificationService implements PersonRebindNotification
     static final String SMS_TYPE = "PERSON_REBIND_SMS";
     static final String SAFE_TEXT = "您的个人实名认证绑定已变更。如非本人操作，请联系平台。";
     private final PersonNotificationAuditDao audits;
-    private final MessageService messages;
+    private final NotificationApplicationService notifications;
     private final UserService users;
-    private final NotifyClient notifyClient;
     /**
      * 处理personrebindnotificationservice。
      */
-    public PersonRebindNotificationService(PersonNotificationAuditDao audits, MessageService messages,
-                                            UserService users, NotifyClient notifyClient) {
+    public PersonRebindNotificationService(PersonNotificationAuditDao audits, NotificationApplicationService notifications,
+                                            UserService users) {
         this.audits = audits;
-        this.messages = messages;
+        this.notifications = notifications;
         this.users = users;
-        this.notifyClient = notifyClient;
     }
     /**
      * 暂存通知消息
@@ -127,7 +122,11 @@ public class PersonRebindNotificationService implements PersonRebindNotification
     private Delivery deliver(String type, long profileId, long applicationId, long userId) {
         try {
             if (INTERNAL_TYPE.equals(type)) {
-                messages.sendMessage(userId, SAFE_TEXT);
+                notifications.submit(new NotificationCommand("profile", "person-rebind", INTERNAL_TYPE,
+                    Long.toString(applicationId), "USER", List.of(Long.toString(userId)), "person-rebind",
+                    java.util.Map.of("title", "实名认证绑定变更通知", "content", SAFE_TEXT), List.of(NotificationChannel.IN_APP),
+                    NotificationStrategy.ALL, NotificationMode.ASYNC, 60, null, null,
+                    internalRequestId(applicationId), java.util.Map.of("audit", "SAFE_TEXT")));
                 return new Delivery(internalRequestId(applicationId), "ACCEPTED", null);
             }
             if (SMS_TYPE.equals(type)) {
@@ -148,27 +147,18 @@ public class PersonRebindNotificationService implements PersonRebindNotification
         if (phone == null) {
             return new Delivery(requestId, "SKIPPED", "TARGET_PHONE_UNAVAILABLE");
         }
-        NotifyResult result = notifyClient.send(NotifyRequest.builder()
-            .requestId(requestId)
-            .bizType("profile_person_rebind")
-            .bizId(Long.toString(applicationId))
-            .channel(NotifyChannel.SMS)
-            .targets(List.of(NotifyTarget.phone(phone)))
-            .content(new NotifyTextContent("实名认证绑定变更通知", SAFE_TEXT))
-            .auditPolicy(NotifyAuditPolicy.REDACT_SENSITIVE)
-            .idempotencyKey("profile:person:rebind:" + profileId + ":" + applicationId + ":sms")
-            .idempotencyWindow(Duration.ofDays(30))
-            .build());
+        NotificationReceipt result = notifications.submit(new NotificationCommand("profile", "person-rebind", SMS_TYPE,
+            Long.toString(applicationId), "PHONE", List.of(phone), "person-rebind",
+            java.util.Map.of("title", "实名认证绑定变更通知", "content", SAFE_TEXT), List.of(NotificationChannel.SMS),
+            NotificationStrategy.ALL, NotificationMode.SYNC, 60, null, null,
+            "profile:person:rebind:" + profileId + ":" + applicationId + ":sms", java.util.Map.of("audit", "REDACT_SENSITIVE")));
         if (result == null || result.status() == null) {
             return new Delivery(requestId, "FAILED", "EMPTY_NOTIFY_RESULT");
         }
-        if (result.status() == NotifyStatus.ACCEPTED) {
-            return new Delivery(result.requestId(), "ACCEPTED", null);
+        if (result.status() == NotificationStatus.ACCEPTED || result.status() == NotificationStatus.DELIVERED) {
+            return new Delivery(result.notificationId(), "ACCEPTED", null);
         }
-        if (result.status() == NotifyStatus.SKIPPED_DUPLICATE) {
-            return new Delivery(result.requestId(), "SKIPPED", null);
-        }
-        return new Delivery(result.requestId(), "FAILED", "NOTIFY_" + result.status().name());
+        return new Delivery(result.notificationId(), "FAILED", "NOTIFY_" + result.status().name());
     }
     /**
      * 生成内部请求编号

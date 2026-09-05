@@ -3,17 +3,18 @@ package org.dromara.demo.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyRequest;
-import org.dromara.common.notify.model.NotifyTarget;
-import org.dromara.common.notify.model.NotifyTextContent;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationChannel;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationMode;
+import org.dromara.notify.api.NotificationStrategy;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -27,7 +28,7 @@ import java.util.List;
 @RequestMapping("/demo/mail")
 public class MailSendController {
 
-    private final NotifyClient notifyClient;
+    private final NotificationApplicationService notificationService;
 
     /**
      * 发送邮件
@@ -71,13 +72,10 @@ public class MailSendController {
     }
 
     private void send(String to, String subject, String text, List<Long> ossIds) {
-        notifyClient.send(NotifyRequest.builder()
-            .bizType("demo_mail")
-            .channel(NotifyChannel.MAIL)
-            .targets(List.of(NotifyTarget.email(to)))
-            .content(new NotifyTextContent(subject, text))
-            .attachmentOssIds(ossIds)
-            .build());
+        notificationService.submit(new NotificationCommand("demo", "mail-demo", "demo_mail", to,
+            "EMAIL", List.of(to), "mail-demo", Map.of("title", subject, "content", text,
+            "attachmentOssIds", ossIds), List.of(NotificationChannel.MAIL), NotificationStrategy.ALL,
+            NotificationMode.SYNC, 20, null, null, null, Map.of()));
     }
 
 }

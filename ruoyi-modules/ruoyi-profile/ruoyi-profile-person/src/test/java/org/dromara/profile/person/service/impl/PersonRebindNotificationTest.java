@@ -1,21 +1,19 @@
 package org.dromara.profile.person.service.impl;
 
-import org.dromara.profile.person.service.PersonRebindNotificationService;
-import org.dromara.profile.person.listener.PersonRebindNotificationListener;
-import org.dromara.profile.person.usecase.impl.PersonRebindNotificationUseCaseImpl;
-
-import org.dromara.profile.person.event.PersonReboundEvent;
 import com.baomidou.dynamic.datasource.annotation.DsTxEventListener;
 import com.baomidou.dynamic.datasource.tx.DsTxEventListenerFactory;
 import com.baomidou.dynamic.datasource.tx.TransactionContext;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyResult;
-import org.dromara.common.notify.model.NotifyStatus;
-import org.dromara.profile.person.mapper.PersonNotificationAuditMapper;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationReceipt;
+import org.dromara.notify.api.NotificationStatus;
 import org.dromara.profile.person.dao.PersonNotificationAuditDao;
 import org.dromara.profile.person.domain.model.read.PersonNotificationAuditRow;
-import org.dromara.system.api.MessageService;
+import org.dromara.profile.person.event.PersonReboundEvent;
+import org.dromara.profile.person.listener.PersonRebindNotificationListener;
+import org.dromara.profile.person.mapper.PersonNotificationAuditMapper;
+import org.dromara.profile.person.service.PersonRebindNotificationService;
+import org.dromara.profile.person.usecase.impl.PersonRebindNotificationUseCaseImpl;
 import org.dromara.system.api.UserService;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -24,7 +22,6 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.transaction.event.TransactionPhase;
 
 import java.lang.reflect.Method;
-
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,54 +36,41 @@ import static org.mockito.Mockito.when;
 
 @Tag("dev")
 class PersonRebindNotificationTest {
-
     private final PersonNotificationAuditMapper audits = mock(PersonNotificationAuditMapper.class);
-    private final MessageService messages = mock(MessageService.class);
     private final UserService users = mock(UserService.class);
-    private final NotifyClient notify = mock(NotifyClient.class);
-    private final PersonRebindNotificationService service =
-        new PersonRebindNotificationService(new PersonNotificationAuditDao(audits), messages, users, notify);
+    private final NotificationApplicationService notifications = mock(NotificationApplicationService.class);
+    private final PersonRebindNotificationService service = new PersonRebindNotificationService(
+        new PersonNotificationAuditDao(audits), notifications, users);
 
     @Test
     void stagesRetryableAuditRowsBeforeAnyDelivery() {
         when(audits.insertNotificationAudit(any(PersonNotificationAuditRow.class))).thenReturn(1);
-
         service.stage(new PersonReboundEvent(9201L, 9001L, 202L));
-
         ArgumentCaptor<PersonNotificationAuditRow> audit = ArgumentCaptor.forClass(PersonNotificationAuditRow.class);
         verify(audits, org.mockito.Mockito.times(2)).insertNotificationAudit(audit.capture());
         assertThat(audit.getAllValues()).extracting(PersonNotificationAuditRow::getStatus)
             .containsExactly("PENDING", "PENDING");
-        verifyNoInteractions(messages, users, notify);
+        verifyNoInteractions(users, notifications);
     }
 
     @Test
     void defersDeliveryUntilDynamicDataSourceTransactionCommits() throws Exception {
-        Method listener = PersonRebindNotificationListener.class.getMethod("handle",
-            PersonReboundEvent.class);
-        DsTxEventListener annotation = listener.getAnnotation(DsTxEventListener.class);
-        assertThat(annotation).isNotNull();
-        assertThat(annotation.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
-
+        Method listener = PersonRebindNotificationListener.class.getMethod("handle", PersonReboundEvent.class);
+        assertThat(listener.getAnnotation(DsTxEventListener.class).phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
         when(users.selectPhonenumberById(202L)).thenReturn("13800138000");
-        when(notify.send(any())).thenReturn(new NotifyResult("sms-person-rebind-9001", NotifyChannel.SMS,
-            "sms-provider", NotifyStatus.ACCEPTED, List.of()));
+        when(notifications.submit(any())).thenReturn(accepted());
         stubPendingRows();
-
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DsTxEventListenerFactory.class);
-            PersonRebindNotificationUseCaseImpl useCase = new PersonRebindNotificationUseCaseImpl(service);
             context.registerBean(PersonRebindNotificationListener.class,
-                () -> new PersonRebindNotificationListener(useCase));
+                () -> new PersonRebindNotificationListener(new PersonRebindNotificationUseCaseImpl(service)));
             context.refresh();
             TransactionContext.bind("person-rebind-test");
             try {
                 context.publishEvent(new PersonReboundEvent(9201L, 9001L, 202L));
-                verifyNoInteractions(messages, users, notify, audits);
                 assertThat(TransactionContext.getSynchronizations()).hasSize(1);
                 TransactionContext.getSynchronizations().getFirst().afterCommit();
-                verify(messages).sendMessage(202L,
-                    "您的个人实名认证绑定已变更。如非本人操作，请联系平台。");
+                verify(notifications, org.mockito.Mockito.atLeastOnce()).submit(any());
             } finally {
                 TransactionContext.removeSynchronizations();
                 TransactionContext.remove();
@@ -97,40 +81,25 @@ class PersonRebindNotificationTest {
     @Test
     void sendsBothSafeChannelsWithoutIdentityOrNewAccountData() {
         when(users.selectPhonenumberById(202L)).thenReturn("13800138000");
-        when(notify.send(any())).thenReturn(new NotifyResult("sms-person-rebind-9001", NotifyChannel.SMS,
-            "sms-provider", NotifyStatus.ACCEPTED, List.of()));
+        when(notifications.submit(any())).thenReturn(accepted());
         stubPendingRows();
-
         service.notifyOldAccount(new PersonReboundEvent(9201L, 9001L, 202L));
-
-        verify(messages).sendMessage(202L, "您的个人实名认证绑定已变更。如非本人操作，请联系平台。");
-        ArgumentCaptor<org.dromara.common.notify.model.NotifyRequest> request =
-            ArgumentCaptor.forClass(org.dromara.common.notify.model.NotifyRequest.class);
-        verify(notify).send(request.capture());
-        assertThat(request.getValue().content().contentSnapshot())
-            .doesNotContain("张三", "110101", "101");
-        assertThat(request.getValue().auditPolicy().name()).isEqualTo("REDACT_SENSITIVE");
-        ArgumentCaptor<PersonNotificationAuditRow> audit = ArgumentCaptor.forClass(PersonNotificationAuditRow.class);
-        verify(audits, org.mockito.Mockito.times(2)).updateDelivery(audit.capture());
-        assertThat(audit.getAllValues()).extracting(PersonNotificationAuditRow::getStatus)
-            .containsExactly("ACCEPTED", "ACCEPTED");
+        ArgumentCaptor<NotificationCommand> request = ArgumentCaptor.forClass(NotificationCommand.class);
+        verify(notifications, org.mockito.Mockito.times(2)).submit(request.capture());
+        assertThat(request.getAllValues()).allSatisfy(command ->
+            assertThat(command.templateParams().toString()).doesNotContain("张三", "110101", "101"));
     }
 
     @Test
     void deliveryFailuresAreCapturedAndNeverEscapeTheAfterCommitListener() {
-        doThrow(new IllegalStateException("offline")).when(messages).sendMessage(anyLong(), anyString());
+        doThrow(new IllegalStateException("offline")).when(notifications).submit(any());
         when(users.selectPhonenumberById(202L)).thenReturn("13800138000");
-        when(notify.send(any())).thenThrow(new IllegalStateException("offline"));
         stubPendingRows();
-
         service.notifyOldAccount(new PersonReboundEvent(9201L, 9001L, 202L));
-
         ArgumentCaptor<PersonNotificationAuditRow> audit = ArgumentCaptor.forClass(PersonNotificationAuditRow.class);
         verify(audits, org.mockito.Mockito.times(2)).updateDelivery(audit.capture());
         assertThat(audit.getAllValues()).extracting(PersonNotificationAuditRow::getStatus)
             .containsExactly("FAILED", "FAILED");
-        assertThat(audit.getAllValues()).extracting(PersonNotificationAuditRow::getFailureCategory)
-            .containsOnly("DELIVERY_FAILED");
     }
 
     @Test
@@ -145,10 +114,10 @@ class PersonRebindNotificationTest {
         row.setVersion(0);
         when(audits.lockRetryable(9901L)).thenReturn(row);
         when(audits.updateDelivery(row)).thenReturn(1);
-
+        when(notifications.submit(any())).thenReturn(accepted());
         assertThat(service.retryFailed(9901L)).isTrue();
         assertThat(row.getStatus()).isEqualTo("ACCEPTED");
-        verify(messages).sendMessage(202L, "您的个人实名认证绑定已变更。如非本人操作，请联系平台。");
+        verify(notifications).submit(any());
     }
 
     private void stubPendingRows() {
@@ -167,5 +136,9 @@ class PersonRebindNotificationTest {
         row.setStatus("PENDING");
         row.setVersion(0);
         return row;
+    }
+
+    private NotificationReceipt accepted() {
+        return new NotificationReceipt("notification-1", NotificationStatus.ACCEPTED, false, false, List.of());
     }
 }

@@ -1,7 +1,7 @@
 package org.dromara.profile.enterprise.service.impl;
 
 import org.dromara.profile.enterprise.adapter.security.EnterpriseTransferCodeGenerator;
-import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.notify.api.NotificationApplicationService;
 import org.dromara.profile.api.person.PersonIdentityLookupService;
 import org.dromara.profile.enterprise.dao.EnterpriseTransferDao;
 import org.dromara.profile.enterprise.mapper.EnterpriseTransferMapper;
@@ -17,7 +17,7 @@ public class EnterpriseTransferServiceImpl extends EnterpriseTransferService imp
     public EnterpriseTransferServiceImpl(EnterpriseTransferMapper mapper, EnterpriseTransferChallengeStore challenges,
                                           EnterpriseTransferCodeGenerator codes,
                                           PersonIdentityLookupService personIdentities, UserService users,
-                                          NotifyClient notify, Clock clock) {
+                                          NotificationApplicationService notify, Clock clock) {
         super(new EnterpriseTransferDao(mapper), challenges, codes, personIdentities, users, notify, clock);
     }
 

@@ -5,19 +5,15 @@ import cn.hutool.core.util.ObjectUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.enums.BusinessStatusEnum;
-import org.dromara.common.core.enums.PushSourceEnum;
-import org.dromara.common.core.enums.PushTypeEnum;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StreamUtils;
 import org.dromara.common.core.utils.StringUtils;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyRequest;
-import org.dromara.common.notify.model.NotifyTarget;
-import org.dromara.common.notify.model.NotifyTextContent;
-import org.dromara.system.api.MessageService;
-import org.dromara.system.api.domain.PushPayloadDTO;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationChannel;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationMode;
+import org.dromara.notify.api.NotificationStrategy;
 import org.dromara.system.api.domain.UserDTO;
 import org.dromara.warm.flow.core.FlowEngine;
 import org.dromara.warm.flow.core.entity.Node;
@@ -31,6 +27,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.dromara.workflow.common.constant.FlowConstant.PATH_MY_DOCUMENT;
@@ -48,8 +45,7 @@ import static org.dromara.workflow.common.constant.FlowConstant.PATH_TASK_WAITIN
 public class FlwCommonServiceImpl implements IFlwCommonService {
 
     private static final String DEFAULT_SUBJECT = "单据审批提醒";
-    private final MessageService messageService;
-    private final NotifyClient notifyClient;
+    private final NotificationApplicationService notificationService;
     private final WorkflowTaskRecipientResolver taskRecipientResolver;
 
     /**
@@ -158,18 +154,11 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
             switch (messageTypeEnum) {
                 case SYSTEM_MESSAGE -> {
                     // 站内消息直接携带前端路由，消息盒子点击后可按路径分流。
-                    messageService.publishMessage(userIds, PushPayloadDTO.of(
-                        PushTypeEnum.MESSAGE,
-                        PushSourceEnum.WORKFLOW,
-                        message, null, path
-                    ));
+                    submit("USER", userIds.stream().map(String::valueOf).toList(), NotificationChannel.IN_APP,
+                        subject, message, path);
                 }
-                case EMAIL_MESSAGE -> sendExternalNotify(NotifyChannel.MAIL,
-                    emails.stream().map(NotifyTarget::email).toList(),
-                    subject, message);
-                case SMS_MESSAGE -> sendExternalNotify(NotifyChannel.SMS,
-                    phones.stream().map(NotifyTarget::phone).toList(),
-                    subject, message);
+                case EMAIL_MESSAGE -> submit("EMAIL", emails.stream().toList(), NotificationChannel.MAIL, subject, message, path);
+                case SMS_MESSAGE -> submit("PHONE", phones.stream().toList(), NotificationChannel.SMS, subject, message, path);
                 default -> log.warn("【消息发送】未处理的消息类型：{}", messageTypeEnum);
             }
         } catch (Exception ex) {
@@ -178,17 +167,13 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
         }
     }
 
-    private void sendExternalNotify(NotifyChannel channel, List<NotifyTarget> targets,
-                                    String subject, String message) {
-        if (targets.isEmpty()) {
-            return;
-        }
-        notifyClient.send(NotifyRequest.builder()
-            .bizType("workflow")
-            .channel(channel)
-            .targets(targets)
-            .content(new NotifyTextContent(subject, message))
-            .build());
+    private void submit(String recipientType, List<String> recipients, NotificationChannel channel,
+                        String subject, String message, String path) {
+        if (recipients.isEmpty()) return;
+        notificationService.submit(new NotificationCommand("workflow", "task-message", "WORKFLOW",
+            subject + ":" + message.hashCode(), recipientType, recipients, "workflow-task",
+            Map.of("title", subject, "content", message, "path", path == null ? "" : path),
+            List.of(channel), NotificationStrategy.ALL, NotificationMode.ASYNC, 40, null, null, null, Map.of()));
     }
 
     /**

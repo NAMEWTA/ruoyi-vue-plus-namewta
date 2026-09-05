@@ -7,12 +7,10 @@ import org.dromara.profile.enterprise.domain.model.read.EnterpriseTransferOwnerR
 import org.dromara.profile.enterprise.mapper.EnterpriseTransferMapper;
 import org.dromara.profile.enterprise.port.store.EnterpriseTransferChallengeStore;
 import cn.hutool.crypto.digest.BCrypt;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.model.NotifyAuditPolicy;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyRequest;
-import org.dromara.common.notify.model.NotifyResult;
-import org.dromara.common.notify.model.NotifyStatus;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationReceipt;
+import org.dromara.notify.api.NotificationStatus;
 import org.dromara.profile.api.person.PersonIdentityLookupService;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityLock;
 import org.dromara.profile.api.person.PersonIdentityLookupService.ActiveIdentityMatch;
@@ -57,7 +55,7 @@ class EnterpriseTransferServiceTest {
     private final EnterpriseTransferCodeGenerator codes = mock(EnterpriseTransferCodeGenerator.class);
     private final PersonIdentityLookupService personIdentities = mock(PersonIdentityLookupService.class);
     private final UserService users = mock(UserService.class);
-    private final NotifyClient notify = mock(NotifyClient.class);
+    private final NotificationApplicationService notify = mock(NotificationApplicationService.class);
     private final EnterpriseTransferServiceImpl service = new EnterpriseTransferServiceImpl(mapper, challenges,
         codes, personIdentities, users, notify, Clock.fixed(NOW, ZoneOffset.UTC));
 
@@ -66,8 +64,7 @@ class EnterpriseTransferServiceTest {
         eligibleTarget();
         when(codes.generate()).thenReturn("123456");
         when(challenges.stage(any())).thenReturn(StageResult.STAGED);
-        when(notify.send(any())).thenReturn(new NotifyResult("enterprise-transfer-challenge-1",
-            NotifyChannel.SMS, "sms-provider", NotifyStatus.ACCEPTED, List.of()));
+        when(notify.submit(any())).thenReturn(accepted());
         when(challenges.activate(any())).thenReturn(true);
 
         var view = service.send(101L, new EnterpriseTransferSendBo("张三", "3001", "13800138000"));
@@ -81,10 +78,10 @@ class EnterpriseTransferServiceTest {
         assertThat(challenge.getValue().state()).isEqualTo(EnterpriseTransferChallenge.State.PENDING_DELIVERY);
         assertThat(BCrypt.checkpw("123456", challenge.getValue().codeHash())).isTrue();
         assertThat(challenge.getValue().sourceBindingVersion()).isEqualTo(7);
-        ArgumentCaptor<NotifyRequest> request = ArgumentCaptor.forClass(NotifyRequest.class);
-        verify(notify).send(request.capture());
-        assertThat(request.getValue().auditPolicy()).isEqualTo(NotifyAuditPolicy.REDACT_SENSITIVE);
-        assertThat(request.getValue().content().contentSnapshot()).contains("123456");
+        ArgumentCaptor<NotificationCommand> request = ArgumentCaptor.forClass(NotificationCommand.class);
+        verify(notify).submit(request.capture());
+        assertThat(request.getValue().metadata().get("audit")).isEqualTo("REDACT_SENSITIVE");
+        assertThat(request.getValue().templateParams().get("content")).asString().contains("123456");
         verify(challenges).activate(view.challengeId());
     }
 
@@ -105,8 +102,7 @@ class EnterpriseTransferServiceTest {
         eligibleTarget();
         when(codes.generate()).thenReturn("123456");
         when(challenges.stage(any())).thenReturn(StageResult.STAGED);
-        when(notify.send(any())).thenReturn(new NotifyResult("enterprise-transfer-challenge-1",
-            NotifyChannel.SMS, "sms-provider", NotifyStatus.FAILED, List.of()));
+        when(notify.submit(any())).thenThrow(new IllegalStateException("rejected"));
 
         assertThatThrownBy(() -> service.send(101L,
             new EnterpriseTransferSendBo("张三", "3001", "13800138000")))
@@ -114,6 +110,11 @@ class EnterpriseTransferServiceTest {
             .hasMessage("ENTERPRISE_TRANSFER_DELIVERY_FAILED");
         verify(challenges).revoke(any());
         verify(challenges, never()).activate(any());
+    }
+
+    private NotificationReceipt accepted() {
+        return new NotificationReceipt("enterprise-transfer-challenge-1", NotificationStatus.ACCEPTED,
+            false, false, List.of());
     }
 
     @Test

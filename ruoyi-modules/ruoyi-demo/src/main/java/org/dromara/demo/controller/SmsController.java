@@ -2,11 +2,11 @@ package org.dromara.demo.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
-import org.dromara.common.notify.core.NotifyClient;
-import org.dromara.common.notify.model.NotifyChannel;
-import org.dromara.common.notify.model.NotifyRequest;
-import org.dromara.common.notify.model.NotifyTarget;
-import org.dromara.common.notify.model.NotifyTemplateContent;
+import org.dromara.notify.api.NotificationApplicationService;
+import org.dromara.notify.api.NotificationChannel;
+import org.dromara.notify.api.NotificationCommand;
+import org.dromara.notify.api.NotificationMode;
+import org.dromara.notify.api.NotificationStrategy;
 import org.dromara.sms4j.api.SmsBlend;
 import org.dromara.sms4j.core.factory.SmsFactory;
 import org.springframework.validation.annotation.Validated;
@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 短信演示案例
@@ -31,7 +32,7 @@ import java.util.List;
 @RequestMapping("/demo/sms")
 public class SmsController {
 
-    private final NotifyClient notifyClient;
+    private final NotificationApplicationService notificationService;
     /**
      * 发送短信Aliyun
      *
@@ -85,18 +86,15 @@ public class SmsController {
 
     private R<Object> sendTemplate(String phones, String templateId, String providerKey,
                                    LinkedHashMap<String, String> params, String contentSnapshot) {
-        List<NotifyTarget> targets = Arrays.stream(phones.split(","))
+        List<String> targets = Arrays.stream(phones.split(","))
             .map(String::trim)
             .filter(phone -> !phone.isEmpty())
-            .map(NotifyTarget::phone)
             .toList();
-        return R.ok(notifyClient.send(NotifyRequest.builder()
-            .bizType("demo_sms")
-            .channel(NotifyChannel.SMS)
-            .providerKey(providerKey)
-            .targets(targets)
-            .content(new NotifyTemplateContent(null, templateId, params, contentSnapshot))
-            .build()));
+        return R.ok(notificationService.submit(new NotificationCommand("demo", "sms-demo", "demo_sms",
+            String.join(",", targets), "PHONE", targets, templateId,
+            Map.of("content", contentSnapshot, "providerKey", providerKey, "params", params),
+            List.of(NotificationChannel.SMS), NotificationStrategy.ALL, NotificationMode.SYNC, 20,
+            null, null, null, Map.of())));
     }
 
 }
