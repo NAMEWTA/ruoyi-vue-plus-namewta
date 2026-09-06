@@ -48,6 +48,22 @@
       "restoreStrategy": "not supported; detached evidence is retained and a new reference is attached instead",
       "carrierSource": "ruoyi-modules/ruoyi-profile/ruoyi-profile-person/src/main/java/org/dromara/profile/person/domain/material/MaterialReference.java",
       "contractTest": "ruoyi-modules/ruoyi-profile/ruoyi-profile-person/src/test/java/org/dromara/profile/person/service/impl/ProfileMaterialServiceTest.java"
+    },
+    {
+      "id": "demo-rich-text-content",
+      "module": "ruoyi-demo",
+      "table": "test_rich_text",
+      "carrier": "content_html",
+      "encoding": "canonical-html-oss-id-references",
+      "primaryKey": "rich_text_id",
+      "ownerService": "org.dromara.demo.service.impl.TestRichTextServiceImpl",
+      "callerClass": "org.dromara.demo.service.impl.TestRichTextServiceImpl",
+      "insertStrategy": "normalize and validate assets before reconcile after insert",
+      "updateStrategy": "optimistic update then reconcile previous and current canonical references",
+      "deleteStrategy": "reconcile persisted references to empty set during logical delete",
+      "restoreStrategy": "not supported",
+      "carrierSource": "ruoyi-modules/ruoyi-demo/src/main/java/org/dromara/demo/domain/TestRichText.java",
+      "contractTest": "ruoyi-admin/src/test/java/org/dromara/test/oss/owner/demo/TestRichTextOssOwnerUnitTest.java"
     }
   ],
   "carrierAllowlist": [

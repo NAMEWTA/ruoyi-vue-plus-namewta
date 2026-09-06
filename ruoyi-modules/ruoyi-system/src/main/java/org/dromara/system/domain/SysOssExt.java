@@ -72,4 +72,7 @@ public class SysOssExt implements Serializable {
      */
     private String md5;
 
+    /** 上传时绑定的 Client 主键，用于富文本资源的跨 Client 隔离。 */
+    private Long uploaderClientPk;
+
 }

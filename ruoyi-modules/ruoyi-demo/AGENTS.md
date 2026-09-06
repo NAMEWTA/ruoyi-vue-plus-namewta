@@ -12,12 +12,14 @@
 
 - Java/Spring Boot 代码、资源文件及本模块 Maven 依赖。
 - `controller/OpenApiDemoController.java`：OpenAPI 注解与机器调用链路演示。
+- `controller/TestRichTextController.java`：富文本规范化、OSS 资源授权与引用对账演示。
 - 具体业务规则、接口与数据结构以源码为准。
 
 ## Entry Points
 
 - `pom.xml`：模块构建和依赖入口。
 - `src/main`：生产代码与资源入口。
+- `docs/rich-text.md`：富文本接口和业务接入说明。
 
 ## Dependencies
 

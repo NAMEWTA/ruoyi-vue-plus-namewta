@@ -128,6 +128,46 @@ oss:
         multipart-threshold: 104857600
         part-size: 16777216
         required-permission: system:oss:upload
+      richtext-image:
+        storage-config-key: minio
+        expected-access-policy: PRIVATE
+        max-size: 20971520
+        allowed-content-types: [image/jpeg, image/png, image/gif, image/webp]
+        object-prefix: direct/richtext/image
+        mode: AUTO
+        multipart-threshold: 10485760
+        part-size: 5242880
+        required-permission: common:richtext:upload
+      richtext-audio:
+        storage-config-key: minio
+        expected-access-policy: PRIVATE
+        max-size: 104857600
+        allowed-content-types: [audio/mpeg, audio/mp4, audio/ogg, audio/wav, audio/webm]
+        object-prefix: direct/richtext/audio
+        mode: AUTO
+        multipart-threshold: 52428800
+        part-size: 8388608
+        required-permission: common:richtext:upload
+      richtext-video:
+        storage-config-key: minio
+        expected-access-policy: PRIVATE
+        max-size: 524288000
+        allowed-content-types: [video/mp4, video/webm, video/ogg]
+        object-prefix: direct/richtext/video
+        mode: AUTO
+        multipart-threshold: 104857600
+        part-size: 16777216
+        required-permission: common:richtext:upload
+      richtext-file:
+        storage-config-key: minio
+        expected-access-policy: PRIVATE
+        max-size: 104857600
+        allowed-content-types: [application/pdf, application/zip, application/octet-stream, text/plain]
+        object-prefix: direct/richtext/file
+        mode: AUTO
+        multipart-threshold: 52428800
+        part-size: 8388608
+        required-permission: common:richtext:upload
       document:
         storage-config-key: minio
         expected-access-policy: PRIVATE

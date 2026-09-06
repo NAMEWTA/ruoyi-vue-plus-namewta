@@ -33,7 +33,11 @@ public class OssUploadService {
         "image/jpeg", hex("ffd8ff"),
         "image/gif", "GIF8".getBytes(StandardCharsets.US_ASCII),
         "application/pdf", "%PDF-".getBytes(StandardCharsets.US_ASCII),
-        "application/zip", hex("504b0304")
+        "application/zip", hex("504b0304"),
+        "audio/ogg", "OggS".getBytes(StandardCharsets.US_ASCII),
+        "video/ogg", "OggS".getBytes(StandardCharsets.US_ASCII),
+        "audio/webm", hex("1a45dfa3"),
+        "video/webm", hex("1a45dfa3")
     );
 
     private final OssUploadProperties properties;
@@ -295,6 +299,27 @@ public class OssUploadService {
             byte[] actual = objectStore.readPrefix(ticket, MAGIC_PREFIX_LENGTH);
             if (actual.length < 12 || !startsWith(actual, "RIFF".getBytes(StandardCharsets.US_ASCII))
                 || !startsWith(Arrays.copyOfRange(actual, 8, actual.length), "WEBP".getBytes(StandardCharsets.US_ASCII))) {
+                throw new OssUploadException(OssUploadError.COMPLETE_VALIDATION_FAILED,
+                    "文件 magic bytes 与 Content-Type 不一致");
+            }
+        } else if ("video/mp4".equals(ticket.contentType()) || "audio/mp4".equals(ticket.contentType())) {
+            byte[] actual = objectStore.readPrefix(ticket, MAGIC_PREFIX_LENGTH);
+            if (actual.length < 8 || !Arrays.equals(Arrays.copyOfRange(actual, 4, 8), "ftyp".getBytes(StandardCharsets.US_ASCII))) {
+                throw new OssUploadException(OssUploadError.COMPLETE_VALIDATION_FAILED,
+                    "文件 magic bytes 与 Content-Type 不一致");
+            }
+        } else if ("audio/mpeg".equals(ticket.contentType())) {
+            byte[] actual = objectStore.readPrefix(ticket, MAGIC_PREFIX_LENGTH);
+            boolean id3 = startsWith(actual, "ID3".getBytes(StandardCharsets.US_ASCII));
+            boolean frame = actual.length >= 2 && (actual[0] & 0xff) == 0xff && (actual[1] & 0xe0) == 0xe0;
+            if (!id3 && !frame) {
+                throw new OssUploadException(OssUploadError.COMPLETE_VALIDATION_FAILED,
+                    "文件 magic bytes 与 Content-Type 不一致");
+            }
+        } else if ("audio/wav".equals(ticket.contentType())) {
+            byte[] actual = objectStore.readPrefix(ticket, MAGIC_PREFIX_LENGTH);
+            if (actual.length < 12 || !startsWith(actual, "RIFF".getBytes(StandardCharsets.US_ASCII))
+                || !startsWith(Arrays.copyOfRange(actual, 8, actual.length), "WAVE".getBytes(StandardCharsets.US_ASCII))) {
                 throw new OssUploadException(OssUploadError.COMPLETE_VALIDATION_FAILED,
                     "文件 magic bytes 与 Content-Type 不一致");
             }

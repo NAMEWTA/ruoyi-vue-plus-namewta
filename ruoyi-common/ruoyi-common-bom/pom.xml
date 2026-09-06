@@ -208,6 +208,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- 富文本内容协议与清洗 -->
+            <dependency>
+                <groupId>org.dromara</groupId>
+                <artifactId>ruoyi-common-richtext</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 

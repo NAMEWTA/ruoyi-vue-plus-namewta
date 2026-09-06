@@ -99,7 +99,12 @@ public interface OssService {
     }
 
     record OssObjectMetadata(Long ossId, String objectKey, String fileName, String fileSuffix,
-                             long fileSize, String contentType, Long uploaderUserId) {
+                             long fileSize, String contentType, Long uploaderUserId, Long uploaderClientPk) {
+        /** 兼容仅提供用户归属的历史测试实现。 */
+        public OssObjectMetadata(Long ossId, String objectKey, String fileName, String fileSuffix,
+                                 long fileSize, String contentType, Long uploaderUserId) {
+            this(ossId, objectKey, fileName, fileSuffix, fileSize, contentType, uploaderUserId, null);
+        }
     }
 
     record OssDownloadUrl(String url, Instant expiresAt, String fileName) {

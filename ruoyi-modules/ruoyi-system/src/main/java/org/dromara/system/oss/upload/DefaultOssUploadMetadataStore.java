@@ -45,6 +45,7 @@ public class DefaultOssUploadMetadataStore implements OssUploadMetadataStore {
         ext.setContentType(ticket.contentType());
         ext.setSource("directUpload");
         ext.setIsTemp(true);
+        ext.setUploaderClientPk(ticket.clientPk());
         SysOss oss = new SysOss();
         oss.setFileName(ticket.objectKey());
         oss.setOriginalName(ticket.originalName());

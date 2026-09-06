@@ -274,7 +274,7 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
             throw new ServiceException("OSS_OBJECT_METADATA_UNAVAILABLE");
         }
         return new OssObjectMetadata(ossId, oss.getFileName(), oss.getOriginalName(), oss.getFileSuffix(),
-            ext.getFileSize(), ext.getContentType(), oss.getCreateBy());
+            ext.getFileSize(), ext.getContentType(), oss.getCreateBy(), ext.getUploaderClientPk());
     }
 
     @Override
