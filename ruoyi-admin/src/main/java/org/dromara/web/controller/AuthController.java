@@ -41,8 +41,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 认证控制器，提供登录、注册、社交绑定和退出能力。
@@ -61,7 +59,6 @@ public class AuthController {
     private final SysRegisterService registerService;
     private final ISysSocialService socialUserService;
     private final ISysClientService clientService;
-    private final ScheduledExecutorService scheduledExecutorService;
     private final NotificationApplicationService notificationService;
     private final PasswordPolicyService passwordPolicyService;
 
@@ -92,14 +89,17 @@ public class AuthController {
         LoginVo loginVo = IAuthStrategy.login(body, client, grantType);
 
         Long userId = LoginHelper.getUserId();
-        scheduledExecutorService.schedule(() -> {
+        try {
             notificationService.submit(new NotificationCommand("admin-web", "auth-login", "LOGIN_SUCCESS",
                 String.valueOf(userId), "USER", List.of(String.valueOf(userId)), "login-welcome",
                 java.util.Map.of("title", "登录提醒", "content", "欢迎登录 RuoYi-Vue-Plus 后台管理系统"),
                 List.of(NotificationChannel.IN_APP), NotificationStrategy.ALL, NotificationMode.ASYNC, 20,
                 null, null, "login-welcome:" + userId + ":" + System.currentTimeMillis() / 60_000,
                 java.util.Map.of()));
-        }, 5, TimeUnit.SECONDS);
+        } catch (RuntimeException exception) {
+            // Login notification is best effort and must not turn a successful login into an error.
+            log.warn("Failed to enqueue login notification for user {}", userId, exception);
+        }
         return R.ok(loginVo);
     }
 

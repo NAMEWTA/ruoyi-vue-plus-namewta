@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import org.dromara.common.core.validation.ValidationException;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.core.exception.ServiceException;
@@ -21,6 +22,7 @@ import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.expression.ExpressionException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingPathVariableException;
@@ -33,6 +35,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 全局异常处理器
@@ -177,7 +181,10 @@ public class GlobalExceptionHandler {
     public R<Void> handleBindException(BindException e) {
         log.error(e.getMessage());
         String message = StreamUtils.join(e.getAllErrors(), DefaultMessageSourceResolvable::getDefaultMessage, ", ");
-        return R.fail(message);
+        R<Void> response = R.fail(message);
+        response.setError(errorInfo(e.getAllErrors().stream().map(error -> new R.ErrorInfo(
+            resolveCode(error.getDefaultMessage()), Map.of(), error instanceof FieldError field ? field.getField() : null, List.of())).toList()));
+        return response;
     }
 
     /**
@@ -187,7 +194,10 @@ public class GlobalExceptionHandler {
     public R<Void> constraintViolationException(ConstraintViolationException e) {
         log.error(e.getMessage());
         String message = StreamUtils.join(e.getConstraintViolations(), ConstraintViolation::getMessage, ", ");
-        return R.fail(message);
+        R<Void> response = R.fail(message);
+        response.setError(errorInfo(e.getConstraintViolations().stream().map(v -> new R.ErrorInfo(
+            resolveCode(v.getMessageTemplate()), Map.of(), v.getPropertyPath().toString(), List.of())).toList()));
+        return response;
     }
 
     /**
@@ -197,7 +207,10 @@ public class GlobalExceptionHandler {
     public R<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException e) {
         log.error(e.getMessage());
         String message = StreamUtils.join(e.getBindingResult().getAllErrors(), DefaultMessageSourceResolvable::getDefaultMessage, ", ");
-        return R.fail(message);
+        R<Void> response = R.fail(message);
+        response.setError(errorInfo(e.getBindingResult().getAllErrors().stream().map(error -> new R.ErrorInfo(
+            resolveCode(error.getDefaultMessage()), Map.of(), error instanceof FieldError field ? field.getField() : null, List.of())).toList()));
+        return response;
     }
 
     /**
@@ -207,7 +220,33 @@ public class GlobalExceptionHandler {
     public R<Void> handlerMethodValidationException(HandlerMethodValidationException e) {
         log.error(e.getMessage());
         String message = StreamUtils.join(e.getAllErrors(), MessageSourceResolvable::getDefaultMessage, ", ");
-        return R.fail(message);
+        R<Void> response = R.fail(message);
+        response.setError(errorInfo(e.getAllErrors().stream().map(error -> new R.ErrorInfo(
+            resolveCode(error.getDefaultMessage()), Map.of(), null, List.of())).toList()));
+        return response;
+    }
+
+    @ExceptionHandler(ValidationException.class)
+    public R<Void> validationException(ValidationException e) {
+        R<Void> response = R.fail(e.getMessage());
+        List<R.ErrorInfo> errors = e.violations().stream()
+            .map(issue -> new R.ErrorInfo(issue.code(), issue.args(), issue.field(), List.of())).toList();
+        response.setError(errorInfo(errors));
+        return response;
+    }
+
+    private R.ErrorInfo errorInfo(List<R.ErrorInfo> errors) {
+        if (errors == null || errors.isEmpty()) {
+            return new R.ErrorInfo("validation.format.invalid", Map.of(), null, List.of());
+        }
+        R.ErrorInfo first = errors.get(0);
+        return new R.ErrorInfo(first.code(), first.args(), first.field(), errors);
+    }
+
+    private String resolveCode(String template) {
+        if (template == null || template.isBlank()) return "validation.format.invalid";
+        return template.startsWith("{") && template.endsWith("}")
+            ? template.substring(1, template.length() - 1) : template;
     }
 
     /**

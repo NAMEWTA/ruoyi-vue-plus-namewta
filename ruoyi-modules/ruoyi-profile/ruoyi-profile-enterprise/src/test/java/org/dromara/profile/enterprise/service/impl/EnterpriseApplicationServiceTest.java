@@ -74,7 +74,7 @@ class EnterpriseApplicationServiceTest {
         doReturn(Optional.empty()).when(service).findOpenByUserId(101L);
         doReturn(null).when(service).findEffectiveProfileIdByUser(101L);
         doReturn(Optional.of(documentType())).when(service).findDocumentType("CN_RESIDENT_ID");
-        doReturn(9201L).when(service).findActiveProfileIdByIdentity("91310000ABCDEF1234");
+        doReturn(9201L).when(service).findActiveProfileIdByIdentity("91310000ABCDEF123Y");
         doReturn(application(9001L, "DRAFT", 0, 0, true))
             .when(service).saveDraft(eq(101L), eq("manual"), any());
 
@@ -90,9 +90,9 @@ class EnterpriseApplicationServiceTest {
 
     @Test
     void probeReturnsOnlyTheMinimalStatus() {
-        doReturn("BOUND").when(service).probeStatus("91310000ABCDEF1234");
+        doReturn("BOUND").when(service).probeStatus("91310000ABCDEF123Y");
 
-        EnterpriseApplicationProbeVo result = service.probe(new EnterpriseApplicationProbeBo(" 91310000abcdef1234 "));
+        EnterpriseApplicationProbeVo result = service.probe(new EnterpriseApplicationProbeBo(" 91310000abcdef123y "));
 
         assertThat(result).isEqualTo(new EnterpriseApplicationProbeVo("BOUND"));
     }
@@ -199,7 +199,7 @@ class EnterpriseApplicationServiceTest {
     }
 
     private EnterpriseApplicationSaveBo command(boolean legalHandler, int version) {
-        return new EnterpriseApplicationSaveBo("示例企业", "91310000abcdef1234", "COMPANY", "张法",
+        return new EnterpriseApplicationSaveBo("示例企业", "91310000abcdef123y", "COMPANY", "张法",
             "CN_RESIDENT_ID", "110101199001011234", legalHandler, LocalDate.of(2010, 1, 1),
             LocalDate.of(2010, 1, 1), LocalDate.of(2035, 1, 1), "上海市示例路 1 号", "软件服务",
             "李联", "13800138000", "OPS@EXAMPLE.COM", new BigDecimal("1000000.00"),

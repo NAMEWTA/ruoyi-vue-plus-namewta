@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
+import java.time.LocalDateTime;
 
 /**
  * 用户与渠道构成的通知投递。
@@ -21,11 +22,12 @@ public class NotifyDelivery extends BaseEntity {
     private String targetValue;
     private String status;
     private Integer attemptCount;
+    private String providerKey;
     private String providerMessageId;
     private String errorCode;
     private String errorMessage;
-    private String acceptedAt;
-    private String deliveredAt;
-    private String readAt;
+    private LocalDateTime acceptedAt;
+    private LocalDateTime deliveredAt;
+    private LocalDateTime readAt;
     private Integer version;
 }

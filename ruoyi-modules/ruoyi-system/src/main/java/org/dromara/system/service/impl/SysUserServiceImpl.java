@@ -85,17 +85,16 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         }
         int boundedLimit = Math.clamp(limit, 1, 50);
         String normalized = keyword.strip();
-        List<SysUserVo> list = userMapper.lambda()
+        List<SysUserVo> list = userMapper.selectUserList(userMapper.lambda()
             .select(SysUser::getUserId, SysUser::getUserName, SysUser::getNickName,
                 SysUser::getPhoneNumber, SysUser::getStatus)
             .eq(SysUser::getStatus, SystemConstants.NORMAL)
             .eq(SysUser::getDelFlag, SystemConstants.NORMAL)
             .and(wrapper -> wrapper.like(SysUser::getUserName, normalized)
                 .or().like(SysUser::getNickName, normalized)
-                .or().like(SysUser::getPhoneNumber, normalized))
+            .or().like(SysUser::getPhoneNumber, normalized))
             .orderByAsc(SysUser::getUserId)
-            .last("limit " + boundedLimit)
-            .voList();
+            .last("limit " + boundedLimit));
         return BeanUtil.copyToList(list, UserDTO.class);
     }
 
@@ -174,6 +173,12 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             .build();
         if (StringUtils.isNotBlank(user.getExcludeUserIds())) {
             wrapper.notIn(SysUser::getUserId, StringUtils.splitTo(user.getExcludeUserIds(), Convert::toLong));
+        }
+        if (StringUtils.isNotBlank(user.getKeyword())) {
+            String keyword = user.getKeyword().strip();
+            wrapper.and(w -> w.like(SysUser::getUserName, keyword)
+                .or().like(SysUser::getNickName, keyword)
+                .or().like(SysUser::getPhoneNumber, keyword));
         }
         return wrapper;
     }
@@ -902,6 +907,7 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
                 SysUser::getPhoneNumber, SysUser::getGender, SysUser::getStatus,
                 SysUser::getCreateTime)
             .eq(SysUser::getStatus, SystemConstants.NORMAL)
+            .eq(SysUser::getDelFlag, SystemConstants.NORMAL)
             .in(SysUser::getUserId, userIds)
             .voList();
         return BeanUtil.copyToList(list, UserDTO.class);
@@ -926,6 +932,55 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
             .last("limit " + boundedLimit)
             .voList();
         return BeanUtil.copyToList(list, UserDTO.class);
+    }
+
+    @Override
+    public List<UserDTO> selectAllActiveUsers(int offset, int limit) {
+        int boundedOffset = Math.max(offset, 0);
+        int boundedLimit = Math.clamp(limit, 1, 10_000);
+        List<SysUserVo> list = userMapper.lambda()
+            .select(SysUser::getUserId, SysUser::getDeptId, SysUser::getUserName,
+                SysUser::getNickName, SysUser::getEmail, SysUser::getPhoneNumber,
+                SysUser::getGender, SysUser::getStatus, SysUser::getCreateTime)
+            .eq(SysUser::getStatus, SystemConstants.NORMAL)
+            .eq(SysUser::getDelFlag, SystemConstants.NORMAL)
+            .orderByAsc(SysUser::getUserId)
+            .last("limit " + boundedOffset + "," + boundedLimit)
+            .voList();
+        return BeanUtil.copyToList(list, UserDTO.class);
+    }
+
+    @Override
+    public List<UserDTO> selectUsersByUserTypeIds(Collection<Long> userTypeIds) {
+        if (CollUtil.isEmpty(userTypeIds)) return List.of();
+        List<Long> requestedTypeIds = userTypeIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (requestedTypeIds.isEmpty() || requestedTypeIds.stream().anyMatch(id -> id <= 0)) {
+            throw new ServiceException("鐢ㄦ埛绫诲瀷缂栧彿蹇呴』涓烘鏁存暟");
+        }
+        Set<Long> activeTypeIds = new HashSet<>(userTypeMapper.lambda()
+            .select(SysUserType::getUserTypeId)
+            .in(SysUserType::getUserTypeId, requestedTypeIds)
+            .eq(SysUserType::getStatus, SystemConstants.NORMAL)
+            .list().stream().map(SysUserType::getUserTypeId).toList());
+        if (activeTypeIds.size() != requestedTypeIds.size()) {
+            throw new ServiceException("Only enabled user types are allowed");
+        }
+        List<Long> ids = userTypeRelService.selectUserIdsByUserTypeIds(requestedTypeIds);
+        List<UserDTO> users = selectListByIds(ids);
+        users.forEach(user -> checkUserDataScope(user.getUserId()));
+        return users;
+    }
+
+    @Override
+    public List<UserDTO> selectNotificationUsers(Collection<Long> userIds) {
+        if (CollUtil.isEmpty(userIds)) {
+            return List.of();
+        }
+        List<Long> distinctIds = userIds.stream().filter(Objects::nonNull).distinct().toList();
+        // Validate every requested identifier before filtering inactive users. An out-of-scope
+        // or missing identifier must fail closed instead of silently changing the draft target.
+        distinctIds.forEach(this::checkUserDataScope);
+        return selectListByIds(distinctIds);
     }
 
     /**

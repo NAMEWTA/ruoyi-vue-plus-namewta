@@ -43,6 +43,6 @@
 
 ## 修改与验证
 
-- 修改公开 `ruoyi-api` 合同时，同步 Javadoc、调用方、契约测试和父工作区 `.agents/skills/ruoyi-system-module-guide`。
+- 修改公开 `ruoyi-api` 合同时，同步 Javadoc、调用方、契约测试和父工作区 `.agents/skills/ruoyi-module-guide/references/modules/system/`。
 - OSS 变更至少运行受影响的 OSS contract/architecture 单元测试和 Maven 编译；涉及 Provider、Redis、MySQL 或 MinIO 的行为时，再运行相应属性门控集成测试并如实记录外部服务条件。
 - 不提交密钥、本地 endpoint、签名 URL、`application-local.yml`、`target/**` 或 `.flattened-pom.xml`。

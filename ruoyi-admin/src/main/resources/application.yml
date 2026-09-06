@@ -314,7 +314,7 @@ xss:
   enabled: true
   # 排除链接
   excludeUrls:
-    - /system/notice
+    - /notify/notice
     - /warm-flow/save-json
 
 --- # 分布式锁 lock4j 全局配置

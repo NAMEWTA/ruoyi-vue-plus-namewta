@@ -7,10 +7,12 @@ import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.push.annotation.ConditionalOnMessageTransport;
 import org.dromara.common.push.core.SseEmitterSessionManager;
+import org.dromara.common.push.security.PushTicketService;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -25,17 +27,21 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class SseController implements DisposableBean {
 
     private final SseEmitterSessionManager sessionManager;
+    private final PushTicketService ticketService;
 
     /**
      * 建立当前登录用户的 SSE 连接。
      *
      * @return SSE 发射器
      */
+    @SaIgnore
     @GetMapping(value = "${message.path:/resource/message}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter connect(HttpServletResponse response) {
+    public SseEmitter connect(HttpServletResponse response, @RequestParam String ticket) {
         prepareSseResponse(response);
-        String tokenValue = StpUtil.getTokenValue();
-        Long userId = LoginHelper.getUserId();
+        var loginUser = ticketService.consume(ticket);
+        if (loginUser == null) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED);
+        String tokenValue = ticket;
+        Long userId = loginUser.getUserId();
         return sessionManager.connect(userId, tokenValue);
     }
 

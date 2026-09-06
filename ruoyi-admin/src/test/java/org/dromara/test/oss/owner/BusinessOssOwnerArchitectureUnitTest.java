@@ -46,9 +46,8 @@ class BusinessOssOwnerArchitectureUnitTest {
 
         assertTrue(ownerCoordinates(manifest).containsAll(Set.of(
             "sys_user.avatar",
-            "sys_notice.notice_content",
-            "sys_notify_log.attachment_oss_ids",
-            "flow_his_task.ext"
+            "flow_his_task.ext",
+            "profile_material_ref.oss_id"
         )));
     }
 
@@ -185,7 +184,34 @@ class BusinessOssOwnerArchitectureUnitTest {
 
     private void scanSchemaCarrierCandidates(Path schema, Set<String> candidates) throws Exception {
         String currentTable = null;
-        for (String line : Files.readAllLines(schema)) {
+        boolean inBlockComment = false;
+        for (String rawLine : Files.readAllLines(schema)) {
+            String line = rawLine;
+            if (inBlockComment) {
+                int end = line.indexOf("*/");
+                if (end < 0) {
+                    continue;
+                }
+                inBlockComment = false;
+                line = line.substring(end + 2);
+            }
+            while (true) {
+                int start = line.indexOf("/*");
+                if (start < 0) {
+                    break;
+                }
+                int end = line.indexOf("*/", start + 2);
+                if (end < 0) {
+                    line = line.substring(0, start);
+                    inBlockComment = true;
+                    break;
+                }
+                line = line.substring(0, start) + line.substring(end + 2);
+            }
+            int lineComment = line.indexOf("--");
+            if (lineComment >= 0) {
+                line = line.substring(0, lineComment);
+            }
             Matcher tableMatcher = CREATE_TABLE.matcher(line);
             if (tableMatcher.find()) {
                 currentTable = tableMatcher.group(1).toLowerCase();

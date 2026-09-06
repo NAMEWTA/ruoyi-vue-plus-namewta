@@ -109,7 +109,7 @@ public class SysUserTypeServiceImpl implements ISysUserTypeService {
      * @return 登录域列表
      */
     @Override
-    public List<SysUserTypeVo> optionselect() {
+    public List<SysUserTypeVo> options() {
         return userTypeMapper.lambda()
             .eq(SysUserType::getStatus, SystemConstants.NORMAL)
             .orderByAsc(SysUserType::getOrderNum)

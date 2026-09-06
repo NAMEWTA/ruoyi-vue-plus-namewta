@@ -100,9 +100,10 @@ public interface UserService {
      * @param limit 最大返回数量
      * @return 正常用户列表
      */
-    default List<UserDTO> selectAllActiveUsers(int limit) {
-        return List.of();
-    }
+    List<UserDTO> selectAllActiveUsers(int limit);
+
+    /** 分页查询可接收通知的正常用户，供大规模异步通知分批生成收件人快照。 */
+    List<UserDTO> selectAllActiveUsers(int offset, int limit);
 
     /**
      * 通过角色ID查询用户ID
@@ -135,6 +136,17 @@ public interface UserService {
      * @return 用户
      */
     List<UserDTO> selectUsersByPostIds(Collection<Long> postIds);
+
+    /**
+     * 通过用户类型查询正常用户。
+     *
+     * @param userTypeIds 用户类型 ID
+     * @return 去重后的正常用户
+     */
+    List<UserDTO> selectUsersByUserTypeIds(Collection<Long> userTypeIds);
+
+    /** 查询当前操作者数据权限内的正常通知接收者；不存在或停用的用户被过滤，越权用户拒绝。 */
+    List<UserDTO> selectNotificationUsers(Collection<Long> userIds);
 
     /**
      * 根据用户 ID 列表查询用户昵称映射关系

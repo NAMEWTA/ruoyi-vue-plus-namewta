@@ -3,9 +3,12 @@ package org.dromara.common.core.domain;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.dromara.common.core.constant.HttpStatus;
+import org.dromara.common.core.validation.ValidationIssue;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.List;
+import java.util.Map;
 
 import static org.dromara.common.core.constant.HttpStatus.ERROR;
 import static org.dromara.common.core.constant.HttpStatus.SUCCESS;
@@ -37,6 +40,20 @@ public class R<T> implements Serializable {
      * 响应业务数据
      */
     private T data;
+
+    /** 机器可读的错误合同，旧客户端可继续使用 code/msg/data。 */
+    private ErrorInfo error;
+
+    public record ErrorInfo(String code, Map<String, Object> args, String field, List<ErrorInfo> violations) {
+        public ErrorInfo {
+            args = args == null ? Map.of() : Map.copyOf(args);
+            violations = violations == null ? List.of() : List.copyOf(violations);
+        }
+
+        public ErrorInfo(String code, Map<String, Object> args, String field) {
+            this(code, args, field, List.of());
+        }
+    }
 
     /**
      * 构建成功响应结果
@@ -147,6 +164,13 @@ public class R<T> implements Serializable {
      */
     public static <T> R<T> fail(int code, String msg) {
         return restResult(null, code, msg);
+    }
+
+    /** Build a backward-compatible failure response with a machine-readable issue. */
+    public static <T> R<T> fail(ValidationIssue issue, String message) {
+        R<T> response = restResult(null, ERROR, message);
+        response.setError(new ErrorInfo(issue.code(), issue.args(), issue.field()));
+        return response;
     }
 
     /**

@@ -1,12 +1,13 @@
 package org.dromara.system.domain.bo;
 
 import io.github.linpeilie.annotations.AutoMapper;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.dromara.common.core.constant.SystemConstants;
+import org.dromara.common.core.validation.ValidFormat;
+import org.dromara.common.core.validation.ValidationFormat;
 import org.dromara.common.core.xss.Xss;
 import org.dromara.system.domain.SysUser;
 
@@ -48,6 +49,9 @@ public class SysUserBo implements Serializable {
     @Size(min = 2, max = 30, message = "用户账号长度必须在{min}到{max}个字符之间")
     private String userName;
 
+    /** 账号、昵称或手机号的统一模糊检索词，仅用于查询。 */
+    private String keyword;
+
     /**
      * 用户昵称
      */
@@ -59,7 +63,7 @@ public class SysUserBo implements Serializable {
     /**
      * 用户邮箱
      */
-    @Email(message = "邮箱格式不正确")
+    @ValidFormat(type = ValidationFormat.EMAIL, message = "{validation.email.invalid}")
     @Size(min = 0, max = 50, message = "邮箱长度不能超过{max}个字符")
     private String email;
 

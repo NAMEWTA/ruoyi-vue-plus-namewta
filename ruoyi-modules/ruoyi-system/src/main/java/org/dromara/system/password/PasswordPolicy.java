@@ -3,6 +3,8 @@ package org.dromara.system.password;
 /**
  * sys.user.passwordPolicy v1 内部配置。
  */
+import org.dromara.common.core.validation.PasswordPolicyContract;
+
 public record PasswordPolicy(
     Integer version,
     Integer minimumLength,
@@ -14,7 +16,7 @@ public record PasswordPolicy(
     String allowedSpecialCharacters,
     Generator generator,
     DefaultPassword defaultPassword
-) {
+) implements PasswordPolicyContract {
 
     public static final String CONFIG_KEY = "sys.user.passwordPolicy";
 

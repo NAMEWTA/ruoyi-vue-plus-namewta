@@ -36,6 +36,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.dromara.common.json.utils.JsonUtils;
+import org.dromara.common.core.validation.ValidationFormat;
+import org.dromara.common.core.validation.ValidationUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -58,8 +60,6 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
     private static final String FLOW_CODE_KEY = "profile.enterprise.flowCode";
     private static final Set<String> EDITABLE_STATUSES = Set.of("DRAFT", "BACK", "CANCEL");
     private static final Set<String> EVENT_STATUSES = Set.of("BACK", "CANCEL", "INVALID", "TERMINATION");
-    private static final Pattern CREDIT_CODE = Pattern.compile("[0-9A-Z-]{8,64}");
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private final EnterpriseApplicationDao dao;
     private final ProfileMaterialPort materials;
     private final EnterpriseVerificationProviderRegistryPort providers;
@@ -115,7 +115,7 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             throw failure("ENTERPRISE_PROBE_REQUIRED");
         }
         String identityKey = normalizeCredit(command.unifiedCreditCode());
-        if (identityKey == null || !CREDIT_CODE.matcher(identityKey).matches()) {
+        if (identityKey == null || !ValidationUtils.isValid(identityKey, ValidationFormat.UNIFIED_SOCIAL_CREDIT_CODE)) {
             throw failure("ENTERPRISE_CREDIT_CODE_INVALID");
         }
         return new EnterpriseApplicationProbeVo(probeStatus(identityKey));
@@ -763,7 +763,7 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
             || length(fields.email()) > 255 || length(fields.industryCode()) > 64 || length(fields.website()) > 500) {
             throw failure("ENTERPRISE_FIELD_TOO_LONG");
         }
-        if (fields.unifiedCreditCode() != null && !CREDIT_CODE.matcher(fields.unifiedCreditCode()).matches()) {
+        if (fields.unifiedCreditCode() != null && !ValidationUtils.isValid(fields.unifiedCreditCode(), ValidationFormat.UNIFIED_SOCIAL_CREDIT_CODE)) {
             throw failure("ENTERPRISE_CREDIT_CODE_INVALID");
         }
         if (fields.legalDocumentTypeCode() != null) {
@@ -773,7 +773,7 @@ public class EnterpriseApplicationService implements EnterpriseApplicationPublic
                 throw failure("ENTERPRISE_LEGAL_DOCUMENT_NUMBER_INVALID");
             }
         }
-        if (fields.email() != null && !EMAIL.matcher(fields.email()).matches()) {
+        if (fields.email() != null && !ValidationUtils.isValid(fields.email(), ValidationFormat.EMAIL)) {
             throw failure("ENTERPRISE_EMAIL_INVALID");
         }
         if (fields.registeredCapital() != null && fields.registeredCapital().signum() < 0) {

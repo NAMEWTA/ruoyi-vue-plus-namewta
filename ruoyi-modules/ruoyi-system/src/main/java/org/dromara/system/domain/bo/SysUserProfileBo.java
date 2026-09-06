@@ -1,11 +1,10 @@
 package org.dromara.system.domain.bo;
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.dromara.common.core.constant.RegexConstants;
+import org.dromara.common.core.validation.ValidFormat;
+import org.dromara.common.core.validation.ValidationFormat;
 import org.dromara.common.core.xss.Xss;
 import org.dromara.common.sensitive.annotation.Sensitive;
 import org.dromara.common.sensitive.core.SensitiveStrategy;
@@ -37,14 +36,14 @@ public class SysUserProfileBo implements Serializable {
      * 用户邮箱
      */
     @Sensitive(strategy = SensitiveStrategy.EMAIL)
-    @Email(message = "邮箱格式不正确")
+    @ValidFormat(type = ValidationFormat.EMAIL, message = "{validation.email.invalid}")
     @Size(min = 0, max = 50, message = "邮箱长度不能超过{max}个字符")
     private String email;
 
     /**
      * 手机号码
      */
-    @Pattern(regexp = RegexConstants.MOBILE, message = "手机号格式不正确")
+    @ValidFormat(type = ValidationFormat.MAINLAND_MOBILE, message = "{validation.phone.mobile.invalid}")
     @Sensitive(strategy = SensitiveStrategy.PHONE)
     private String phoneNumber;
 

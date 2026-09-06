@@ -4,6 +4,7 @@ import org.dromara.common.push.annotation.ConditionalOnMessageTransport;
 import org.dromara.common.push.core.WebSocketSessionManager;
 import org.dromara.common.push.handler.PlusWebSocketHandler;
 import org.dromara.common.push.interceptor.PlusWebSocketInterceptor;
+import org.dromara.common.push.security.PushTicketService;
 import org.dromara.common.push.listener.MessageTopicListener;
 import org.dromara.common.push.properties.MessageProperties;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -54,8 +55,8 @@ public class MessageWebSocketConfiguration {
      * 建立连接前做登录校验、客户端ID校验
      */
     @Bean
-    public HandshakeInterceptor handshakeInterceptor() {
-        return new PlusWebSocketInterceptor();
+    public HandshakeInterceptor handshakeInterceptor(PushTicketService ticketService) {
+        return new PlusWebSocketInterceptor(ticketService);
     }
 
     /**

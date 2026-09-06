@@ -5,6 +5,7 @@ import org.dromara.common.push.controller.SseController;
 import org.dromara.common.push.core.SseEmitterSessionManager;
 import org.dromara.common.push.listener.MessageTopicListener;
 import org.dromara.common.push.properties.MessageProperties;
+import org.dromara.common.push.security.PushTicketService;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 
@@ -51,7 +52,7 @@ public class MessageSseConfiguration {
      * @return SseController 实例
      */
     @Bean
-    public SseController sseController(SseEmitterSessionManager manager) {
-        return new SseController(manager);
+    public SseController sseController(SseEmitterSessionManager manager, PushTicketService ticketService) {
+        return new SseController(manager, ticketService);
     }
 }

@@ -53,7 +53,7 @@ public interface ISysUserTypeService {
      *
      * @return 登录域列表
      */
-    List<SysUserTypeVo> optionselect();
+    List<SysUserTypeVo> options();
 
     /**
      * 新增登录域

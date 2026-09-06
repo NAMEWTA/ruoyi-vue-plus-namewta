@@ -137,7 +137,7 @@ class EnterpriseVerificationMySqlE2ETest {
                 established_date, registered_address, business_scope,
                 provider_code, submission_seq, version, create_time, update_time, del_flag
             ) values (?, 940000000003, 'WAITING', 'E2E Enterprise Ltd',
-                '91310000E2E000001X', '91310000E2E000001X', 'LIMITED_COMPANY',
+                '91310000E2E000001Q', '91310000E2E000001Q', 'LIMITED_COMPANY',
                 'E2E Legal', 'CN_ID_CARD', '110101199001011234', '2020-01-01',
                 'E2E Address', 'E2E Scope', 'test-provider', 1, 0,
                 current_timestamp, current_timestamp, '0')
@@ -153,8 +153,8 @@ class EnterpriseVerificationMySqlE2ETest {
                 handler_is_legal_representative, established_date, registered_address,
                 business_scope, provider_code, field_snapshot_json, submitted_time,
                 version, create_time, update_time, del_flag
-            ) values (?, ?, 1, 'E2E Enterprise Ltd', '91310000E2E000001X',
-                '91310000E2E000001X', 'LIMITED_COMPANY', 'E2E Legal', 'CN_ID_CARD',
+            ) values (?, ?, 1, 'E2E Enterprise Ltd', '91310000E2E000001Q',
+                '91310000E2E000001Q', 'LIMITED_COMPANY', 'E2E Legal', 'CN_ID_CARD',
                 '110101199001011234', 'Y', '2020-01-01', 'E2E Address', 'E2E Scope',
                 'test-provider', '{}', current_timestamp, 0,
                 current_timestamp, current_timestamp, '0')

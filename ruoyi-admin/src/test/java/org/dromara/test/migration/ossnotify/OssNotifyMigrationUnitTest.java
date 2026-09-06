@@ -36,33 +36,35 @@ class OssNotifyMigrationUnitTest {
         assertTrue(ossRef.contains("uk_sys_oss_ref_object"));
         assertFalse(ossRef.contains("client_pk"));
 
-        String notify = createTable(ddl, "sys_notify_log");
-        assertBaseFields(notify);
-        assertTrue(notify.contains("notify_log_id"));
-        assertTrue(notify.contains("original_request_id"));
+        String notify = createTable(ddl, "notify_intent");
+        assertCoreFields(notify);
+        assertTrue(notify.contains("intent_id"));
+        assertTrue(notify.contains("idempotency_key"));
         assertTrue(notify.contains("content_snapshot"));
-        assertTrue(notify.contains("attachment_oss_ids"));
-        assertTrue(notify.contains("client_pk"));
-        assertFalse(notify.contains("key idx_sys_notify_log_client"));
+        assertTrue(notify.contains("metadata_json"));
+        assertFalse(notify.contains("client_pk"));
 
-        String delivery = createTable(ddl, "sys_notify_delivery_log");
-        assertBaseFields(delivery);
-        assertTrue(delivery.contains("notify_delivery_log_id"));
-        assertTrue(delivery.contains("notify_log_id"));
+        String delivery = createTable(ddl, "notify_delivery");
+        assertCoreFields(delivery);
+        assertTrue(delivery.contains("delivery_id"));
+        assertTrue(delivery.contains("recipient_id"));
         assertTrue(delivery.contains("target_value"));
         assertTrue(delivery.contains("provider_message_id"));
-        assertTrue(delivery.contains("idx_sys_notify_delivery_provider_msg"));
+        assertTrue(delivery.contains("uk_notify_delivery_provider_message"));
     }
 
     @Test
-    void dmlDefinesIdempotentGlobalMonitorMenuAndThreePermissions() throws IOException {
+    void dmlDefinesIdempotentNotificationMenusAndPermissions() throws IOException {
         String dml = readSql("60-namewta-dml.sql");
 
         assertTrue(dml.contains(DSL_MARKER));
-        assertTrue(dml.contains("monitor/notify/index"));
-        assertTrue(dml.contains("system:notify:list"));
-        assertTrue(dml.contains("system:notify:query"));
-        assertTrue(dml.contains("system:notify:remove"));
+        assertTrue(dml.contains("notify/monitor/index"));
+        assertTrue(dml.contains("notify:monitor:list"));
+        assertTrue(dml.contains("notify:monitor:query"));
+        assertTrue(dml.contains("notify:notice:list"));
+        assertTrue(dml.contains("notify:inbox:list"));
+        assertTrue(dml.contains("notify:notification:submit"));
+        assertTrue(dml.contains("perms like 'system:notify:%'"));
         assertTrue(dml.contains("where not exists"));
         assertFalse(dml.substring(dml.indexOf(DSL_MARKER)).contains("client_pk"));
     }
@@ -70,6 +72,12 @@ class OssNotifyMigrationUnitTest {
     private void assertBaseFields(String table) {
         for (String field : new String[]{"version", "create_dept", "create_time", "create_by", "update_time", "update_by", "del_flag"}) {
             assertTrue(table.contains(field), () -> "missing project base field: " + field);
+        }
+    }
+
+    private void assertCoreFields(String table) {
+        for (String field : new String[]{"version", "create_dept", "create_time", "create_by", "update_time", "update_by"}) {
+            assertTrue(table.contains(field), () -> "missing notification base field: " + field);
         }
     }
 

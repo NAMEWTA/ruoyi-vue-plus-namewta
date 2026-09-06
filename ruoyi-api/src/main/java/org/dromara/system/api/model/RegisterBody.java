@@ -1,12 +1,11 @@
 package org.dromara.system.api.model;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import org.dromara.common.core.constant.RegexConstants;
 import org.dromara.common.core.domain.model.LoginBody;
+import org.dromara.common.core.validation.ValidFormat;
+import org.dromara.common.core.validation.ValidationFormat;
 import org.hibernate.validator.constraints.Length;
 
 /**
@@ -40,14 +39,14 @@ public class RegisterBody extends LoginBody {
     /**
      * 可选邮箱。
      */
-    @Email(message = "{user.email.not.valid}")
+    @ValidFormat(type = ValidationFormat.EMAIL, message = "{validation.email.invalid}")
     @Length(max = 50, message = "邮箱长度不能超过50个字符")
     private String email;
 
     /**
      * 可选手机号码。
      */
-    @Pattern(regexp = "^$|" + RegexConstants.MOBILE, message = "{user.mobile.phone.number.not.valid}")
+    @ValidFormat(type = ValidationFormat.MAINLAND_MOBILE, message = "{validation.phone.mobile.invalid}")
     private String phoneNumber;
 
 }

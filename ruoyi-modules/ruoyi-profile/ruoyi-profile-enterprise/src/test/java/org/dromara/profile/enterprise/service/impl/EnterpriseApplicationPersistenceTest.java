@@ -36,17 +36,17 @@ class EnterpriseApplicationPersistenceTest {
     void ordinaryApplicationCannotReplaceAnyEffectiveResponsibleAccount() {
         when(mapper.lockEffectiveBindingByUser(101L)).thenReturn(binding(9201L, 101L, "ACTIVE"));
 
-        assertThatThrownBy(() -> service.requireSubmissionAllowed(101L, 9201L, "91310000ABCDEF1234"))
+        assertThatThrownBy(() -> service.requireSubmissionAllowed(101L, 9201L, "91310000ABCDEF123Y"))
             .hasMessage("ENTERPRISE_ACCOUNT_ALREADY_RESPONSIBLE");
     }
 
     @Test
     void ordinaryApplicationCannotReplaceTheExistingEnterpriseResponsibleAccount() {
         EnterpriseProfileRow profile = profile(9201L, 0);
-        when(mapper.lockActiveProfileByIdentity("91310000ABCDEF1234")).thenReturn(profile);
+        when(mapper.lockActiveProfileByIdentity("91310000ABCDEF123Y")).thenReturn(profile);
         when(mapper.lockEffectiveBindingByProfile(9201L)).thenReturn(binding(9201L, 202L, "SUSPENDED"));
 
-        assertThatThrownBy(() -> service.requireSubmissionAllowed(101L, 9201L, "91310000ABCDEF1234"))
+        assertThatThrownBy(() -> service.requireSubmissionAllowed(101L, 9201L, "91310000ABCDEF123Y"))
             .hasMessage("ENTERPRISE_RESPONSIBLE_ALREADY_BOUND");
     }
 
@@ -57,7 +57,7 @@ class EnterpriseApplicationPersistenceTest {
         EnterpriseProfileRow profile = profile(9201L, 4);
         when(mapper.lockApplicationById(9001L)).thenReturn(application);
         when(mapper.selectSubmission(9001L, 1)).thenReturn(submission);
-        when(mapper.lockActiveProfileByIdentity("91310000ABCDEF1234")).thenReturn(profile);
+        when(mapper.lockActiveProfileByIdentity("91310000ABCDEF123Y")).thenReturn(profile);
         when(mapper.insertVersion(any())).thenReturn(1);
         when(mapper.updateProfile(any())).thenReturn(1);
         when(mapper.insertBinding(any())).thenReturn(1);
@@ -95,8 +95,8 @@ class EnterpriseApplicationPersistenceTest {
         row.setApplicantUserId(101L);
         row.setTargetProfileId(9201L);
         row.setEnterpriseName("示例企业");
-        row.setUnifiedCreditCode("91310000ABCDEF1234");
-        row.setIdentityKey("91310000ABCDEF1234");
+        row.setUnifiedCreditCode("91310000ABCDEF123Y");
+        row.setIdentityKey("91310000ABCDEF123Y");
         row.setEnterpriseType("COMPANY");
         row.setLegalRepresentativeName("张法");
         row.setLegalDocumentTypeCode("CN_RESIDENT_ID");
@@ -113,7 +113,7 @@ class EnterpriseApplicationPersistenceTest {
     private EnterpriseProfileRow profile(long profileId, int version) {
         EnterpriseProfileRow row = new EnterpriseProfileRow();
         row.setEnterpriseProfileId(profileId);
-        row.setUnifiedCreditCode("91310000ABCDEF1234");
+        row.setUnifiedCreditCode("91310000ABCDEF123Y");
         row.setStatus("ACTIVE");
         row.setVersion(version);
         return row;

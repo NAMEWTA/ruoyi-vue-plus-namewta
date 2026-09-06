@@ -73,7 +73,7 @@ public class SysUserTypeController extends BaseController {
      * @return 登录域详情
      */
     @SaCheckPermission("system:userType:query")
-    @GetMapping("/{userTypeId}")
+    @GetMapping("/{userTypeId:\\d+}")
     public R<SysUserTypeVo> getInfo(@NotNull(message = "主键不能为空")
                                     @PathVariable Long userTypeId) {
         return R.ok(userTypeService.queryById(userTypeId));
@@ -131,7 +131,7 @@ public class SysUserTypeController extends BaseController {
      */
     @SaCheckPermission("system:userType:remove")
     @Log(title = "登录域管理", businessType = BusinessType.DELETE)
-    @DeleteMapping("/{userTypeIds}")
+    @DeleteMapping("/{userTypeIds:\\d+(?:,\\d+)*}")
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
                           @PathVariable Long[] userTypeIds) {
         return toAjax(userTypeService.deleteWithValidByIds(List.of(userTypeIds)));
@@ -143,9 +143,9 @@ public class SysUserTypeController extends BaseController {
      * @return 登录域列表
      */
     @SaCheckPermission("system:userType:query")
-    @GetMapping({"/optionselect", "/options"})
-    public R<List<SysUserTypeVo>> optionselect() {
-        return R.ok(userTypeService.optionselect());
+    @GetMapping("/options")
+    public R<List<SysUserTypeVo>> options() {
+        return R.ok(userTypeService.options());
     }
 
     /**

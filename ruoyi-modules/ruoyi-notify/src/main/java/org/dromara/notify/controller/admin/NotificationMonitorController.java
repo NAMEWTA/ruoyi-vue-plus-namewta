@@ -1,14 +1,11 @@
 package org.dromara.notify.controller.admin;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
-import org.dromara.notify.api.NotificationQuery;
 import org.dromara.notify.api.NotificationSnapshot;
-import org.dromara.notify.api.NotificationApplicationService;
-import org.dromara.notify.domain.entity.NotifyDelivery;
-import org.dromara.notify.mapper.NotifyDeliveryMapper;
+import org.dromara.notify.domain.vo.NotificationDeliveryView;
+import org.dromara.notify.usecase.NotificationMonitorUseCase;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,8 +23,7 @@ import java.util.List;
 @RequestMapping("/notify/monitor")
 public class NotificationMonitorController {
 
-    private final NotificationApplicationService notificationService;
-    private final NotifyDeliveryMapper deliveryMapper;
+    private final NotificationMonitorUseCase monitorUseCase;
 
     /**
      * 查询通知详情。
@@ -38,7 +34,7 @@ public class NotificationMonitorController {
     @SaCheckPermission("notify:monitor:query")
     @GetMapping("/snapshot")
     public R<NotificationSnapshot> snapshot(@RequestParam String notificationId) {
-        return R.ok(notificationService.query(new NotificationQuery(notificationId, false)));
+        return R.ok(monitorUseCase.snapshot(notificationId));
     }
 
     /**
@@ -51,15 +47,9 @@ public class NotificationMonitorController {
      */
     @SaCheckPermission("notify:monitor:list")
     @GetMapping("/deliveries")
-    public R<List<NotifyDelivery>> deliveries(@RequestParam(required = false) Long userId,
+    public R<List<NotificationDeliveryView>> deliveries(@RequestParam(required = false) Long userId,
                                               @RequestParam(required = false) String channel,
                                               @RequestParam(required = false) String status) {
-        LambdaQueryWrapper<NotifyDelivery> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(userId != null, NotifyDelivery::getUserId, userId)
-            .eq(channel != null && !channel.isBlank(), NotifyDelivery::getChannel, channel)
-            .eq(status != null && !status.isBlank(), NotifyDelivery::getStatus, status)
-            .orderByDesc(NotifyDelivery::getCreateTime)
-            .last("limit 500");
-        return R.ok(deliveryMapper.selectList(wrapper));
+        return R.ok(monitorUseCase.deliveries(userId, channel, status));
     }
 }

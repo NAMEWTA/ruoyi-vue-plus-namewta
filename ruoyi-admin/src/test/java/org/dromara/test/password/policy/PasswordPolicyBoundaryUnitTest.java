@@ -64,7 +64,7 @@ class PasswordPolicyBoundaryUnitTest {
         client.setStatus(SystemConstants.NORMAL);
         client.setRegisterEnabled(true);
         when(clientService.queryByClientId("web-client")).thenReturn(client);
-        AuthController controller = new AuthController(null, null, null, null, clientService, null, null, policyService);
+        AuthController controller = new AuthController(null, null, null, null, clientService, null, policyService);
 
         AuthClientContextVo context = controller.clientContext("web-client", null).getData();
 

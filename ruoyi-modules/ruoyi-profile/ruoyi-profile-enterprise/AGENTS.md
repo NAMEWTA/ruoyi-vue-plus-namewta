@@ -26,7 +26,7 @@
 
 ## Verification
 
-在后端仓库根目录执行 `mvn -pl ruoyi-modules/ruoyi-profile/ruoyi-profile-enterprise -am -DskipTests compile`，并运行 `node .agents/skills/ruoyi-backend-development/scripts/validate-module-mode.mjs ruoyi-modules/ruoyi-profile/ruoyi-profile-enterprise --mode=layered`，再按模块测试配置执行验证。
+在后端仓库根目录执行 `mvn -pl ruoyi-modules/ruoyi-profile/ruoyi-profile-enterprise -am -DskipTests compile`，并运行 `node .agents/skills/namewta-fullstack-development/scripts/validate-module-mode.mjs ruoyi-modules/ruoyi-profile/ruoyi-profile-enterprise --mode=layered`，再按模块测试配置执行验证。
 
 ## Read Next
 

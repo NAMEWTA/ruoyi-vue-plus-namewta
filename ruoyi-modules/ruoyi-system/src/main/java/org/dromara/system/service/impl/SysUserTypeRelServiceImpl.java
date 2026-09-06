@@ -73,6 +73,22 @@ public class SysUserTypeRelServiceImpl implements ISysUserTypeRelService {
         return userTypeRelMapper.selectVoListByUserIds(userIds);
     }
 
+    @Override
+    public List<Long> selectUserIdsByUserTypeIds(Collection<Long> userTypeIds) {
+        if (CollUtil.isEmpty(userTypeIds)) return List.of();
+        Set<Long> activeIds = new HashSet<>(userTypeMapper.lambda()
+            .select(SysUserType::getUserTypeId)
+            .in(SysUserType::getUserTypeId, userTypeIds)
+            .eq(SysUserType::getStatus, SystemConstants.NORMAL)
+            .list().stream().map(SysUserType::getUserTypeId).toList());
+        if (!activeIds.containsAll(userTypeIds)) throw new ServiceException("所选用户类型不存在或已停用");
+        return userTypeRelMapper.lambda()
+            .select(SysUserTypeRel::getUserId)
+            .in(SysUserTypeRel::getUserTypeId, activeIds)
+            .eq(SysUserTypeRel::getStatus, SystemConstants.NORMAL)
+            .list().stream().map(SysUserTypeRel::getUserId).distinct().toList();
+    }
+
     /**
      * 判断用户是否拥有指定且正常的登录域
      *

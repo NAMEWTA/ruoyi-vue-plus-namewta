@@ -18,7 +18,8 @@ public class MetaVo {
     private String title;
 
     /**
-     * 设置该路由的图标，对应路径src/assets/icons/svg
+     * 设置该路由的图标。支持本地 SVG 名称（对应前端 src/assets/icons/svg）、
+     * 离线 Tabler 名称（tabler:users）以及显式的外部 Iconify 名称。
      */
     private String icon;
 

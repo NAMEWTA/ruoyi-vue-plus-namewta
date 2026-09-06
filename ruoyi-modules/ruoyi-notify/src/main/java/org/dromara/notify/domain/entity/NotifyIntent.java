@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
+import java.time.LocalDateTime;
 
 /**
  * 通知意图事实。
@@ -23,8 +24,8 @@ public class NotifyIntent extends BaseEntity {
     private String strategy;
     private String mode;
     private Integer priority;
-    private String scheduledAt;
-    private String expiresAt;
+    private LocalDateTime scheduledAt;
+    private LocalDateTime expiresAt;
     private String idempotencyKey;
     private String status;
     private String titleSnapshot;

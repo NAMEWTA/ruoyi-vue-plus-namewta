@@ -33,7 +33,7 @@
 ruoyi-admin/       主应用与模块组装
 ruoyi-api/         跨业务模块公开服务和 DTO
 ruoyi-common/      可按需依赖的通用基础能力
-ruoyi-modules/     system、workflow、gen、demo、ai、job 业务模块
+ruoyi-modules/     system、workflow、demo、profile、notify、ai、job、third 业务模块
 ruoyi-extend/      monitor、SnailJob、SnailAI 等独立应用
 ```
 
@@ -81,7 +81,7 @@ ruoyi-extend/      monitor、SnailJob、SnailAI 等独立应用
 ## 开发导航
 
 - 父工作区工程规范：`../.agents/skills/engineering-standards/SKILL.md`
-- 父工作区后端导航：`../.agents/skills/ruoyi-backend-development/SKILL.md`
+- 父工作区后端导航：`../.agents/skills/namewta-fullstack-development/SKILL.md`
 - 上游边界：[docs/upstream/README.md](docs/upstream/README.md)
 
 项目开发 Skill 只在 `ruoyi-vue-plus-docs/.agents/skills/` 集中维护，本仓库不保留 `.claude` 或 `.codex` 副本。独立克隆本仓库时以本 README、模块源码、POM、测试和上游边界文档为证据。

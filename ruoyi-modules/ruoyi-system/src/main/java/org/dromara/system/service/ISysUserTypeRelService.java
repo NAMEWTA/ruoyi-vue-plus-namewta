@@ -29,6 +29,9 @@ public interface ISysUserTypeRelService {
      */
     List<SysUserTypeRelVo> selectByUserIds(Collection<Long> userIds);
 
+    /** 查询拥有任一指定且启用登录域的正常关系用户 ID。 */
+    List<Long> selectUserIdsByUserTypeIds(Collection<Long> userTypeIds);
+
     /**
      * 判断用户是否拥有指定且正常的登录域
      *
