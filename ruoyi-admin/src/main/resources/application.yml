@@ -48,8 +48,8 @@ openapi:
   app-rate-limit-per-minute: ${OPENAPI_APP_RATE_LIMIT_PER_MINUTE:1000}
   interface-rate-limit-per-minute: ${OPENAPI_INTERFACE_RATE_LIMIT_PER_MINUTE:100}
   machine-session-ttl: ${OPENAPI_MACHINE_SESSION_TTL:8h}
-  kek-version: ${OPENAPI_KEK_VERSION:}
-  kek: ${OPENAPI_KEK:}
+  kek-version: ${OPENAPI_KEK_VERSION:dev-local}
+  kek: ${OPENAPI_KEK:VXxSnbD0rNBFoAS6GfRG1ztku6gGKz3XiqOhHsUjrQc=}
 
 # OSS 浏览器直传控制面。生产启用主动清理前先审核 dry-run，并配置 Bucket CORS/Lifecycle。
 oss:
