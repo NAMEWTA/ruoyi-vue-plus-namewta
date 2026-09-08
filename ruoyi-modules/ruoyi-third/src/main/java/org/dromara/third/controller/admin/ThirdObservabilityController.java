@@ -17,13 +17,13 @@ public class ThirdObservabilityController {
 
     @GetMapping("/invocation/list")
     @SaCheckPermission("third:invocation:list")
-    public R<?> invocations(@RequestParam String providerCode) {
+    public R<?> invocations(@RequestParam(required = false) String providerCode) {
         return R.ok(observabilityService.invocations(providerCode));
     }
 
     @GetMapping("/statistics/list")
     @SaCheckPermission("third:statistics:list")
-    public R<?> statistics(@RequestParam String providerCode) {
+    public R<?> statistics(@RequestParam(required = false) String providerCode) {
         return R.ok(observabilityService.statistics(providerCode));
     }
 }

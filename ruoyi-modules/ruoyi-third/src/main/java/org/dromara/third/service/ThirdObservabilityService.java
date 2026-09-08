@@ -17,11 +17,17 @@ public class ThirdObservabilityService {
     private final ThirdStatisticDao statisticDao;
 
     public List<ThirdInvocationVo> invocations(String providerCode) {
+        providerCode = normalize(providerCode);
         return invocationDao.findRecent(providerCode, LocalDateTime.now().minusDays(7)).stream()
             .map(x -> new ThirdInvocationVo(x.getInvocationId(), x.getRequestId(), x.getProviderCode(), x.getEndpointCode(), x.getAttemptCount(), x.getLogicalStatus(), x.getFailureCategory(), x.getHttpStatus(), x.getDurationMs(), x.getSanitizedRequestJson(), x.getSanitizedResponseJson(), x.getCreateTime())).toList();
     }
 
     public List<ThirdStatisticVo> statistics(String providerCode) {
+        providerCode = normalize(providerCode);
         return statisticDao.findRecent(providerCode).stream().map(x -> new ThirdStatisticVo(x.getProviderCode(), x.getEndpointCode(), x.getStatDate(), x.getAttemptCount(), x.getSuccessCount(), x.getFailureCount(), x.getTimeoutCount(), x.getRejectedCount(), x.getQuotaValue())).toList();
+    }
+
+    private String normalize(String providerCode) {
+        return providerCode == null || providerCode.isBlank() ? null : providerCode.strip();
     }
 }

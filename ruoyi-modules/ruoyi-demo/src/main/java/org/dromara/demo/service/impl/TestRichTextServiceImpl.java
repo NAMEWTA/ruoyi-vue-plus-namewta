@@ -34,6 +34,7 @@ public class TestRichTextServiceImpl implements org.dromara.demo.service.ITestRi
 
     @Override
     public PageResult<TestRichTextSummaryVo> list(PageQuery pageQuery) {
+        requireUser();
         Long userId = LoginHelper.getUserId();
         Long clientPk = clientPk();
         Page<TestRichTextSummaryVo> page = mapper.selectVoPage(pageQuery.build(),
@@ -157,7 +158,8 @@ public class TestRichTextServiceImpl implements org.dromara.demo.service.ITestRi
     }
 
     private RichTextContent normalize(String html) { try { return RichTextProcessor.normalize(html); } catch (IllegalArgumentException ex) { throw new ServiceException(ex.getMessage()); } }
-    private Long clientPk() { var user = LoginHelper.getLoginUser(); if (user == null || user.getClientPk() == null) throw new ServiceException("当前会话缺少 Client"); return user.getClientPk(); }
+    private void requireUser() { if (LoginHelper.getLoginUser() == null || LoginHelper.getUserId() == null) throw new ServiceException("当前会话已失效，请重新登录"); }
+    private Long clientPk() { requireUser(); var user = LoginHelper.getLoginUser(); if (user.getClientPk() == null) throw new ServiceException("当前会话缺少 Client"); return user.getClientPk(); }
     private void requireClient() { clientPk(); }
     private TestRichTextVo view(TestRichText e) { TestRichTextVo v = new TestRichTextVo(); v.setRichTextId(e.getRichTextId()); v.setTitle(e.getTitle()); v.setHtml(e.getContentHtml()); v.setVersion(e.getVersion()); v.setUpdateTime(e.getUpdateTime()); return v; }
     private Collection<Long> parseIds(String value) {
