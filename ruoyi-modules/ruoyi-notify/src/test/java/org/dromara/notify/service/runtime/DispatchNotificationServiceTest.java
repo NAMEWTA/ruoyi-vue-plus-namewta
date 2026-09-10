@@ -157,6 +157,71 @@ class DispatchNotificationServiceTest {
         assertEquals("DONE", second.outbox.getStatus());
     }
 
+    @Test
+    void recipientMinuteCapIsIsolatedByScene() {
+        MemoryQuota quota = new MemoryQuota();
+        Fixture first = fixture("MAIL", quota);
+        Fixture second = fixture("MAIL", quota);
+        Fixture otherScene = fixture("MAIL", quota);
+        otherScene.intent.setSceneCode("notice-published");
+        otherScene.intent.setTemplateCode("notice-published");
+        otherScene.intent.setTemplateParamsJson(JsonUtils.toJsonString(
+            Map.of("title", "公告标题", "content", "公告正文", "path", "/notify/notice")));
+        NotifySceneBinding captcha = binding(11L, "MAIL", "${code}", "${expireMinutes}");
+        captcha.setRestricted("Y");
+        captcha.setRecipientMinuteMax(1);
+        captcha.setRecipientDayMax(0);
+        NotifySceneBinding notice = binding(11L, "MAIL", "${title}", "${content}${path}");
+        notice.setSceneCode("notice-published");
+        notice.setRestricted("Y");
+        notice.setRecipientMinuteMax(1);
+        notice.setRecipientDayMax(0);
+        NotifyChannelAccount account = mailAccount(11L, "smtp-main", "Y");
+        when(first.configDao.findBinding("auth-captcha", "MAIL")).thenReturn(captcha);
+        when(first.configDao.findAccount(11L)).thenReturn(account);
+        when(second.configDao.findBinding("auth-captcha", "MAIL")).thenReturn(captcha);
+        when(second.configDao.findAccount(11L)).thenReturn(account);
+        when(otherScene.configDao.findBinding("notice-published", "MAIL")).thenReturn(notice);
+        when(otherScene.configDao.findAccount(11L)).thenReturn(account);
+        when(first.notifyClient.send(any())).thenReturn(accepted("smtp-main", NotifyChannel.MAIL));
+        when(otherScene.notifyClient.send(any())).thenReturn(accepted("smtp-main", NotifyChannel.MAIL));
+
+        first.service.dispatch(first.outbox);
+        second.service.dispatch(second.outbox);
+        otherScene.service.dispatch(otherScene.outbox);
+
+        verify(second.notifyClient, never()).send(any());
+        assertEquals("RECIPIENT_MINUTE_QUOTA", second.delivery.getErrorCode());
+        verify(otherScene.notifyClient).send(any());
+        assertEquals("ACCEPTED", otherScene.delivery.getStatus());
+    }
+
+    @Test
+    void noticePublishedMailRendersWrapperNotCallerSnapshot() {
+        Fixture fixture = fixture("MAIL");
+        fixture.intent.setSceneCode("notice-published");
+        fixture.intent.setTemplateCode("notice-published");
+        fixture.intent.setTitleSnapshot("caller-title");
+        fixture.intent.setContentSnapshot("caller-raw-body");
+        fixture.intent.setTemplateParamsJson(JsonUtils.toJsonString(
+            Map.of("title", "包装标题", "content", "包装正文", "path", "/n/1")));
+        NotifySceneBinding binding = binding(11L, "MAIL", "外壳 ${title}", "${content}<p>${path}</p>");
+        binding.setSceneCode("notice-published");
+        when(fixture.configDao.findBinding("notice-published", "MAIL")).thenReturn(binding);
+        when(fixture.configDao.findAccount(11L)).thenReturn(mailAccount(11L, "smtp-main", "Y"));
+        when(fixture.notifyClient.send(any())).thenReturn(accepted("smtp-main", NotifyChannel.MAIL));
+
+        fixture.service.dispatch(fixture.outbox);
+
+        ArgumentCaptor<NotifyRequest> captor = ArgumentCaptor.forClass(NotifyRequest.class);
+        verify(fixture.notifyClient).send(captor.capture());
+        NotifyRichContent content = assertInstanceOf(NotifyRichContent.class, captor.getValue().content());
+        assertEquals("外壳 包装标题", content.subject());
+        assertEquals("包装正文<p>/n/1</p>", content.content());
+        assertTrue(!content.subject().contains("caller-title"));
+        assertTrue(!content.content().contains("caller-raw-body"));
+    }
+
     private Fixture fixture(String channel) {
         return fixture(channel, (key, limit, window) -> true);
     }

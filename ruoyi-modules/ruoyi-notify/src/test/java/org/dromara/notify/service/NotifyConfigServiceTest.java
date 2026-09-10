@@ -6,6 +6,7 @@ import org.dromara.notify.dao.NotifyConfigDao;
 import org.dromara.notify.domain.bo.NotifyChannelAccountBo;
 import org.dromara.notify.domain.bo.NotifySceneBindingBo;
 import org.dromara.notify.domain.entity.NotifyChannelAccount;
+import org.dromara.notify.domain.entity.NotifySceneBinding;
 import org.dromara.notify.domain.vo.NotifyChannelAccountVo;
 import org.dromara.notify.port.SmsBlendRegistryPort;
 import org.junit.jupiter.api.Tag;
@@ -93,6 +94,34 @@ class NotifyConfigServiceTest {
 
         ServiceException exception = assertThrows(ServiceException.class, () -> service.saveBinding(bo));
         assertTrue(exception.getMessage().contains("不能超过账号上限"));
+    }
+
+    @Test
+    void mailBindingRejectsRenamedRequiredTokenAndAcceptsMovedToken() {
+        NotifyConfigDao dao = mock(NotifyConfigDao.class);
+        NotifyConfigService service = new NotifyConfigService(dao, mock(SmsBlendRegistryPort.class));
+        when(dao.findAccount(8L)).thenReturn(account());
+        when(dao.findBinding("auth-captcha", "MAIL")).thenReturn(null);
+        when(dao.insert(any(NotifySceneBinding.class))).thenReturn(1);
+
+        NotifySceneBindingBo renamed = new NotifySceneBindingBo();
+        renamed.setSceneCode("auth-captcha");
+        renamed.setChannel("MAIL");
+        renamed.setAccountId(8L);
+        renamed.setMailSubject("码 ${code}");
+        renamed.setMailBody("分钟 ${minutes}");
+        renamed.setTemplateMinuteMax(10);
+        ServiceException missing = assertThrows(ServiceException.class, () -> service.saveBinding(renamed));
+        assertTrue(missing.getMessage().contains("expireMinutes") || missing.getMessage().contains("未声明"));
+
+        NotifySceneBindingBo moved = new NotifySceneBindingBo();
+        moved.setSceneCode("auth-captcha");
+        moved.setChannel("MAIL");
+        moved.setAccountId(8L);
+        moved.setMailSubject("${expireMinutes}");
+        moved.setMailBody("验证码 ${code}");
+        moved.setTemplateMinuteMax(10);
+        assertEquals(1, service.saveBinding(moved));
     }
 
     private NotifyChannelAccount account() {
