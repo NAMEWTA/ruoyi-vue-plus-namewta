@@ -1,5 +1,7 @@
 package org.dromara.common.mail.notify;
 
+import cn.hutool.extra.mail.MailAccount;
+
 import java.nio.file.Path;
 import java.util.List;
 
@@ -13,7 +15,8 @@ public record MailNotificationMessage(
     String subject,
     String content,
     boolean html,
-    List<Path> attachments
+    List<Path> attachments,
+    MailAccount account
 ) {
 
     public MailNotificationMessage {
@@ -25,6 +28,11 @@ public record MailNotificationMessage(
 
     public MailNotificationMessage(List<String> to, List<String> cc, List<String> bcc,
                                    String subject, String content, boolean html) {
-        this(to, cc, bcc, subject, content, html, List.of());
+        this(to, cc, bcc, subject, content, html, List.of(), null);
+    }
+
+    public MailNotificationMessage(List<String> to, List<String> cc, List<String> bcc,
+                                   String subject, String content, boolean html, List<Path> attachments) {
+        this(to, cc, bcc, subject, content, html, attachments, null);
     }
 }

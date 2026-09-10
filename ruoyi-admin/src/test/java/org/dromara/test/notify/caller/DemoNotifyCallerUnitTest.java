@@ -46,11 +46,13 @@ class DemoNotifyCallerUnitTest {
         NotificationCommand aliyun = requests.getAllValues().get(0);
         NotificationCommand tencent = requests.getAllValues().get(1);
         assertAll(
-            () -> assertEquals("config1", aliyun.templateParams().get("providerKey")),
+            () -> assertEquals("auth-captcha", aliyun.templateCode()),
             () -> assertEquals(List.of("13812345678", "13912345678"), aliyun.recipientIds()),
-            () -> assertTrue(String.valueOf(aliyun.templateParams().get("content")).contains("1234")),
-            () -> assertEquals("config2", tencent.templateParams().get("providerKey")),
-            () -> assertTrue(String.valueOf(tencent.templateParams().get("content")).contains("1234"))
+            () -> assertEquals("1234", aliyun.templateParams().get("code")),
+            () -> assertFalse(aliyun.templateParams().containsKey("providerKey")),
+            () -> assertFalse(aliyun.templateParams().containsKey("content")),
+            () -> assertEquals("auth-captcha", tencent.templateCode()),
+            () -> assertEquals("1234", tencent.templateParams().get("code"))
         );
     }
 

@@ -2,22 +2,30 @@ package org.dromara.notify.service.runtime;
 
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.notify.core.NotifyClient;
+import org.dromara.common.notify.model.NotifyContent;
 import org.dromara.common.notify.model.NotifyRequest;
 import org.dromara.common.notify.model.NotifyResult;
+import org.dromara.common.notify.model.NotifyRichContent;
+import org.dromara.common.notify.model.NotifyTemplateContent;
 import org.dromara.common.notify.model.NotifyTarget;
-import org.dromara.common.notify.model.NotifyTextContent;
 import org.dromara.common.notify.exception.NotifyDeliveryException;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.notify.api.NotificationChannel;
 import org.dromara.notify.api.NotificationStatus;
 import org.dromara.notify.api.InAppNotificationPort;
-import org.dromara.notify.port.NotifyDispatchPort;
+import org.dromara.notify.dao.NotifyConfigDao;
+import org.dromara.notify.dao.NotifyNotificationDao;
 import org.dromara.notify.domain.entity.NotifyAttempt;
+import org.dromara.notify.domain.entity.NotifyChannelAccount;
 import org.dromara.notify.domain.entity.NotifyDelivery;
 import org.dromara.notify.domain.entity.NotifyIntent;
 import org.dromara.notify.domain.entity.NotifyOutbox;
+import org.dromara.notify.domain.entity.NotifySceneBinding;
 import org.dromara.notify.domain.policy.NotificationAggregatePolicy;
-import org.dromara.notify.dao.NotifyNotificationDao;
+import org.dromara.notify.port.NotifyDispatchPort;
+import org.dromara.notify.port.NotifyQuotaPort;
+import org.dromara.notify.support.NotifySendPlanner;
+import org.dromara.notify.support.NotifyTemplateRenderer;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -38,6 +46,8 @@ public class DispatchNotificationService implements NotifyDispatchPort {
     private final NotifyNotificationDao dao;
     private final NotifyClient notifyClient;
     private final ObjectProvider<InAppNotificationPort> inAppPort;
+    private final NotifyConfigDao configDao;
+    private final NotifyQuotaPort quotaPort;
 
     /** 执行一个 Outbox 任务。 */
     public void dispatch(NotifyOutbox outbox) {
@@ -94,22 +104,30 @@ public class DispatchNotificationService implements NotifyDispatchPort {
                     // 站内信已经落库，实时提示失败只影响在线体验，不应触发重复写入。
                 }
             } else {
-                NotifyRequest request = NotifyRequest.builder()
-                    .requestId(String.valueOf(delivery.getDeliveryId()))
-                    .bizType(intent.getBizType())
-                    .bizId(intent.getBizId())
-                    .channel(org.dromara.common.notify.model.NotifyChannel.of(delivery.getChannel().toLowerCase()))
-                    .targets(List.of(target(delivery)))
-                    .content(new NotifyTextContent(intent.getTitleSnapshot(), intent.getContentSnapshot()))
-                    .idempotencyKey(String.valueOf(delivery.getDeliveryId()))
-                    .build();
-                result = notifyClient.send(request);
-                delivery.setStatus(result.status().name());
-                if (!result.deliveries().isEmpty()) {
-                    delivery.setProviderKey(result.providerKey());
-                    delivery.setProviderMessageId(result.deliveries().getFirst().providerMessageId());
-                    errorCode = result.deliveries().getFirst().errorCode();
-                    errorMessage = result.deliveries().getFirst().errorMessage();
+                NotifySendPlanner.Plan plan = planChannel(intent, delivery);
+                if (!plan.ok()) {
+                    delivery.setStatus("FAILED");
+                    errorCode = plan.errorCode();
+                    errorMessage = plan.errorMessage();
+                } else {
+                    NotifyRequest request = NotifyRequest.builder()
+                        .requestId(String.valueOf(delivery.getDeliveryId()))
+                        .bizType(intent.getBizType())
+                        .bizId(intent.getBizId())
+                        .channel(org.dromara.common.notify.model.NotifyChannel.of(delivery.getChannel().toLowerCase()))
+                        .providerKey(plan.providerKey())
+                        .targets(List.of(target(delivery)))
+                        .content(toContent(plan))
+                        .idempotencyKey(String.valueOf(delivery.getDeliveryId()))
+                        .build();
+                    result = notifyClient.send(request);
+                    delivery.setStatus(result.status().name());
+                    if (!result.deliveries().isEmpty()) {
+                        delivery.setProviderKey(result.providerKey());
+                        delivery.setProviderMessageId(result.deliveries().getFirst().providerMessageId());
+                        errorCode = result.deliveries().getFirst().errorCode();
+                        errorMessage = result.deliveries().getFirst().errorMessage();
+                    }
                 }
             }
         } catch (NotifyDeliveryException exception) {
@@ -154,12 +172,13 @@ public class DispatchNotificationService implements NotifyDispatchPort {
         dao.insert(attempt);
 
         boolean success = isSuccess(delivery.getStatus());
+        boolean failClosed = "FAILED".equals(delivery.getStatus()) && isConfigFailure(errorCode);
         boolean waitForReceipt = "UNKNOWN".equals(delivery.getStatus());
-        outbox.setStatus(success ? "DONE" : waitForReceipt ? "WAITING_RECEIPT" : "READY");
+        outbox.setStatus(success || failClosed ? "DONE" : waitForReceipt ? "WAITING_RECEIPT" : "READY");
         outbox.setAttemptCount((outbox.getAttemptCount() == null ? 0 : outbox.getAttemptCount()) + 1);
         outbox.setLastErrorCode(errorCode);
         outbox.setLastErrorMessage(errorMessage);
-        if (!success && !waitForReceipt) {
+        if (!success && !waitForReceipt && !failClosed) {
             outbox.setNextAttemptAt(LocalDateTime.ofInstant(Instant.now().plusSeconds(backoff(outbox.getAttemptCount())), ZoneOffset.UTC));
             if (outbox.getAttemptCount() >= outbox.getMaxAttempts()) {
                 outbox.setStatus("DEAD_LETTER");
@@ -199,6 +218,33 @@ public class DispatchNotificationService implements NotifyDispatchPort {
         intent.setStatus(NotificationAggregatePolicy.aggregate(all.stream()
             .map(NotifyDelivery::getStatus).toList()).name());
         dao.update(intent);
+    }
+
+    private NotifyContent toContent(NotifySendPlanner.Plan plan) {
+        if (plan.mail()) {
+            return new NotifyRichContent(plan.subject(), plan.body(), plan.html());
+        }
+        return new NotifyTemplateContent("sms", plan.smsTemplateCode(), plan.smsParams(), "");
+    }
+
+    private NotifySendPlanner.Plan planChannel(NotifyIntent intent, NotifyDelivery delivery) {
+        String sceneCode = intent.getSceneCode() == null || intent.getSceneCode().isBlank()
+            ? intent.getTemplateCode() : intent.getSceneCode();
+        NotifySceneBinding binding = configDao.findBinding(sceneCode, delivery.getChannel());
+        NotifyChannelAccount account = binding == null ? null : configDao.findAccount(binding.getAccountId());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> raw = JsonUtils.parseObject(intent.getTemplateParamsJson(), Map.class);
+        return NotifySendPlanner.plan(sceneCode, delivery.getChannel(), delivery.getTargetValue(),
+            NotifyTemplateRenderer.stringify(raw), binding, account, quotaPort);
+    }
+
+    private boolean isConfigFailure(String errorCode) {
+        return errorCode != null && (
+            errorCode.startsWith("UNBOUND")
+                || errorCode.startsWith("ACCOUNT_")
+                || errorCode.startsWith("MISSING_")
+                || errorCode.startsWith("SMS_")
+                || errorCode.endsWith("_QUOTA"));
     }
 
     private NotifyTarget target(NotifyDelivery delivery) {

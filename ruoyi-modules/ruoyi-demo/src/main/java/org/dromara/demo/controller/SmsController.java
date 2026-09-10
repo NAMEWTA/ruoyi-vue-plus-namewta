@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,9 +40,7 @@ public class SmsController {
      */
     @GetMapping("/sendAliyun")
     public R<Object> sendAliyun(String phones, String templateId) {
-        LinkedHashMap<String, String> map = new LinkedHashMap<>(1);
-        map.put("code", "1234");
-        return sendTemplate(phones, templateId, "config1", map, "短信验证码：1234");
+        return sendTemplate(phones);
     }
 
     /**
@@ -54,10 +51,7 @@ public class SmsController {
      */
     @GetMapping("/sendTencent")
     public R<Object> sendTencent(String phones, String templateId) {
-        LinkedHashMap<String, String> map = new LinkedHashMap<>(1);
-//        map.put("2", "测试测试");
-        map.put("1", "1234");
-        return sendTemplate(phones, templateId, "config2", map, "短信验证码：1234");
+        return sendTemplate(phones);
     }
 
     /**
@@ -84,15 +78,14 @@ public class SmsController {
         return R.ok();
     }
 
-    private R<Object> sendTemplate(String phones, String templateId, String providerKey,
-                                   LinkedHashMap<String, String> params, String contentSnapshot) {
+    private R<Object> sendTemplate(String phones) {
         List<String> targets = Arrays.stream(phones.split(","))
             .map(String::trim)
             .filter(phone -> !phone.isEmpty())
             .toList();
-        return R.ok(notificationService.submit(new NotificationCommand("demo", "sms-demo", "demo_sms",
-            String.join(",", targets), "PHONE", targets, templateId,
-            Map.of("content", contentSnapshot, "providerKey", providerKey, "params", params),
+        return R.ok(notificationService.submit(new NotificationCommand("demo", "auth-captcha", "demo_sms",
+            String.join(",", targets), "PHONE", targets, "auth-captcha",
+            Map.of("code", "1234", "expireMinutes", "5"),
             List.of(NotificationChannel.SMS), NotificationStrategy.ALL, NotificationMode.SYNC, 20,
             null, null, null, Map.of())));
     }

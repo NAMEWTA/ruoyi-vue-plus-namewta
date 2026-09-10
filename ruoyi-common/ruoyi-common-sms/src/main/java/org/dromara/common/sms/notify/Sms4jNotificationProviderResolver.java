@@ -17,9 +17,10 @@ public final class Sms4jNotificationProviderResolver implements SmsNotificationP
 
     @Override
     public SmsNotificationProvider resolve(String requestedProviderKey) {
-        SmsBlend blend = requestedProviderKey == null || requestedProviderKey.isBlank()
-            ? SmsFactory.getSmsBlend()
-            : SmsFactory.getSmsBlend(requestedProviderKey);
+        if (requestedProviderKey == null || requestedProviderKey.isBlank()) {
+            throw new NotifyValidationException("UNKNOWN_PROVIDER", "短信发送缺少渠道账号");
+        }
+        SmsBlend blend = SmsFactory.getSmsBlend(requestedProviderKey);
         if (blend == null) {
             throw new NotifyValidationException("UNKNOWN_PROVIDER", "未找到可用的 SMS Provider");
         }

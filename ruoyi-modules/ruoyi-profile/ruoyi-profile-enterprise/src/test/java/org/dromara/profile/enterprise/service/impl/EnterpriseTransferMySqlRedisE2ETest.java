@@ -107,8 +107,7 @@ class EnterpriseTransferMySqlRedisE2ETest {
                 assertThat(challengeId).isNotBlank();
                 assertThat(delivery.get().metadata().get("audit")).isEqualTo("REDACT_SENSITIVE");
                 assertThat(delivery.get().recipientIds()).containsExactly("13800138000");
-                String code = String.valueOf(delivery.get().templateParams().get("content"))
-                    .replaceAll(".*?(\\d{6}).*", "$1");
+                String code = String.valueOf(delivery.get().templateParams().get("code"));
 
                 mvc.perform(post("/profile/enterprise/transfer/confirm")
                         .contentType(MediaType.APPLICATION_JSON)

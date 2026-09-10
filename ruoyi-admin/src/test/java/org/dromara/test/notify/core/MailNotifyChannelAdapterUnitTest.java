@@ -42,4 +42,18 @@ class MailNotifyChannelAdapterUnitTest {
         assertEquals(3, result.deliveries().size());
         result.deliveries().forEach(item -> assertEquals("mail-message-id", item.providerMessageId()));
     }
+
+    @Test
+    void resolverRequiresProviderKeyAndResolvedAccount() {
+        MailNotifyChannelAdapter adapter = new MailNotifyChannelAdapter(message -> "id", key -> null);
+        NotifyRequest request = NotifyRequest.builder()
+            .channel(NotifyChannel.MAIL)
+            .targets(List.of(NotifyTarget.email("to@example.com")))
+            .content(new NotifyRichContent("subject", "content", false))
+            .build();
+        org.dromara.common.notify.exception.NotifyValidationException missing = org.junit.jupiter.api.Assertions.assertThrows(
+            org.dromara.common.notify.exception.NotifyValidationException.class,
+            () -> adapter.send(new NotifyAdapterRequest(request, NotifyContext.empty())));
+        assertEquals("UNKNOWN_PROVIDER", missing.code());
+    }
 }

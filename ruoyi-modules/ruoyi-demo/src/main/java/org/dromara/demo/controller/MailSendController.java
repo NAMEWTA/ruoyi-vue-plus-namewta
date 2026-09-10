@@ -72,8 +72,8 @@ public class MailSendController {
     }
 
     private void send(String to, String subject, String text, List<Long> ossIds) {
-        notificationService.submit(new NotificationCommand("demo", "mail-demo", "demo_mail", to,
-            "EMAIL", List.of(to), "mail-demo", Map.of("title", subject, "content", text,
+        notificationService.submit(new NotificationCommand("demo", "notice-published", "demo_mail", to,
+            "EMAIL", List.of(to), "notice-published", Map.of("title", subject, "content", text, "path", "",
             "attachmentOssIds", ossIds), List.of(NotificationChannel.MAIL), NotificationStrategy.ALL,
             NotificationMode.SYNC, 20, null, null, null, Map.of()));
     }

@@ -1,6 +1,5 @@
 package org.dromara.test.nacos.refresh;
 
-import org.dromara.common.mail.config.properties.MailProperties;
 import org.dromara.common.nacos.NacosConfigAccessor;
 import org.dromara.common.nacos.NacosConfigManager;
 import org.dromara.common.nacos.NacosConfigParticipant;
@@ -59,7 +58,7 @@ class NacosLiveRefreshContractUnitTest {
         MutableAccessor accessor = new MutableAccessor();
         CaptchaProperties properties = captchaProperties();
         properties.setNacosConfigAccessor(accessor);
-        CaptchaController controller = new CaptchaController(properties, new MailProperties(),
+        CaptchaController controller = new CaptchaController(properties,
             mock(NotificationApplicationService.class));
 
         accessor.replace(Map.of("captcha", new CaptchaProperties.Snapshot(false, "char", 2, 6)));

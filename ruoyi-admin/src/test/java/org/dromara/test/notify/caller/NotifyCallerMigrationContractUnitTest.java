@@ -27,7 +27,9 @@ class NotifyCallerMigrationContractUnitTest {
             () -> assertTrue(mailDemo.contains("NotificationApplicationService")),
             () -> assertFalse(mailDemo.contains("MailBuilder")),
             () -> assertTrue(smsDemo.contains("NotificationApplicationService")),
-            () -> assertFalse(smsDemo.contains("smsBlend.sendMessage"))
+            () -> assertFalse(smsDemo.contains("smsBlend.sendMessage")),
+            () -> assertFalse(captcha.contains("您本次验证码为")),
+            () -> assertTrue(captcha.contains("\"auth-captcha\""))
         );
 
         assertTrue(source("ruoyi-admin/pom.xml").contains("<artifactId>ruoyi-api</artifactId>"));

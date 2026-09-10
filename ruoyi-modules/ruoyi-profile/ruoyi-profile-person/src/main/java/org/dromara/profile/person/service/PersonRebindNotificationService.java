@@ -149,7 +149,7 @@ public class PersonRebindNotificationService implements PersonRebindNotification
         }
         NotificationReceipt result = notifications.submit(new NotificationCommand("profile", "person-rebind", SMS_TYPE,
             Long.toString(applicationId), "PHONE", List.of(phone), "person-rebind",
-            java.util.Map.of("title", "实名认证绑定变更通知", "content", SAFE_TEXT), List.of(NotificationChannel.SMS),
+            java.util.Map.of(), List.of(NotificationChannel.SMS),
             NotificationStrategy.ALL, NotificationMode.SYNC, 60, null, null,
             "profile:person:rebind:" + profileId + ":" + applicationId + ":sms", java.util.Map.of("audit", "REDACT_SENSITIVE")));
         if (result == null || result.status() == null) {

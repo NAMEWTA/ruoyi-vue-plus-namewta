@@ -121,7 +121,7 @@ public class EnterpriseTransferService {
         try {
             result = notify.submit(new NotificationCommand("profile", "enterprise-transfer", "ENTERPRISE_TRANSFER",
                 challengeId, "PHONE", List.of(target.phone()), "enterprise-transfer",
-                Map.of("title", "企业负责人转移验证码", "content", "您的企业负责人转移验证码为：" + code + "，5分钟内有效。"),
+                Map.of("code", code),
                 List.of(NotificationChannel.SMS), NotificationStrategy.ALL, NotificationMode.SYNC, 80, null, expiresAt,
                 "profile:enterprise:transfer:" + challengeId, Map.of("audit", "REDACT_SENSITIVE")));
         } catch (RuntimeException exception) {

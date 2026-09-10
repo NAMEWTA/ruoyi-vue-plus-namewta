@@ -16,7 +16,6 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.core.utils.regex.RegexValidator;
-import org.dromara.common.mail.config.properties.MailProperties;
 import org.dromara.notify.api.NotificationApplicationService;
 import org.dromara.notify.api.NotificationChannel;
 import org.dromara.notify.api.NotificationCommand;
@@ -52,7 +51,6 @@ import java.util.List;
 public class CaptchaController {
 
     private final CaptchaProperties captchaProperties;
-    private final MailProperties mailProperties;
     private final NotificationApplicationService notificationService;
 
     /**
@@ -69,12 +67,10 @@ public class CaptchaController {
         }
         String key = GlobalConstants.CAPTCHA_CODE_KEY + phoneNumber;
         String code = RandomUtil.randomNumbers(4);
-        // 验证码模板id 自行处理 (查数据库或写死均可)
-        String templateId = "";
-        String content = "您本次验证码为：" + code + "，有效性为" + Constants.CAPTCHA_EXPIRATION + "分钟，请尽快填写。";
         try {
             notificationService.submit(new NotificationCommand("admin-web", "auth-captcha", "auth_captcha", phoneNumber,
-                "PHONE", List.of(phoneNumber), templateId, Map.of("code", code, "title", "登录验证码", "content", content),
+                "PHONE", List.of(phoneNumber), "auth-captcha",
+                Map.of("code", code, "expireMinutes", String.valueOf(Constants.CAPTCHA_EXPIRATION)),
                 List.of(NotificationChannel.SMS), NotificationStrategy.ALL, NotificationMode.SYNC, 80, null, null,
                 captchaIdempotencyKey(NotificationChannel.SMS, phoneNumber), Map.of("audit", "REDACT_SENSITIVE")));
         } catch (Exception ex) {
@@ -93,9 +89,6 @@ public class CaptchaController {
      */
     @GetMapping("/resource/email/code")
     public R<Void> emailCode(@NotBlank(message = "{user.email.not.blank}") String email) {
-        if (!mailProperties.getEnabled()) {
-            return R.fail("当前系统没有开启邮箱功能！");
-        }
         if (!RegexValidator.isEmail(email)) {
             return R.fail("请输入正确的邮箱地址！");
         }
@@ -112,10 +105,10 @@ public class CaptchaController {
     public void emailCodeImpl(String email) {
         String key = GlobalConstants.CAPTCHA_CODE_KEY + email;
         String code = RandomUtil.randomNumbers(4);
-        String content = "您本次验证码为：" + code + "，有效性为" + Constants.CAPTCHA_EXPIRATION + "分钟，请尽快填写。";
         try {
             notificationService.submit(new NotificationCommand("admin-web", "auth-captcha", "auth_captcha", email,
-                "EMAIL", List.of(email), "", Map.of("title", "登录验证码", "content", content),
+                "EMAIL", List.of(email), "auth-captcha",
+                Map.of("code", code, "expireMinutes", String.valueOf(Constants.CAPTCHA_EXPIRATION)),
                 List.of(NotificationChannel.MAIL), NotificationStrategy.ALL, NotificationMode.SYNC, 80, null, null,
                 captchaIdempotencyKey(NotificationChannel.MAIL, email), Map.of("audit", "REDACT_SENSITIVE")));
             cacheCaptchaCode(key, code);

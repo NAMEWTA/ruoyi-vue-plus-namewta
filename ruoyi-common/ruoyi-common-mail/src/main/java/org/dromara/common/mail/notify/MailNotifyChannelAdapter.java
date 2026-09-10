@@ -24,9 +24,15 @@ public final class MailNotifyChannelAdapter implements NotifyChannelAdapter {
     public static final String PROVIDER = "smtp";
 
     private final MailNotificationSender sender;
+    private final MailAccountResolver accountResolver;
 
     public MailNotifyChannelAdapter(MailNotificationSender sender) {
+        this(sender, null);
+    }
+
+    public MailNotifyChannelAdapter(MailNotificationSender sender, MailAccountResolver accountResolver) {
         this.sender = sender;
+        this.accountResolver = accountResolver;
     }
 
     @Override
@@ -42,7 +48,10 @@ public final class MailNotifyChannelAdapter implements NotifyChannelAdapter {
     @Override
     public NotifyAdapterResult send(NotifyAdapterRequest adapterRequest) {
         NotifyRequest request = adapterRequest.request();
-        if (request.providerKey() != null && !request.providerKey().isBlank()
+        if (accountResolver != null && (request.providerKey() == null || request.providerKey().isBlank())) {
+            throw new NotifyValidationException("UNKNOWN_PROVIDER", "邮件发送缺少渠道账号");
+        }
+        if (accountResolver == null && request.providerKey() != null && !request.providerKey().isBlank()
             && !PROVIDER.equalsIgnoreCase(request.providerKey())) {
             throw new NotifyValidationException("UNKNOWN_PROVIDER", "邮件渠道不支持 Provider: " + request.providerKey());
         }
@@ -54,14 +63,19 @@ public final class MailNotifyChannelAdapter implements NotifyChannelAdapter {
                 attachments = materialize(adapterRequest.attachments(), tempDirectory);
             }
             MailNotificationMessage message = buildMessage(request, attachments);
+            if (accountResolver != null && message.account() == null) {
+                throw new NotifyValidationException("UNKNOWN_PROVIDER", "未找到可用的邮件账号");
+            }
             long startedAt = System.nanoTime();
             try {
                 String messageId = sender.send(message);
                 long costTime = elapsedMillis(startedAt);
+                String providerKey = request.providerKey() == null || request.providerKey().isBlank()
+                    ? PROVIDER : request.providerKey();
                 List<NotifyTargetResult> results = request.targets().stream()
                     .map(target -> NotifyTargetResult.accepted(target, messageId, costTime))
                     .toList();
-                return new NotifyAdapterResult(PROVIDER, results);
+                return new NotifyAdapterResult(providerKey, results);
             } catch (RuntimeException exception) {
                 long costTime = elapsedMillis(startedAt);
                 List<NotifyTargetResult> results = request.targets().stream()
@@ -140,8 +154,10 @@ public final class MailNotifyChannelAdapter implements NotifyChannelAdapter {
         }
         NotifyContent content = request.content();
         boolean html = content instanceof NotifyRichContent rich && rich.html();
+        cn.hutool.extra.mail.MailAccount account = accountResolver == null
+            ? null : accountResolver.resolve(request.providerKey());
         return new MailNotificationMessage(to, cc, bcc, content.subject(), content.contentSnapshot(), html,
-            attachments);
+            attachments, account);
     }
 
     private long elapsedMillis(long startedAt) {

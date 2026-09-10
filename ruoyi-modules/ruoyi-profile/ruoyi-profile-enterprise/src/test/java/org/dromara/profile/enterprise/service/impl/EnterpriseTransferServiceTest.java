@@ -81,7 +81,8 @@ class EnterpriseTransferServiceTest {
         ArgumentCaptor<NotificationCommand> request = ArgumentCaptor.forClass(NotificationCommand.class);
         verify(notify).submit(request.capture());
         assertThat(request.getValue().metadata().get("audit")).isEqualTo("REDACT_SENSITIVE");
-        assertThat(request.getValue().templateParams().get("content")).asString().contains("123456");
+        assertThat(request.getValue().templateParams().get("code")).isEqualTo("123456");
+        assertThat(request.getValue().templateParams()).doesNotContainKey("content");
         verify(challenges).activate(view.challengeId());
     }
 
