@@ -282,8 +282,13 @@ public class NotifyConfigService implements MailAccountResolver {
     }
 
     private void registerSms(NotifyChannelAccount account) {
-        if (account != null && "SMS".equals(account.getChannel()) && "Y".equals(account.getEnabled())) {
+        if (account == null || !"SMS".equals(account.getChannel()) || isBlank(account.getConfigKey())) {
+            return;
+        }
+        if ("Y".equals(account.getEnabled())) {
             smsBlendRegistry.upsert(account);
+        } else {
+            smsBlendRegistry.remove(account.getConfigKey());
         }
     }
 

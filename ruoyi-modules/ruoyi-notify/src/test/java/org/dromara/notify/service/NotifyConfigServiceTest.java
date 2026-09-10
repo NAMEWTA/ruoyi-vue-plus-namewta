@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -94,6 +95,26 @@ class NotifyConfigServiceTest {
 
         ServiceException exception = assertThrows(ServiceException.class, () -> service.saveBinding(bo));
         assertTrue(exception.getMessage().contains("不能超过账号上限"));
+    }
+
+    @Test
+    void disablingSmsAccountUnregistersBlend() {
+        NotifyConfigDao dao = mock(NotifyConfigDao.class);
+        SmsBlendRegistryPort registry = mock(SmsBlendRegistryPort.class);
+        NotifyConfigService service = new NotifyConfigService(dao, registry);
+        NotifyChannelAccount current = new NotifyChannelAccount();
+        current.setAccountId(8L);
+        current.setChannel("SMS");
+        current.setConfigKey("ali-prod");
+        current.setEnabled("Y");
+        current.setMinuteMax(30);
+        when(dao.findAccount(8L)).thenReturn(current);
+        when(dao.update(any(NotifyChannelAccount.class))).thenReturn(1);
+
+        service.changeStatus(8L, "N");
+
+        verify(registry).remove("ali-prod");
+        verify(registry, never()).upsert(any());
     }
 
     @Test
