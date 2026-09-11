@@ -10,8 +10,10 @@ import org.dromara.notify.domain.entity.NotifyIntent;
 import org.dromara.notify.domain.entity.NotifyOutbox;
 import org.dromara.notify.domain.entity.NotifyRecipient;
 import org.dromara.notify.dao.NotifyNotificationDao;
+import org.dromara.notify.support.outbox.NotifyOutboxWakeRequestedEvent;
 import org.dromara.system.api.UserService;
 import org.dromara.system.api.domain.UserDTO;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DuplicateKeyException;
 
@@ -36,6 +38,7 @@ public class NotificationApplicationRuntimeService {
     private final NotifyNotificationDao dao;
     private final UserService userService;
     private final DispatchNotificationService dispatchService;
+    private final ApplicationEventPublisher events;
 
     public NotificationReceipt submit(NotificationCommand command) {
         validate(command);
@@ -128,6 +131,8 @@ public class NotificationApplicationRuntimeService {
         }
         if (outboxes.isEmpty()) {
             dispatchService.refreshAggregate(intentId);
+        } else {
+            requestOutboxWake(outboxes.getFirst().getOutboxId());
         }
         return receipt(dao.intent(intentId), dao.deliveries(intentId));
     }
@@ -159,6 +164,8 @@ public class NotificationApplicationRuntimeService {
         }
         List<NotifyDelivery> deliveries = dao.deliveries(intent.getIntentId()).stream()
             .filter(item -> List.of("FAILED", "UNKNOWN").contains(item.getStatus())).toList();
+        boolean queued = false;
+        Long wakeHint = null;
         for (NotifyDelivery delivery : deliveries) {
             if (dao.markDeliveryForRetry(delivery.getDeliveryId()) != 1) continue;
             LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
@@ -173,10 +180,15 @@ public class NotificationApplicationRuntimeService {
                 outbox.setAttemptCount(0);
                 outbox.setMaxAttempts(5);
                 dao.insert(outbox);
+                wakeHint = outbox.getOutboxId();
             }
+            queued = true;
         }
         intent.setStatus(NotificationStatus.QUEUED.name());
         dao.update(intent);
+        if (queued) {
+            requestOutboxWake(wakeHint);
+        }
         return new RetryReceipt(command.notificationId(), NotificationStatus.QUEUED);
     }
 
@@ -195,6 +207,15 @@ public class NotificationApplicationRuntimeService {
         dao.update(intent);
         dao.updateDeliveryStatus(intent.getIntentId(), "PENDING", "CANCELLED");
         return new CancelReceipt(command.notificationId(), NotificationStatus.CANCELLED);
+    }
+
+    /**
+     * 在当前 {@code @DSTransactional} 内登记提交后唤醒；真正的 Redis 发布由 AFTER_COMMIT 监听器执行。
+     *
+     * @param outboxIdHint 可选 Outbox 主键 hint，允许为 {@code null}
+     */
+    private void requestOutboxWake(Long outboxIdHint) {
+        events.publishEvent(new NotifyOutboxWakeRequestedEvent(outboxIdHint));
     }
 
     private void validate(NotificationCommand command) {
