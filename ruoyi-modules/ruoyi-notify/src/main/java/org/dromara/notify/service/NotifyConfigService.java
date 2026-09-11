@@ -2,6 +2,7 @@ package org.dromara.notify.service;
 
 import cn.hutool.extra.mail.MailAccount;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.domain.PageResult;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.json.utils.JsonUtils;
@@ -29,6 +30,7 @@ import java.util.Map;
 /**
  * 通知渠道配置规则：账号、绑定、变量契约与 SMTP 解析。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotifyConfigService implements MailAccountResolver {
@@ -38,10 +40,19 @@ public class NotifyConfigService implements MailAccountResolver {
 
     /**
      * 启动时把已启用短信账号注册进 SMS4J。
+     *
+     * <p>已有库尚未建表时查询会失败。缺表不得阻止进程启动；发送路径仍按无绑定失败关闭。</p>
      */
     @PostConstruct
     public void loadEnabledSmsAccounts() {
-        for (NotifyChannelAccount account : dao.listAccounts("SMS")) {
+        List<NotifyChannelAccount> accounts;
+        try {
+            accounts = dao.listAccounts("SMS");
+        } catch (RuntimeException exception) {
+            log.warn("加载短信渠道账号失败，进程继续启动；发送将失败关闭。原因={}", exception.getMessage());
+            return;
+        }
+        for (NotifyChannelAccount account : accounts) {
             registerSms(account);
         }
     }

@@ -12,9 +12,12 @@ import org.dromara.notify.port.SmsBlendRegistryPort;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.BadSqlGrammarException;
 
+import java.sql.SQLSyntaxErrorException;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -30,6 +33,21 @@ import static org.mockito.Mockito.when;
  */
 @Tag("dev")
 class NotifyConfigServiceTest {
+
+    @Test
+    void missingChannelAccountTableDoesNotAbortStartup() {
+        NotifyConfigDao dao = mock(NotifyConfigDao.class);
+        SmsBlendRegistryPort registry = mock(SmsBlendRegistryPort.class);
+        when(dao.listAccounts("SMS")).thenThrow(new BadSqlGrammarException(
+            "select",
+            "SELECT * FROM notify_channel_account",
+            new SQLSyntaxErrorException("Table 'ry-namewta.notify_channel_account' doesn't exist")));
+        NotifyConfigService service = new NotifyConfigService(dao, registry);
+
+        assertDoesNotThrow(service::loadEnabledSmsAccounts);
+        verify(registry, never()).upsert(any());
+        verify(registry, never()).remove(any());
+    }
 
     @Test
     void accountVoOmitsSecretFields() {
