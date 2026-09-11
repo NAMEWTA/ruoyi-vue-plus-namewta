@@ -5,6 +5,7 @@ import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.notify.support.outbox.NotifyOutboxWakeChannels;
 import org.dromara.notify.support.outbox.NotifyOutboxWakeSignal;
 import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +29,7 @@ public class NotifyOutboxWakeSubscriber implements InitializingBean, DisposableB
      *
      * @param worker 统一领取循环
      */
+    @Autowired
     public NotifyOutboxWakeSubscriber(NotifyOutboxWorker worker) {
         this(worker, redisBus());
     }

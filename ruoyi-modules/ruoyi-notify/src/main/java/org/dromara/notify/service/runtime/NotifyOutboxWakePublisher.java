@@ -6,6 +6,7 @@ import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.notify.support.outbox.NotifyOutboxWakeChannels;
 import org.dromara.notify.support.outbox.NotifyOutboxWakeRequestedEvent;
 import org.dromara.notify.support.outbox.NotifyOutboxWakeSignal;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -27,6 +28,7 @@ public class NotifyOutboxWakePublisher {
      *
      * @param localEvents 同 JVM 辅信号出口
      */
+    @Autowired
     public NotifyOutboxWakePublisher(ApplicationEventPublisher localEvents) {
         this(NotifyOutboxWakePublisher::publishViaRedis, localEvents);
     }
