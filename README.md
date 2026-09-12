@@ -1,3 +1,5 @@
+> **FROZEN.** This repository is a read-only backup. Current NAMEWTA product development is **https://github.com/NAMEWTA/WTA-plus**. Do not open new features or force-push here.
+
 # NAMEWTA 后端
 
 本仓库是基于 RuoYi-Vue-Plus 持续演进的 NAMEWTA 后端增强版。它保留上游模块化业务基础，并重点增强 Client 登录域与 RBAC 隔离、OSS 直传和对象生命周期、统一通知、完整 HTTP 系统日志、增量 SQL 及组合构建治理。
